@@ -34,6 +34,52 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  
+  # Firebase dependencies
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  firebase_storage: ^12.3.4
+
+  # Excel export
+  excel: ^4.0.0
+  path_provider: ^2.1.4
+  share_plus: ^10.1.2
+  cross_file: ^0.3.5
+  
+  # Image picker and permissions
+  image_picker: ^1.0.7
+  permission_handler: ^11.3.0
+  
+  # Camera for live text detection (Google Lens-like)
+  camera: ^0.11.3
+  
+  # OCR for ID scanning
+  flutter_native_ocr: ^0.1.0
+  
+  # Egyptian National ID parser
+  egyptian_id_parser: ^1.1.0
+  
+  # Image processing for OCR preprocessing
+  image: ^4.3.0
+  
+  # Image cropping for ID card focus
+  image_cropper: ^8.0.2
+  
+  # Note: ML Kit Document Scanner API will be implemented via platform channels
+  # This provides Google Lens-like automatic document detection with built-in UI
+  
+  # Note: OpenCV has been removed - now using egyptian_id_parser 1.1.0 package directly
+  # All ID card parsing and data extraction is handled by the egyptian_id_parser Dart package
+  
+  # NFC support
+  flutter_nfc_reader:
+    git:
+      url: https://github.com/matteocrippa/flutter-nfc-reader.git
+      ref: master
+  
+  # Shared preferences for local storage
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

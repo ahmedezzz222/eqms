@@ -2,8 +2,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
     }
 }
+
+// Note: OpenCV has been removed - now using egyptian_id_parser 1.1.0 package directly
+// All ID card parsing and data extraction is handled by the egyptian_id_parser Dart package
 
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory

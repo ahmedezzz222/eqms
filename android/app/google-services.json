@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "546064424992",
+    "project_id": "et3am-ca94c",
+    "storage_bucket": "et3am-ca94c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:546064424992:android:bff11ecd74a1a1e832dc45",
+        "android_client_info": {
+          "package_name": "com.et3amapp.eqmsapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEhUrWxVfya0hQE5XzTiVgsdnIINfrhLs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
