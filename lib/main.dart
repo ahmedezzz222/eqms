@@ -3151,6 +3151,7 @@ class Beneficiary {
   final int? queueNumber;
   final bool isServed;
   final int unitsTaken;
+  final String? createdBy;
 
   Beneficiary({
     required this.id,
@@ -3172,6 +3173,7 @@ class Beneficiary {
     this.queueNumber,
     this.isServed = false,
     this.unitsTaken = 0,
+    this.createdBy,
   });
 
   Beneficiary copyWith({
@@ -3194,6 +3196,7 @@ class Beneficiary {
     int? queueNumber,
     bool? isServed,
     int? unitsTaken,
+    String? createdBy,
   }) {
     return Beneficiary(
       id: id ?? this.id,
@@ -3215,6 +3218,7 @@ class Beneficiary {
       queueNumber: queueNumber ?? this.queueNumber,
       isServed: isServed ?? this.isServed,
       unitsTaken: unitsTaken ?? this.unitsTaken,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 }
@@ -5502,6 +5506,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   }
   DateTime? _extractedBirthDate;
   String? _duplicateIDMessage;
+  String? _duplicateMobileMessage; // Track duplicate mobile number message
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
@@ -5757,9 +5762,9 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         type: _type,
         idCopyPath: _idCopyPath,
         gender: _gender,
-        name: _nameController.text,
-        idNumber: _idNumberController.text,
-        mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text : null,
+          name: _nameController.text,
+          idNumber: _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), ''), // Clean ID number
+          mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '') : null, // Clean mobile number
         isEntity: _isEntity,
         entityName: _isEntity ? entityName : null,
         numberOfUnits: units,
@@ -6623,22 +6628,22 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateIDMessage = 'This ID is already registered. Distribution Area: ${existingBeneficiary.distributionArea}';
+          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${existingBeneficiary.name}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same National ID.';
         });
       } else {
         // Also check local list as fallback
         try {
           final localBeneficiary = widget.beneficiaries.firstWhere(
-        (b) => b.idNumber == idNumber,
-      );
-      setState(() {
-            _duplicateIDMessage = 'This ID is already registered. Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}';
-      });
-    } catch (e) {
+            (b) => b.idNumber == idNumber,
+          );
+          setState(() {
+            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
+          });
+        } catch (e) {
           // ID not found - no duplicate
-      setState(() {
-        _duplicateIDMessage = null;
-      });
+          setState(() {
+            _duplicateIDMessage = null;
+          });
         }
       }
     } catch (e) {
@@ -6649,11 +6654,64 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           (b) => b.idNumber == idNumber,
         );
         setState(() {
-          _duplicateIDMessage = 'This ID is already registered. Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}';
+          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
         });
       } catch (e2) {
         setState(() {
           _duplicateIDMessage = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkDuplicateMobile(String mobileNumber) async {
+    if (mobileNumber.isEmpty) {
+      setState(() {
+        _duplicateMobileMessage = null;
+      });
+      return;
+    }
+
+    // Clean the mobile number (remove spaces, dashes)
+    final cleanMobile = mobileNumber.replaceAll(RegExp(r'[\s\-]'), '');
+    
+    // Check if mobile number already exists in Firestore
+    try {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(cleanMobile);
+      
+      if (existingBeneficiary != null) {
+        setState(() {
+          _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${existingBeneficiary.name}, National ID: ${existingBeneficiary.idNumber}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same Mobile Number.';
+        });
+      } else {
+        // Also check local list as fallback
+        try {
+          final localBeneficiary = widget.beneficiaries.firstWhere(
+            (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
+          );
+          setState(() {
+            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+          });
+        } catch (e) {
+          // Mobile number not found - no duplicate
+          setState(() {
+            _duplicateMobileMessage = null;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error checking duplicate mobile: $e');
+      // On error, also check local list
+      try {
+        final localBeneficiary = widget.beneficiaries.firstWhere(
+          (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
+        );
+        setState(() {
+          _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+        });
+      } catch (e2) {
+        setState(() {
+          _duplicateMobileMessage = null;
         });
       }
     }
@@ -7146,11 +7204,40 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _idNumberController,
-                  decoration: _buildInputDecoration('Enter ID number'),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter ID number') : null,
+                  keyboardType: TextInputType.number,
+                  decoration: _buildInputDecoration('Enter National ID (14 digits)'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return AppLanguage.translate('Please enter National ID number');
+                    }
+                    // Remove any spaces or dashes for validation
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    // Check if it's exactly 14 digits
+                    if (cleanValue.length != 14) {
+                      return 'National ID must be exactly 14 digits';
+                    }
+                    // Check if all characters are digits
+                    if (!RegExp(r'^\d{14}$').hasMatch(cleanValue)) {
+                      return 'National ID must contain only digits';
+                    }
+                    // Check if first digit is 2 or 3 (Egyptian ID format)
+                    final firstDigit = int.tryParse(cleanValue.substring(0, 1));
+                    if (firstDigit != 2 && firstDigit != 3) {
+                      return 'Invalid National ID format (must start with 2 or 3)';
+                    }
+                    return null;
+                  },
                   onChanged: (value) {
                     if (value.isNotEmpty) {
-                      _checkDuplicateID(value);
+                      // Clean the value before checking
+                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                      if (cleanValue.length == 14) {
+                        _checkDuplicateID(cleanValue);
+                      } else {
+                        setState(() {
+                          _duplicateIDMessage = null;
+                        });
+                      }
                     } else {
                       setState(() {
                         _duplicateIDMessage = null;
@@ -7187,17 +7274,62 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 TextFormField(
                   controller: _mobileNumberController,
                   keyboardType: TextInputType.phone,
-                  decoration: _buildInputDecoration('Enter mobile number'),
+                  decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
                   validator: (value) {
-                    if (value != null && value.isNotEmpty) {
-                    final regex = RegExp(r'^01[0-2,5]{1}[0-9]{8}$');
-                    if (!regex.hasMatch(value)) {
-                      return 'Please enter a valid Egyptian mobile number';
-                      }
+                    if (value == null || value.isEmpty) {
+                      return null; // Mobile number is optional in guest mode
+                    }
+                    // Remove any spaces or dashes for validation
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    // Check Egyptian mobile number format: 01[0-2,5][0-9]{8}
+                    final regex = RegExp(r'^01[0-2,5][0-9]{8}$');
+                    if (!regex.hasMatch(cleanValue)) {
+                      return 'Invalid Egyptian mobile number format. Must be 11 digits starting with 01 (e.g., 01012345678, 01123456789, 01234567890, 01512345678)';
                     }
                     return null;
                   },
+                  onChanged: (value) {
+                    if (value.isNotEmpty) {
+                      // Clean the value before checking
+                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                      // Only check if it's a valid format (11 digits starting with 01)
+                      if (RegExp(r'^01[0-2,5][0-9]{8}$').hasMatch(cleanValue)) {
+                        _checkDuplicateMobile(cleanValue);
+                      } else {
+                        setState(() {
+                          _duplicateMobileMessage = null;
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        _duplicateMobileMessage = null;
+                      });
+                    }
+                  },
                 ),
+                if (_duplicateMobileMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _duplicateMobileMessage!,
+                            style: const TextStyle(color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 _buildLabel('Number of Units *'),
                 const SizedBox(height: 8),
@@ -7974,10 +8106,35 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     return entries;
   }
 
+  /// Get icon based on queue unit name
+  IconData _getUnitIcon(String unitName) {
+    final unitLower = unitName.toLowerCase();
+    if (unitLower.contains('meal') || unitLower.contains('food')) {
+      return Icons.restaurant;
+    } else if (unitLower.contains('bag') || unitLower.contains('package')) {
+      return Icons.shopping_bag;
+    } else if (unitLower.contains('blanket') || unitLower.contains('bed') || unitLower.contains('cloth')) {
+      return Icons.hotel;
+    } else {
+      // Generic icon for other types
+      return Icons.category;
+    }
+  }
+
   /// Build Multi Day Queue Accordion with parent and child entries
-  Widget _buildMultiDayQueueAccordion(Queue queue, int displayIndex) {
+  Widget _buildMultiDayQueueAccordion(Queue queue, int displayIndex, {bool showOnlyToday = false}) {
     const tealGreen = Color(0xFF81CF01);
-    final dailyEntries = _generateDailyEntries(queue);
+    var dailyEntries = _generateDailyEntries(queue);
+    
+    // For "Today List", only show today's entry for multi-day queues
+    if (showOnlyToday) {
+      final today = DateTime.now();
+      final todayOnly = DateTime(today.year, today.month, today.day);
+      dailyEntries = dailyEntries.where((day) {
+        final dayOnly = DateTime(day.year, day.month, day.day);
+        return dayOnly.isAtSameMomentAs(todayOnly);
+      }).toList();
+    }
     final queueKey = queue.name;
     final isQueueExpanded = _multiDayQueueExpanded[queueKey] ?? false;
     final dailyExpandedSet = _dailyEntryExpanded[queueKey] ?? <String>{};
@@ -8513,11 +8670,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
                           if (!isPast) ...[
-                            // Start button for this day
+                            // Start/Serve button for this day
+                            // For today, label is "Serve", for future days label is "Start"
                             _buildActionButton(
-                            icon: Icons.play_arrow,
-                            label: AppLanguage.translate('Start'),
-                            color: Colors.green,
+                            icon: isToday ? _getUnitIcon(queue.unitName) : Icons.play_arrow,
+                            label: isToday ? AppLanguage.translate('Serve') : AppLanguage.translate('Start'),
+                            color: isToday ? Colors.orange : Colors.green,
                             onPressed: () {
                               // Start serving for this specific day
                               // Create a day-specific queue representation
@@ -8553,7 +8711,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             },
                           ),
                         ],
-                        // View/Serve button - always available
+                        // View button - always available
                         _buildActionButton(
                           icon: Icons.visibility,
                           label: AppLanguage.translate('View'),
@@ -8585,10 +8743,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             );
                           },
                         ),
-                        // Serve button - available for today and future days
-                        if (!isPast) ...[
+                        // Serve button - only available for future days (not today)
+                        if (!isPast && !isToday) ...[
                           _buildActionButton(
-                            icon: Icons.restaurant,
+                            icon: _getUnitIcon(queue.unitName),
                             label: AppLanguage.translate('Serve'),
                             color: Colors.orange,
                             onPressed: () {
@@ -8618,7 +8776,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               );
                             },
                           ),
-                          ],
+                        ],
                         ],
                       ),
                     ),
@@ -9576,7 +9734,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                       final queue = queuesToDisplay[index];
                                       // Use accordion for Multi Day queues, regular row for Single Day
                                       if (queue.isMultiDay) {
-                                        return _buildMultiDayQueueAccordion(queue, index);
+                                        return _buildMultiDayQueueAccordion(queue, index, showOnlyToday: true);
                                       } else {
                                         return _buildQueueRow(queue, index);
                                       }
@@ -13893,6 +14051,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   String? _photoPath;
   DateTime? _extractedBirthDate;
   String? _duplicateIDMessage;
+  String? _duplicateMobileMessage; // Track duplicate mobile number message
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
@@ -15019,7 +15178,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateIDMessage = 'This ID is already registered. Distribution Area: ${existingBeneficiary.distributionArea}';
+          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${existingBeneficiary.name}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same National ID.';
         });
       } else {
         // Also check local list as fallback
@@ -15028,7 +15187,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             (b) => b.idNumber == idNumber,
           );
           setState(() {
-            _duplicateIDMessage = 'This ID is already registered. Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}';
+            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
           });
         } catch (e) {
           // ID not found - no duplicate
@@ -15045,11 +15204,64 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           (b) => b.idNumber == idNumber,
         );
         setState(() {
-          _duplicateIDMessage = 'This ID is already registered. Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}';
+          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
         });
       } catch (e2) {
         setState(() {
           _duplicateIDMessage = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkDuplicateMobile(String mobileNumber) async {
+    if (mobileNumber.isEmpty) {
+      setState(() {
+        _duplicateMobileMessage = null;
+      });
+      return;
+    }
+
+    // Clean the mobile number (remove spaces, dashes)
+    final cleanMobile = mobileNumber.replaceAll(RegExp(r'[\s\-]'), '');
+    
+    // Check if mobile number already exists in Firestore
+    try {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(cleanMobile);
+      
+      if (existingBeneficiary != null) {
+        setState(() {
+          _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${existingBeneficiary.name}, National ID: ${existingBeneficiary.idNumber}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same Mobile Number.';
+        });
+      } else {
+        // Also check local list as fallback
+        try {
+          final localBeneficiary = widget.beneficiaries.firstWhere(
+            (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
+          );
+          setState(() {
+            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+          });
+        } catch (e) {
+          // Mobile number not found - no duplicate
+          setState(() {
+            _duplicateMobileMessage = null;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error checking duplicate mobile: $e');
+      // On error, also check local list
+      try {
+        final localBeneficiary = widget.beneficiaries.firstWhere(
+          (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
+        );
+        setState(() {
+          _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+        });
+      } catch (e2) {
+        setState(() {
+          _duplicateMobileMessage = null;
         });
       }
     }
@@ -15244,8 +15456,8 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           idCopyPath: _idCopyPath,
           gender: _gender,
           name: _nameController.text,
-          idNumber: _idNumberController.text,
-          mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text : null,
+          idNumber: _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), ''), // Clean ID number
+          mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '') : null, // Clean mobile number
           isEntity: _isEntity,
           entityName: _isEntity ? entityName : null,
           numberOfUnits: units,
@@ -15430,13 +15642,42 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                 TextFormField(
                   controller: _idNumberController,
                   focusNode: _idNumberFocusNode,
+                  keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
-                  decoration: _buildInputDecoration('Enter ID number'),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter ID number') : null,
+                  decoration: _buildInputDecoration('Enter National ID (14 digits)'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return AppLanguage.translate('Please enter National ID number');
+                    }
+                    // Remove any spaces or dashes for validation
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    // Check if it's exactly 14 digits
+                    if (cleanValue.length != 14) {
+                      return 'National ID must be exactly 14 digits';
+                    }
+                    // Check if all characters are digits
+                    if (!RegExp(r'^\d{14}$').hasMatch(cleanValue)) {
+                      return 'National ID must contain only digits';
+                    }
+                    // Check if first digit is 2 or 3 (Egyptian ID format)
+                    final firstDigit = int.tryParse(cleanValue.substring(0, 1));
+                    if (firstDigit != 2 && firstDigit != 3) {
+                      return 'Invalid National ID format (must start with 2 or 3)';
+                    }
+                    return null;
+                  },
                   onFieldSubmitted: (_) => _mobileNumberFocusNode.requestFocus(),
                   onChanged: (value) {
                     if (value.isNotEmpty) {
-                      _checkDuplicateID(value);
+                      // Clean the value before checking
+                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                      if (cleanValue.length == 14) {
+                        _checkDuplicateID(cleanValue);
+                      } else {
+                        setState(() {
+                          _duplicateIDMessage = null;
+                        });
+                      }
                     } else {
                       setState(() {
                         _duplicateIDMessage = null;
@@ -15475,14 +15716,17 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                   focusNode: _mobileNumberFocusNode,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  decoration: _buildInputDecoration('Enter mobile number'),
+                  decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return AppLanguage.translate('Please enter mobile number');
                     }
-                    final regex = RegExp(r'^01[0-2,5]{1}[0-9]{8}$');
-                    if (!regex.hasMatch(value)) {
-                      return AppLanguage.translate('Invalid Egyptian mobile number');
+                    // Remove any spaces or dashes for validation
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    // Check Egyptian mobile number format: 01[0-2,5][0-9]{8}
+                    final regex = RegExp(r'^01[0-2,5][0-9]{8}$');
+                    if (!regex.hasMatch(cleanValue)) {
+                      return 'Invalid Egyptian mobile number format. Must be 11 digits starting with 01 (e.g., 01012345678, 01123456789, 01234567890, 01512345678)';
                     }
                     return null;
                   },
@@ -15496,7 +15740,48 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                       _nfcCodeFocusNode.requestFocus();
                     }
                   },
+                  onChanged: (value) {
+                    if (value.isNotEmpty) {
+                      // Clean the value before checking
+                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                      // Only check if it's a valid format (11 digits starting with 01)
+                      if (RegExp(r'^01[0-2,5][0-9]{8}$').hasMatch(cleanValue)) {
+                        _checkDuplicateMobile(cleanValue);
+                      } else {
+                        setState(() {
+                          _duplicateMobileMessage = null;
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        _duplicateMobileMessage = null;
+                      });
+                    }
+                  },
                 ),
+                if (_duplicateMobileMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _duplicateMobileMessage!,
+                            style: const TextStyle(color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 _buildLabel('Number of Units *'),
                 const SizedBox(height: 8),
@@ -16228,6 +16513,31 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                             if (beneficiary.mobileNumber != null)
                               Text('Mobile: ${beneficiary.mobileNumber}'),
                             Text('Status: ${beneficiary.status}'),
+                            if (beneficiary.createdBy != null && beneficiary.createdBy!.isNotEmpty)
+                              FutureBuilder<Admin?>(
+                                future: AdminService.getAdminById(beneficiary.createdBy!),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final admin = snapshot.data;
+                                  final createdByText = admin != null 
+                                      ? 'Created by: ${admin.fullName}'
+                                      : beneficiary.createdBy == 'guest' 
+                                          ? 'Created by: Guest'
+                                          : beneficiary.createdBy == 'system'
+                                              ? 'Created by: System'
+                                              : 'Created by: ${beneficiary.createdBy}';
+                                  return Text(
+                                    createdByText,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                         trailing: Row(
@@ -16239,25 +16549,124 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                                 backgroundColor: const Color(0xFF81CF01).withOpacity(0.2),
                                 labelStyle: const TextStyle(fontSize: 12),
                               ),
-                            const Icon(Icons.chevron_right),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.orange),
+                              tooltip: 'Update',
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => BeneficiaryDetailsScreen(
+                                      beneficiary: beneficiary,
+                                      beneficiaryIndex: -1,
+                                      availableQueues: widget.queues,
+                                      distributionAreas: widget.distributionAreas,
+                                      entities: widget.entities,
+                                      onBeneficiaryUpdated: (updatedBeneficiary) async {
+                                        // Update in Firebase
+                                        await BeneficiaryService.updateBeneficiary(
+                                          updatedBeneficiary.id,
+                                          updatedBeneficiary,
+                                        );
+                                        // Call the callback
+                                        widget.onBeneficiaryUpdated(updatedBeneficiary);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Beneficiary updated successfully'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      onBeneficiaryDeleted: () {},
+                                      onEntityAdded: widget.onEntityAdded,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: 'Delete',
+                              onPressed: () {
+                                // Store parent context before showing dialog
+                                final parentContext = context;
+                                
+                                // Show confirmation dialog
+                                showDialog(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text('Confirm Delete'),
+                                    content: Text(
+                                      'Are you sure you want to delete ${beneficiary.name}? This action cannot be undone.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(dialogContext),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () async {
+                                          // Close confirmation dialog first
+                                          Navigator.pop(dialogContext);
+                                          
+                                          // Show loading indicator using parent context
+                                          showDialog(
+                                            context: parentContext,
+                                            barrierDismissible: false,
+                                            builder: (loadingContext) => const Center(
+                                              child: CircularProgressIndicator(),
+                                            ),
+                                          );
+                                          
+                                          try {
+                                            // Delete from Firebase
+                                            await BeneficiaryService.deleteBeneficiary(beneficiary.id);
+                                            
+                                            // Close loading dialog
+                                            if (mounted && Navigator.of(parentContext).canPop()) {
+                                              Navigator.of(parentContext).pop();
+                                            }
+                                            
+                                            // Show success message
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Beneficiary deleted successfully'),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            // Close loading dialog
+                                            if (mounted && Navigator.of(parentContext).canPop()) {
+                                              Navigator.of(parentContext).pop();
+                                            }
+                                            
+                                            // Show error message
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Error deleting beneficiary: $e'),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => BeneficiaryDetailsScreen(
-                                beneficiary: beneficiary,
-                                beneficiaryIndex: -1, // Not needed for Firebase
-                                availableQueues: widget.queues,
-                                distributionAreas: widget.distributionAreas,
-                                entities: widget.entities,
-                                onBeneficiaryUpdated: widget.onBeneficiaryUpdated,
-                                onBeneficiaryDeleted: () {},
-                                onEntityAdded: widget.onEntityAdded,
-                              ),
-                            ),
-                          );
-                        },
                       ),
                     );
                   },
@@ -16332,6 +16741,23 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
   List<Queue> get _filteredQueues {
     if (_selectedDistributionArea == null) return [];
     return widget.availableQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
+  }
+
+  /// Build unique queue names for dropdown, handling duplicates
+  List<String> get _uniqueQueueNames {
+    final queues = _filteredQueues;
+    final seen = <String>{};
+    final uniqueNames = <String>[];
+    
+    for (final queue in queues) {
+      final name = queue.name;
+      if (!seen.contains(name)) {
+        seen.add(name);
+        uniqueNames.add(name);
+      }
+    }
+    
+    return uniqueNames;
   }
 
   @override
@@ -16684,6 +17110,72 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildQueuePointDropdown() {
+    final queues = _filteredQueues;
+    // Get unique queue names to avoid duplicates - use Set to guarantee uniqueness
+    final uniqueQueueNames = _uniqueQueueNames.toSet().toList();
+    
+    // Validate selected queue point exists in the list and ensure it's unique
+    String? validSelectedQueuePoint = _selectedQueuePoint;
+    if (validSelectedQueuePoint != null) {
+      // Count how many times this value appears (should be exactly 1)
+      final count = uniqueQueueNames.where((name) => name == validSelectedQueuePoint).length;
+      if (count != 1) {
+        // Value doesn't exist or appears multiple times, reset it
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedQueuePoint = null;
+            });
+          }
+        });
+        validSelectedQueuePoint = null;
+      }
+    }
+    
+    // Ensure no duplicate values in dropdown items
+    final dropdownItems = <DropdownMenuItem<String>>[];
+    final usedValues = <String>{};
+    
+    for (final queueName in uniqueQueueNames) {
+      if (!usedValues.contains(queueName)) {
+        usedValues.add(queueName);
+        dropdownItems.add(
+          DropdownMenuItem(
+            value: queueName,
+            child: Text(
+              queueName,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        );
+      }
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: validSelectedQueuePoint,
+          isExpanded: true,
+          hint: const Text('Select queue point'),
+          items: dropdownItems,
+          onChanged: (value) {
+            setState(() {
+              _selectedQueuePoint = value;
+            });
+          },
+        ),
+      ),
     );
   }
 
@@ -17389,6 +17881,12 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                 _buildLabel('Distribution Area *'),
                 const SizedBox(height: 8),
                 _buildDistributionAreaDropdown(),
+                if (_selectedDistributionArea != null) ...[
+                  const SizedBox(height: 24),
+                  _buildLabel('Initial Assigned Queue Point'),
+                  const SizedBox(height: 8),
+                  _buildQueuePointDropdown(),
+                ],
                 const SizedBox(height: 24),
                 _buildLabel('ID Copy'),
                 const SizedBox(height: 8),
@@ -18695,6 +19193,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   String? _lastProcessedTagId; // Track last processed tag to prevent duplicate searches
   DateTime? _lastTagDetectionTime; // Track last tag detection time
   static const Duration _tagDetectionCooldown = Duration(milliseconds: 1500); // Cooldown period
+  final Map<String, int> _unitsToServe = {}; // Track units to serve for each beneficiary
 
   late final String _effectiveQueueName; // Day-specific key for Multi Day queues
 
@@ -18703,6 +19202,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   void initState() {
     super.initState();
     _availableUnits = widget.queue.numberOfAvailableUnits;
+    _servingOption = 'queueOrder'; // Default to Queue order sequence
 
     // Multi Day beneficiaries are saved under a day-specific queue key:
     //   <queue.name>_YYYY-MM-DD
@@ -18861,7 +19361,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     }
   }
 
-  void _handleSearchInput(String value) {
+  Future<void> _handleSearchInput(String value) async {
     if (value.isEmpty) {
       setState(() {
         _selectedBeneficiary = null;
@@ -18872,11 +19372,25 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // Normalize the search value (trim and uppercase for comparison)
     final normalizedValue = value.trim();
     Beneficiary? foundBeneficiary;
+    
+    // Get the list to search in - if "without tickets" or "no order" mode, search all beneficiaries from distribution area
+    List<Beneficiary> searchList = _localBeneficiaries;
+    if (_servingOption == 'withoutTickets' || _servingOption == 'noOrder') {
+      try {
+        // Load all beneficiaries from the queue's distribution area
+        final allAreaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(widget.queue.distributionArea).first;
+        searchList = allAreaBeneficiaries;
+      } catch (e) {
+        print('Error loading area beneficiaries: $e');
+        // Fall back to local list
+        searchList = _localBeneficiaries;
+      }
+    }
 
     // Try to find beneficiary by different methods - check all possibilities
     // 1. Try NFC code (case-insensitive, with or without "NFC_" prefix)
     try {
-      final nfcMatches = _localBeneficiaries.where((b) {
+      final nfcMatches = searchList.where((b) {
         if (b.nfcPreprintedCode == null) return false;
         final nfcCode = b.nfcPreprintedCode!.toUpperCase().trim();
         final searchValue = normalizedValue.toUpperCase();
@@ -18901,7 +19415,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         
         // Check if it looks like a mobile number (starts with 01 and has 11 digits)
         if (RegExp(r'^01[0-2,5]?[0-9]{0,9}$').hasMatch(cleanValue)) {
-          final mobileMatches = _localBeneficiaries.where((b) {
+          final mobileMatches = searchList.where((b) {
             final mobileNumber = b.mobileNumber;
             if (mobileNumber == null || mobileNumber.isEmpty) return false;
             final mobile = mobileNumber.replaceAll(RegExp(r'[\s\-]'), '');
@@ -18938,7 +19452,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         
         // Check if it looks like an ID (all digits, at least 11 characters)
         if (RegExp(r'^[0-9]{11,}$').hasMatch(cleanValue)) {
-          final idMatches = _localBeneficiaries.where((b) {
+          final idMatches = searchList.where((b) {
             final idNumber = b.idNumber;
             if (idNumber == null || idNumber.isEmpty) return false;
             final id = idNumber.replaceAll(RegExp(r'[\s\-]'), '');
@@ -18970,7 +19484,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // 4. If still not found, try name search as fallback (partial match)
     if (foundBeneficiary == null && normalizedValue.length >= 3) {
       try {
-        final nameMatches = _localBeneficiaries.where((b) {
+        final nameMatches = searchList.where((b) {
           final name = b.name.toLowerCase();
           return name.contains(normalizedValue.toLowerCase());
         }).toList();
@@ -18980,6 +19494,73 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         }
       } catch (e) {
         // Not found
+      }
+    }
+
+    // For "No Order" mode, if not found in local/area list, search directly in Firebase
+    if (foundBeneficiary == null && _servingOption == 'noOrder') {
+      try {
+        final cleanValue = normalizedValue.replaceAll(RegExp(r'[\s\-]'), '');
+        
+        // Try NFC first (if value looks like NFC code)
+        if (normalizedValue.length >= 8 && (normalizedValue.toUpperCase().contains('NFC') || !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(normalizedValue);
+        }
+        
+        // Try mobile number (if it looks like a mobile number)
+        if (foundBeneficiary == null && RegExp(r'^01[0-2,5]?[0-9]{8,9}$').hasMatch(cleanValue)) {
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(cleanValue);
+        }
+        
+        // Try national ID (if it looks like an ID - all digits, 11+ characters)
+        if (foundBeneficiary == null && RegExp(r'^[0-9]{11,}$').hasMatch(cleanValue)) {
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(cleanValue);
+        }
+        
+        // If found in Firebase and not in local list, add to local list temporarily for serving
+        if (foundBeneficiary != null) {
+          // Check if beneficiary is from the same distribution area
+          if (foundBeneficiary.distributionArea != widget.queue.distributionArea) {
+            // Not from same area - show error
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Beneficiary is not assigned to this distribution area'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+            foundBeneficiary = null;
+          } else if (!_localBeneficiaries.any((b) => b.id == foundBeneficiary!.id)) {
+            // Add to local list if not already present
+            setState(() {
+              _localBeneficiaries.add(foundBeneficiary!);
+            });
+          }
+        }
+      } catch (e) {
+        print('Error searching in Firebase for No Order mode: $e');
+      }
+    }
+
+    // If "without tickets" mode and beneficiary found, check eligibility and add to queue if needed
+    if (foundBeneficiary != null && _servingOption == 'withoutTickets') {
+      final isEligible = await _checkWithoutTicketsEligibility(foundBeneficiary);
+      if (isEligible) {
+        // Add beneficiary to queue without queue number
+        await _addBeneficiaryToQueueWithoutTicket(foundBeneficiary);
+      } else {
+        // Not eligible - show message and don't select
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Beneficiary is not eligible for without tickets serving. They may already be in this queue or have a queue number.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
       }
     }
 
@@ -18995,18 +19576,101 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       _scrollToBeneficiary(foundBeneficiary);
       
       // Show success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } else {
       // Clear selection if no match found
       setState(() {
         _selectedBeneficiary = null;
       });
+    }
+  }
+  
+  // Check if beneficiary is eligible for "without tickets" serving
+  Future<bool> _checkWithoutTicketsEligibility(Beneficiary beneficiary) async {
+    // 1. Check if beneficiary is NOT in this queue
+    if (beneficiary.initialAssignedQueuePoint == _effectiveQueueName) {
+      return false; // Already in this queue
+    }
+    
+    // 2. Check if beneficiary IS assigned to the queue's distribution area
+    if (beneficiary.distributionArea != widget.queue.distributionArea) {
+      return false; // Not assigned to this distribution area
+    }
+    
+    // 3. Check if beneficiary does NOT have a queue number for this queue
+    // For multi-day queues, check queueHistory
+    if (widget.queue.isMultiDay) {
+      try {
+        final historyQuery = await FirebaseService.firestore
+            .collection('queueHistory')
+            .where('dayQueueName', isEqualTo: _effectiveQueueName)
+            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('action', isEqualTo: 'issued')
+            .get();
+        
+        if (historyQuery.docs.isNotEmpty) {
+          return false; // Has a queue number for this day
+        }
+      } catch (e) {
+        print('Error checking queueHistory: $e');
+        // If we can't check, assume eligible (fail open)
+      }
+    } else {
+      // For single-day queues, check if beneficiary has a queue number for this queue
+      if (beneficiary.initialAssignedQueuePoint == widget.queue.name && beneficiary.queueNumber != null) {
+        return false; // Has a queue number for this queue
+      }
+    }
+    
+    return true; // All conditions met
+  }
+  
+  // Add beneficiary to queue without issuing a queue number
+  Future<void> _addBeneficiaryToQueueWithoutTicket(Beneficiary beneficiary) async {
+    try {
+      // Update beneficiary's initialAssignedQueuePoint to this queue
+      final updatedBeneficiary = beneficiary.copyWith(
+        initialAssignedQueuePoint: _effectiveQueueName,
+        // Don't set queueNumber - leave it null to indicate "Has No Ticket"
+      );
+      
+      await BeneficiaryService.updateBeneficiary(beneficiary.id, updatedBeneficiary);
+      
+      // Add to local list if not already present
+      if (!_localBeneficiaries.any((b) => b.id == beneficiary.id)) {
+        setState(() {
+          _localBeneficiaries.add(updatedBeneficiary);
+        });
+      } else {
+        // Update existing entry
+        final index = _localBeneficiaries.indexWhere((b) => b.id == beneficiary.id);
+        if (index != -1) {
+          setState(() {
+            _localBeneficiaries[index] = updatedBeneficiary;
+          });
+        }
+      }
+      
+      print('✅ Added beneficiary ${beneficiary.id} to queue $_effectiveQueueName without ticket');
+    } catch (e) {
+      print('Error adding beneficiary to queue: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding beneficiary to queue: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -19401,7 +20065,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             ),
           // Statistics Section
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             color: Colors.white,
             child: Row(
               children: [
@@ -19413,7 +20077,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     Colors.green,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: _buildStatCard(
                     'Attendees',
@@ -19422,22 +20086,47 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     Colors.blue,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: _buildStatCard(
                     'Available',
-                    '$_availableUnits',
+                    '$_availableUnits / ${widget.queue.numberOfAvailableUnits}',
                     Icons.inventory,
                     Colors.orange,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: _buildStatCard(
                     'Est. Q Size',
                     '${widget.queue.estimatedQueueSize}',
                     Icons.assessment,
                     Colors.purple,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.settings, size: 18, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text(
+                  'Current Serving Option: ',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  _getServingOptionDisplayName(),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
                 ),
               ],
@@ -19510,212 +20199,178 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                           ? (daySpecificUnitsTaken[beneficiary.id] ?? 0)
                           : beneficiary.unitsTaken;
                       final remainingUnits = eligibleUnits - dayUnitsTaken;
+                      final maxUnitsToServe = remainingUnits > 0 && _availableUnits > 0
+                          ? (remainingUnits < _availableUnits ? remainingUnits : _availableUnits)
+                          : 1;
                       
                       final isSelected = _selectedBeneficiary?.id == beneficiary.id;
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         elevation: isSelected ? 4 : 1,
                         color: isSelected ? const Color(0xFF81CF01).withOpacity(0.1) : Colors.white,
-                        child: InkWell(
-                          onTap: () => _selectBeneficiary(beneficiary),
-                          child: ListTile(
-                            leading: Stack(
-                              children: [
-                                beneficiary.photoPath != null
-                                    ? CircleAvatar(
-                                        backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
-                                            ? NetworkImage(beneficiary.photoPath!)
-                                            : beneficiary.photoPath!.startsWith('assets/')
-                                                ? AssetImage(beneficiary.photoPath!)
-                                                : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
-                                        onBackgroundImageError: (exception, stackTrace) {
-                                          // Handle image loading errors gracefully
-                                        },
-                                      )
-                                    : const CircleAvatar(child: Icon(Icons.person)),
-                                if (isSelected)
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF81CF01),
-                                        shape: BoxShape.circle,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () => _selectBeneficiary(beneficiary),
+                              child: ListTile(
+                                leading: Stack(
+                                  children: [
+                                    beneficiary.photoPath != null
+                                        ? CircleAvatar(
+                                            backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
+                                                ? NetworkImage(beneficiary.photoPath!)
+                                                : beneficiary.photoPath!.startsWith('assets/')
+                                                    ? AssetImage(beneficiary.photoPath!)
+                                                    : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
+                                            onBackgroundImageError: (exception, stackTrace) {
+                                              // Handle image loading errors gracefully
+                                            },
+                                          )
+                                        : const CircleAvatar(child: Icon(Icons.person)),
+                                    if (isSelected)
+                                      Positioned(
+                                        right: 0,
+                                        bottom: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF81CF01),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.check, color: Colors.white, size: 16),
+                                        ),
                                       ),
-                                      child: const Icon(Icons.check, color: Colors.white, size: 16),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            title: Text(
-                              beneficiary.name,
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${AppLanguage.translate('Eligible for')} ${dayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
+                                  ],
+                                ),
+                                title: Text(
+                                  beneficiary.name,
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: isSelected ? Colors.black87 : const Color(0xFF81CF01),
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                                if (beneficiary.entityName != null) Text('Entity: ${beneficiary.entityName}'),
-                                if (beneficiary.queueNumber != null) Text('Queue #${beneficiary.queueNumber}'),
-                                if (beneficiary.idNumber.isNotEmpty) Text('ID: ${beneficiary.idNumber}'),
-                              ],
-                            ),
-                            trailing: servedBeneficiaryIds.contains(beneficiary.id)
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : ElevatedButton(
-                                    onPressed: remainingUnits > 0 && _availableUnits > 0
-                                        ? () {
-                                            if (!isSelected) {
-                                              _selectBeneficiary(beneficiary);
-                                            }
-                                            showDialog(
-                                              context: context,
-                                              builder: (context) {
-                                                final maxUnits = remainingUnits > 0 ? remainingUnits : 1;
-                                                final unitsNotifier = ValueNotifier<int>(maxUnits);
-                                                return StatefulBuilder(
-                                                  builder: (context, setDialogState) {
-                                                    return ValueListenableBuilder<int>(
-                                                      valueListenable: unitsNotifier,
-                                                      builder: (context, unitsToServe, child) {
-                                                        // Calculate what the display will be after serving
-                                                        final newDayUnitsTaken = dayUnitsTaken + unitsToServe;
-                                                        return AlertDialog(
-                                                          title: Text(AppLanguage.translate('Serve Units')),
-                                                          content: Column(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              // Show current status
-                                                              Container(
-                                                                padding: const EdgeInsets.all(12),
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors.blue.shade50,
-                                                                  borderRadius: BorderRadius.circular(8),
-                                                                ),
-                                                                child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                                    Text(
-                                                                      '${AppLanguage.translate('Current status')}: ${dayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
-                                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                                                    ),
-                                                                    const SizedBox(height: 4),
-                                                                    Text(
-                                                                      '${AppLanguage.translate('After serving')}: ${newDayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
-                                                                      style: TextStyle(
-                                                                        fontSize: 12,
-                                                                        color: newDayUnitsTaken > eligibleUnits ? Colors.red : Colors.green.shade700,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              const SizedBox(height: 16),
-                                                              Text(
-                                                                AppLanguage.translate('Units to serve (max: $remainingUnits)'),
-                                                                style: const TextStyle(fontSize: 14, color: Colors.grey),
-                                                              ),
-                                                              const SizedBox(height: 16),
-                                                              Row(
-                                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                                children: [
-                                                                  IconButton(
-                                                                    onPressed: unitsToServe > 1
-                                                                        ? () {
-                                                                            unitsNotifier.value = unitsToServe - 1;
-                                                                          }
-                                                                        : null,
-                                                                    icon: const Icon(Icons.remove_circle_outline),
-                                                                    iconSize: 32,
-                                                                    color: const Color(0xFF81CF01),
-                                                                  ),
-                                                                  Container(
-                                                                    width: 80,
-                                                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                                                    decoration: BoxDecoration(
-                                                                      border: Border.all(color: const Color(0xFF81CF01)),
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                    ),
-                                                                    child: Text(
-                                                                      '$unitsToServe',
-                                                                      textAlign: TextAlign.center,
-                                                                      style: const TextStyle(
-                                                                        fontSize: 24,
-                                                                        fontWeight: FontWeight.bold,
-                                                                        color: Color(0xFF81CF01),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  IconButton(
-                                                                    onPressed: unitsToServe < remainingUnits && unitsToServe < _availableUnits
-                                                                        ? () {
-                                                                            unitsNotifier.value = unitsToServe + 1;
-                                                                          }
-                                                                        : null,
-                                                                    icon: const Icon(Icons.add_circle_outline),
-                                                                    iconSize: 32,
-                                                                    color: const Color(0xFF81CF01),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () {
-                                                                unitsNotifier.dispose();
-                                                                Navigator.pop(context);
-                                                              },
-                                                              child: Text(AppLanguage.translate('Cancel')),
-                                                            ),
-                                                            ElevatedButton(
-                                                              onPressed: unitsToServe > 0 && unitsToServe <= remainingUnits && unitsToServe <= _availableUnits
-                                                                  ? () {
-                                                                      final units = unitsToServe;
-                                                                      unitsNotifier.dispose();
-                                                                      Navigator.pop(context);
-                                                                      _serveBeneficiary(
-                                                                        beneficiary,
-                                                                        units,
-                                                                      );
-                                                                      setState(() {
-                                                                        _selectedBeneficiary = null;
-                                                                      });
-                                                                    }
-                                                                  : null,
-                                                              style: ElevatedButton.styleFrom(
-                                                                backgroundColor: const Color(0xFF81CF01),
-                                                                foregroundColor: Colors.white,
-                                                              ),
-                                                              child: Text(AppLanguage.translate('Serve')),
-                                                            ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                            );
-                                          }
-                                        : null,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isSelected ? const Color(0xFF81CF01) : Colors.grey,
-                                      foregroundColor: Colors.white,
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${AppLanguage.translate('Eligible for')} ${dayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: isSelected ? Colors.black87 : const Color(0xFF81CF01),
+                                      ),
                                     ),
-                                    child: Text(AppLanguage.translate('Serve')),
+                                    if (beneficiary.entityName != null) Text('Entity: ${beneficiary.entityName}'),
+                                    // Show "Has No Ticket" if beneficiary is in this queue but has no queue number
+                                    if (beneficiary.initialAssignedQueuePoint == _effectiveQueueName && beneficiary.queueNumber == null)
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.orange, width: 1),
+                                        ),
+                                        child: const Text(
+                                          'Has No Ticket',
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    if (beneficiary.queueNumber != null) Text('Queue #${beneficiary.queueNumber}'),
+                                    if (beneficiary.idNumber.isNotEmpty) Text('ID: ${beneficiary.idNumber}'),
+                                  ],
+                                ),
+                                trailing: servedBeneficiaryIds.contains(beneficiary.id)
+                                    ? const Icon(Icons.check_circle, color: Colors.green)
+                                    : null,
+                              ),
+                            ),
+                            if (!servedBeneficiaryIds.contains(beneficiary.id) && remainingUnits > 0 && _availableUnits > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: Colors.grey[300]!),
                                   ),
-                          ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      onPressed: (_unitsToServe[beneficiary.id] ?? maxUnitsToServe) > 1
+                                          ? () {
+                                              setState(() {
+                                                final currentValue = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
+                                                if (currentValue > 1) {
+                                                  _unitsToServe[beneficiary.id] = currentValue - 1;
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                      icon: const Icon(Icons.remove_circle_outline),
+                                      iconSize: 24,
+                                      color: Colors.blue,
+                                    ),
+                                    Container(
+                                      width: 50,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.blue),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${_unitsToServe[beneficiary.id] ?? maxUnitsToServe}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: (_unitsToServe[beneficiary.id] ?? maxUnitsToServe) < maxUnitsToServe
+                                          ? () {
+                                              setState(() {
+                                                final currentValue = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
+                                                if (currentValue < maxUnitsToServe) {
+                                                  _unitsToServe[beneficiary.id] = currentValue + 1;
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                      icon: const Icon(Icons.add_circle_outline),
+                                      iconSize: 24,
+                                      color: Colors.blue,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
+                                        if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
+                                          _serveBeneficiary(beneficiary, units);
+                                          setState(() {
+                                            _unitsToServe.remove(beneficiary.id);
+                                            _selectedBeneficiary = null;
+                                          });
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                        minimumSize: const Size(80, 40),
+                                      ),
+                                      child: Text(AppLanguage.translate('Serve'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -19727,21 +20382,21 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
   Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(height: 2),
+          Icon(icon, color: color, size: 12),
+          const SizedBox(height: 1),
           Text(
             value,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: color,
             ),
@@ -19750,7 +20405,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           Text(
             label,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 8,
               color: Colors.grey[700],
               fontWeight: FontWeight.w500,
             ),
@@ -19769,6 +20424,23 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     Navigator.pop(context);
   }
 
+  String _getServingOptionDisplayName() {
+    switch (_servingOption) {
+      case 'queueOrder':
+        return 'Queue order sequence';
+      case 'grace5':
+        return 'Grace 5';
+      case 'grace10':
+        return 'Grace 10';
+      case 'noOrder':
+        return 'No Order';
+      case 'withoutTickets':
+        return 'Without Tickets';
+      default:
+        return 'None';
+    }
+  }
+
   Future<void> _serveBeneficiary(Beneficiary beneficiary, int units) async {
     if (units <= 0 || _availableUnits < units) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -19776,6 +20448,96 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       );
       return;
     }
+    
+    // Check if beneficiary was already served today in another queue with the same unit type
+    try {
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+      
+      // Query queueHistory for served actions today for this beneficiary
+      // Try to query with unitName filter first (for new records that have unitName stored)
+      QuerySnapshot? servedHistoryQuery;
+      try {
+        servedHistoryQuery = await FirebaseService.firestore
+            .collection('queueHistory')
+            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('action', isEqualTo: 'served')
+            .where('unitName', isEqualTo: widget.queue.unitName)
+            .where('performedAt', isGreaterThanOrEqualTo: FirebaseService.dateTimeToTimestamp(todayStart))
+            .where('performedAt', isLessThan: FirebaseService.dateTimeToTimestamp(todayEnd))
+            .get();
+      } catch (e) {
+        // If query fails (e.g., missing index or unitName field), fall back to querying without unitName filter
+        print('Note: Could not query with unitName filter, trying without: $e');
+        servedHistoryQuery = await FirebaseService.firestore
+            .collection('queueHistory')
+            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('action', isEqualTo: 'served')
+            .where('performedAt', isGreaterThanOrEqualTo: FirebaseService.dateTimeToTimestamp(todayStart))
+            .where('performedAt', isLessThan: FirebaseService.dateTimeToTimestamp(todayEnd))
+            .get();
+      }
+      
+      // Check each served record to see if it's from a different queue with the same unit type
+      for (var doc in servedHistoryQuery.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final servedQueueId = data['queueId'] as String?;
+        final dayQueueName = data['dayQueueName'] as String?;
+        final servedUnitName = data['unitName'] as String?;
+        
+        // Skip if this is the same queue we're trying to serve in
+        if (servedQueueId == widget.queue.name || dayQueueName == _effectiveQueueName) {
+          continue;
+        }
+        
+        // Check if unitName matches (either from stored field or by querying the queue)
+        bool unitNameMatches = false;
+        String? servedQueueName;
+        
+        if (servedUnitName != null && servedUnitName == widget.queue.unitName) {
+          // UnitName is stored and matches
+          unitNameMatches = true;
+          servedQueueName = servedQueueId; // Use queueId as queue name
+        } else if (servedQueueId != null) {
+          // UnitName not stored, need to query the queue to check
+          try {
+            final servedQueueIdFromFirestore = await QueueService.getQueueIdByName(servedQueueId);
+            if (servedQueueIdFromFirestore != null) {
+              final servedQueue = await QueueService.getQueueById(servedQueueIdFromFirestore);
+              if (servedQueue != null) {
+                servedQueueName = servedQueue.name;
+                if (servedQueue.unitName == widget.queue.unitName) {
+                  unitNameMatches = true;
+                }
+              }
+            }
+          } catch (e) {
+            print('Error checking served queue: $e');
+            // Continue checking other records if this one fails
+            continue;
+          }
+        }
+        
+        if (unitNameMatches && servedQueueName != null) {
+          // Beneficiary was already served today in another queue with the same unit type
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in queue "$servedQueueName". Cannot serve the same type again on the same day.'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      print('Error checking if beneficiary was served today in another queue: $e');
+      // Continue with serving if check fails (fail open)
+    }
+    
     // Eligibility is based on beneficiary.numberOfUnits set during registration
     final eligibleUnits = int.tryParse(beneficiary.numberOfUnits) ?? 1;
     
@@ -19854,24 +20616,23 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       
       print('✅ Beneficiary updated in Firebase: unitsTaken = $newUnitsTaken, isServed = ${updatedBeneficiary.isServed}');
       
-      // Record serving action in queueHistory for multi-day queues (day-specific tracking)
-      if (widget.queue.isMultiDay) {
-        try {
-          await FirebaseService.firestore.collection('queueHistory').add({
-            'queueId': widget.queue.name,
-            'dayQueueName': _effectiveQueueName, // Store the day-specific queue name
-            'beneficiaryId': beneficiary.id,
-            'action': 'served',
-            'unitsServed': units,
-            'totalUnitsTaken': newUnitsTaken,
-            'performedBy': AdminService.currentAdmin?.fullName ?? 'system',
-            'performedAt': FieldValue.serverTimestamp(),
-          });
-          print('✅ Recorded serving action in queueHistory for beneficiary ${beneficiary.id} on day $_effectiveQueueName');
-        } catch (e) {
-          print('⚠️ Warning: Could not record serving action in queueHistory: $e');
-          // Don't fail the operation if history tracking fails
-        }
+      // Record serving action in queueHistory for all queues (for tracking and validation)
+      try {
+        await FirebaseService.firestore.collection('queueHistory').add({
+          'queueId': widget.queue.name,
+          'dayQueueName': widget.queue.isMultiDay ? _effectiveQueueName : widget.queue.name, // Store the day-specific queue name for multi-day, or queue name for single-day
+          'beneficiaryId': beneficiary.id,
+          'action': 'served',
+          'unitsServed': units,
+          'totalUnitsTaken': newUnitsTaken,
+          'unitName': widget.queue.unitName, // Store unitName for easier validation
+          'performedBy': AdminService.currentAdmin?.fullName ?? 'system',
+          'performedAt': FieldValue.serverTimestamp(),
+        });
+        print('✅ Recorded serving action in queueHistory for beneficiary ${beneficiary.id}');
+      } catch (e) {
+        print('⚠️ Warning: Could not record serving action in queueHistory: $e');
+        // Don't fail the operation if history tracking fails
       }
       
       // Also record serving metadata (servedAt, servedBy) if needed
@@ -20012,14 +20773,32 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               }).toList();
               
               // Merge with local updates
+              // Prefer stream data for numberOfUnits (eligibility) since it's the source of truth
+              // Prefer local updates for unitsTaken/isServed (recently served) for immediate feedback
               final Map<String, Beneficiary> beneficiaryMap = {};
+              // First add all from stream (most authoritative from Firebase, especially for numberOfUnits)
               for (var b in filteredBeneficiaries) {
                 beneficiaryMap[b.id] = b;
               }
+              // Then merge with local updates (might have recent serving updates not yet in stream)
               for (var b in _localBeneficiaries) {
                 if (b.initialAssignedQueuePoint == _effectiveQueueName || 
                     beneficiaryIdsFromHistory.contains(b.id)) {
-                  beneficiaryMap[b.id] = b;
+                  final streamed = beneficiaryMap[b.id];
+                  if (streamed == null) {
+                    // New beneficiary not in stream yet, add it
+                    beneficiaryMap[b.id] = b;
+                  } else {
+                    // Merge: use stream's numberOfUnits (source of truth), but prefer local for unitsTaken/isServed if more recent
+                    if (b.unitsTaken > streamed.unitsTaken || 
+                        (b.unitsTaken == streamed.unitsTaken && b.isServed != streamed.isServed)) {
+                      // Local has more recent serving data, but keep numberOfUnits from stream
+                      beneficiaryMap[b.id] = b.copyWith(numberOfUnits: streamed.numberOfUnits);
+                    } else {
+                      // Stream is more recent or equal, use stream data (already in map)
+                      // This ensures numberOfUnits updates are immediately reflected
+                    }
+                  }
                 }
               }
               
@@ -20089,19 +20868,103 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     ListTile(
-                                      title: const Text('Grace 5'),
+                                      leading: _servingOption == 'queueOrder'
+                                          ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                          : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                      title: Text(
+                                        'Queue order sequence',
+                                        style: TextStyle(
+                                          fontWeight: _servingOption == 'queueOrder' ? FontWeight.bold : FontWeight.normal,
+                                          color: _servingOption == 'queueOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                        ),
+                                      ),
+                                      tileColor: _servingOption == 'queueOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: _servingOption == 'queueOrder'
+                                            ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                            : BorderSide.none,
+                                      ),
+                                      onTap: () => _handleServingOption('queueOrder'),
+                                    ),
+                                    ListTile(
+                                      leading: _servingOption == 'grace5'
+                                          ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                          : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                      title: Text(
+                                        'Grace 5',
+                                        style: TextStyle(
+                                          fontWeight: _servingOption == 'grace5' ? FontWeight.bold : FontWeight.normal,
+                                          color: _servingOption == 'grace5' ? const Color(0xFF81CF01) : Colors.black87,
+                                        ),
+                                      ),
+                                      tileColor: _servingOption == 'grace5' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: _servingOption == 'grace5'
+                                            ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                            : BorderSide.none,
+                                      ),
                                       onTap: () => _handleServingOption('grace5'),
                                     ),
                                     ListTile(
-                                      title: const Text('Grace 10'),
+                                      leading: _servingOption == 'grace10'
+                                          ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                          : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                      title: Text(
+                                        'Grace 10',
+                                        style: TextStyle(
+                                          fontWeight: _servingOption == 'grace10' ? FontWeight.bold : FontWeight.normal,
+                                          color: _servingOption == 'grace10' ? const Color(0xFF81CF01) : Colors.black87,
+                                        ),
+                                      ),
+                                      tileColor: _servingOption == 'grace10' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: _servingOption == 'grace10'
+                                            ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                            : BorderSide.none,
+                                      ),
                                       onTap: () => _handleServingOption('grace10'),
                                     ),
                                     ListTile(
-                                      title: const Text('No Order Mode'),
+                                      leading: _servingOption == 'noOrder'
+                                          ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                          : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                      title: Text(
+                                        'No Order',
+                                        style: TextStyle(
+                                          fontWeight: _servingOption == 'noOrder' ? FontWeight.bold : FontWeight.normal,
+                                          color: _servingOption == 'noOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                        ),
+                                      ),
+                                      tileColor: _servingOption == 'noOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: _servingOption == 'noOrder'
+                                            ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                            : BorderSide.none,
+                                      ),
                                       onTap: () => _handleServingOption('noOrder'),
                                     ),
                                     ListTile(
-                                      title: const Text('Without Tickets'),
+                                      leading: _servingOption == 'withoutTickets'
+                                          ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                          : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                      title: Text(
+                                        'Without Tickets',
+                                        style: TextStyle(
+                                          fontWeight: _servingOption == 'withoutTickets' ? FontWeight.bold : FontWeight.normal,
+                                          color: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01) : Colors.black87,
+                                        ),
+                                      ),
+                                      tileColor: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: _servingOption == 'withoutTickets'
+                                            ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                            : BorderSide.none,
+                                      ),
                                       onTap: () => _handleServingOption('withoutTickets'),
                                     ),
                                   ],
@@ -20137,9 +21000,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             final streamedBeneficiaries = snapshot.data!;
             
             // Merge stream data with local updates to ensure immediate UI updates
-            // Prefer local updates (recently served) over stream data for immediate feedback
+            // Prefer stream data for numberOfUnits (eligibility) since it's the source of truth
+            // Prefer local updates for unitsTaken/isServed (recently served) for immediate feedback
             final Map<String, Beneficiary> beneficiaryMap = {};
-            // First add all from stream (most authoritative from Firebase)
+            // First add all from stream (most authoritative from Firebase, especially for numberOfUnits)
             for (var b in streamedBeneficiaries) {
               beneficiaryMap[b.id] = b;
             }
@@ -20147,11 +21011,20 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             // This ensures immediate UI updates before Firebase stream catches up
             // Only include beneficiaries that match this queue's name
             for (var b in filteredLocalBeneficiaries) {
-              // Only use local if it's more recent (has higher unitsTaken or different isServed)
               final streamed = beneficiaryMap[b.id];
-              if (streamed == null || b.unitsTaken > streamed.unitsTaken || 
-                  (b.unitsTaken == streamed.unitsTaken && b.isServed != streamed.isServed)) {
+              if (streamed == null) {
+                // New beneficiary not in stream yet, add it
                 beneficiaryMap[b.id] = b;
+              } else {
+                // Merge: use stream's numberOfUnits (source of truth), but prefer local for unitsTaken/isServed if more recent
+                if (b.unitsTaken > streamed.unitsTaken || 
+                    (b.unitsTaken == streamed.unitsTaken && b.isServed != streamed.isServed)) {
+                  // Local has more recent serving data, but keep numberOfUnits from stream
+                  beneficiaryMap[b.id] = b.copyWith(numberOfUnits: streamed.numberOfUnits);
+                } else {
+                  // Stream is more recent or equal, use stream data (already in map)
+                  // This ensures numberOfUnits updates are immediately reflected
+                }
               }
             }
             
@@ -20202,19 +21075,103 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               ListTile(
-                                title: const Text('Grace 5'),
+                                leading: _servingOption == 'queueOrder'
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                title: Text(
+                                  'Queue order sequence',
+                                  style: TextStyle(
+                                    fontWeight: _servingOption == 'queueOrder' ? FontWeight.bold : FontWeight.normal,
+                                    color: _servingOption == 'queueOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ),
+                                ),
+                                tileColor: _servingOption == 'queueOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: _servingOption == 'queueOrder'
+                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                      : BorderSide.none,
+                                ),
+                                onTap: () => _handleServingOption('queueOrder'),
+                              ),
+                              ListTile(
+                                leading: _servingOption == 'grace5'
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                title: Text(
+                                  'Grace 5',
+                                  style: TextStyle(
+                                    fontWeight: _servingOption == 'grace5' ? FontWeight.bold : FontWeight.normal,
+                                    color: _servingOption == 'grace5' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ),
+                                ),
+                                tileColor: _servingOption == 'grace5' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: _servingOption == 'grace5'
+                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                      : BorderSide.none,
+                                ),
                                 onTap: () => _handleServingOption('grace5'),
                               ),
                               ListTile(
-                                title: const Text('Grace 10'),
+                                leading: _servingOption == 'grace10'
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                title: Text(
+                                  'Grace 10',
+                                  style: TextStyle(
+                                    fontWeight: _servingOption == 'grace10' ? FontWeight.bold : FontWeight.normal,
+                                    color: _servingOption == 'grace10' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ),
+                                ),
+                                tileColor: _servingOption == 'grace10' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: _servingOption == 'grace10'
+                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                      : BorderSide.none,
+                                ),
                                 onTap: () => _handleServingOption('grace10'),
                               ),
                               ListTile(
-                                title: const Text('No Order Mode'),
+                                leading: _servingOption == 'noOrder'
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                title: Text(
+                                  'No Order',
+                                  style: TextStyle(
+                                    fontWeight: _servingOption == 'noOrder' ? FontWeight.bold : FontWeight.normal,
+                                    color: _servingOption == 'noOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ),
+                                ),
+                                tileColor: _servingOption == 'noOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: _servingOption == 'noOrder'
+                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                      : BorderSide.none,
+                                ),
                                 onTap: () => _handleServingOption('noOrder'),
                               ),
                               ListTile(
-                                title: const Text('Without Tickets'),
+                                leading: _servingOption == 'withoutTickets'
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                title: Text(
+                                  'Without Tickets',
+                                  style: TextStyle(
+                                    fontWeight: _servingOption == 'withoutTickets' ? FontWeight.bold : FontWeight.normal,
+                                    color: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ),
+                                ),
+                                tileColor: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: _servingOption == 'withoutTickets'
+                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                      : BorderSide.none,
+                                ),
                                 onTap: () => _handleServingOption('withoutTickets'),
                               ),
                             ],

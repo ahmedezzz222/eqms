@@ -286,6 +286,7 @@ class BeneficiaryService {
       queueNumber: data['queueNumber'],
       isServed: data['isServed'] ?? false,
       unitsTaken: data['unitsTaken'] ?? 0,
+      createdBy: data['createdBy'],
     );
   }
 }
