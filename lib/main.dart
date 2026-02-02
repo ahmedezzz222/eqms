@@ -16156,6 +16156,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isExpanded = true; // Make dropdown visible by default
   List<String> _adminDistributionAreaIds = [];
+  final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -16191,6 +16192,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _progressNotifier.dispose();
     super.dispose();
   }
 
@@ -16223,6 +16225,176 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     return filtered;
   }
 
+  // Generate test beneficiaries
+  Future<void> _generateTestBeneficiaries() async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Generate Test Data'),
+        content: const Text('This will create 9000 test beneficiaries with Active status. This may take several minutes. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Generate'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Show loading dialog with progress
+    final loadingContext = context;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 20),
+                ValueListenableBuilder<int>(
+                  valueListenable: _progressNotifier,
+                  builder: (context, progress, child) {
+                    return Text('Generating test data...\n$progress/9000 created');
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    try {
+      final random = math.Random();
+      final firstNames = ['Ahmed', 'Mohamed', 'Ali', 'Hassan', 'Omar', 'Khaled', 'Youssef', 'Mahmoud', 'Ibrahim', 'Said', 'Fatima', 'Aisha', 'Mariam', 'Zainab', 'Khadija', 'Salma', 'Nour', 'Layla', 'Hana', 'Sara', 'Nadia', 'Rania', 'Dina', 'Yasmin', 'Reem', 'Lina', 'Rana', 'Heba', 'Doha', 'Mona'];
+      final lastNames = ['Ali', 'Hassan', 'Ibrahim', 'Mohamed', 'Ahmed', 'Omar', 'Khaled', 'Mahmoud', 'Youssef', 'Said', 'Abdullah', 'Hussein', 'Salem', 'Farid', 'Nasser', 'Tariq', 'Rashid', 'Malik', 'Karim', 'Bakr', 'Zaki', 'Fouad', 'Adel', 'Samir', 'Waleed', 'Tamer', 'Sherif', 'Amr', 'Hany', 'Mostafa'];
+      final genders = ['Male', 'Female'];
+      final types = ['Normal', 'VIP', 'Special'];
+      final status = 'Active'; // All beneficiaries will have Active status
+      final unitsOptions = ['1', '2', '3', '4', '5'];
+      
+      // Get available distribution areas and entities
+      final availableAreas = widget.distributionAreas.isNotEmpty 
+          ? widget.distributionAreas 
+          : await DistributionAreaService.getAllAreas().first;
+      final availableEntities = widget.entities.isNotEmpty 
+          ? widget.entities 
+          : ['Individual', 'Family', 'Organization', 'Other'];
+      
+      if (availableAreas.isEmpty) {
+        if (mounted) {
+          Navigator.pop(loadingContext); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No distribution areas available. Please create at least one area first.')),
+          );
+        }
+        return;
+      }
+
+      final currentAdminId = AdminService.currentAdminId ?? 'system';
+      int created = 0;
+      _progressNotifier.value = 0;
+      
+      for (int i = 0; i < 9000; i++) {
+        final firstName = firstNames[random.nextInt(firstNames.length)];
+        final lastName = lastNames[random.nextInt(lastNames.length)];
+        final name = '$firstName $lastName';
+        final gender = genders[random.nextInt(genders.length)];
+        
+        // Generate valid Egyptian National ID (14 digits, starts with 2 or 3)
+        // Use index and timestamp to ensure uniqueness
+        final idPrefix = random.nextBool() ? '2' : '3';
+        final uniquePart = (i * 1000000 + DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(13, '0');
+        final paddedId = '$idPrefix${uniquePart.substring(0, 13)}';
+        
+        // Generate valid Egyptian mobile number (11 digits, starts with 01, third digit is 0,1,2, or 5)
+        // Use index to ensure uniqueness
+        final mobilePrefix = '01';
+        final mobileThirdDigit = ['0', '1', '2', '5'][random.nextInt(4)];
+        final uniqueSuffix = (90000000 + i).toString().padLeft(8, '0');
+        final mobileNumber = '$mobilePrefix$mobileThirdDigit$uniqueSuffix';
+        
+        // Generate NFC code (optional, 30% chance)
+        final String? nfcCode = random.nextDouble() < 0.3 
+            ? 'NFC_${(i * 1000 + DateTime.now().millisecondsSinceEpoch % 1000).toRadixString(16).toUpperCase().padLeft(10, '0')}'
+            : null;
+        
+        final distributionArea = availableAreas[random.nextInt(availableAreas.length)];
+        final isEntity = random.nextDouble() < 0.1; // 10% chance of being an entity
+        final entityName = isEntity ? availableEntities[random.nextInt(availableEntities.length)] : null;
+        
+        // Generate birth date (between 18 and 80 years ago)
+        final yearsAgo = 18 + random.nextInt(62);
+        final birthDate = DateTime.now().subtract(Duration(days: yearsAgo * 365 + random.nextInt(365)));
+        
+        final beneficiary = Beneficiary(
+          id: '', // Will be generated by Firestore
+          distributionArea: distributionArea.id,
+          initialAssignedQueuePoint: '', // No initial queue assignment
+          type: types[random.nextInt(types.length)],
+          gender: gender,
+          name: name,
+          idNumber: paddedId,
+          mobileNumber: mobileNumber,
+          isEntity: isEntity,
+          entityName: entityName,
+          numberOfUnits: unitsOptions[random.nextInt(unitsOptions.length)],
+          nfcPreprintedCode: nfcCode,
+          status: status, // All Active
+          birthDate: birthDate,
+          isServed: false,
+          unitsTaken: 0,
+          createdBy: currentAdminId,
+        );
+        
+        await BeneficiaryService.createBeneficiary(beneficiary, currentAdminId);
+        created++;
+        _progressNotifier.value = created;
+        
+        // Update progress every 500 beneficiaries
+        if (created % 500 == 0) {
+          print('✅ Created $created/9000 test beneficiaries...');
+        }
+      }
+      
+      if (mounted) {
+        Navigator.pop(loadingContext); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully created $created test beneficiaries with Active status!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error generating test beneficiaries: $e');
+      if (mounted) {
+        Navigator.pop(loadingContext); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating test data: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      _progressNotifier.value = 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -16232,13 +16404,25 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
           Container(
             padding: const EdgeInsets.all(20.0),
             color: Colors.white,
-            child: Text(
-              AppLanguage.translate('Beneficiaries'),
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A237E),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppLanguage.translate('Beneficiaries'),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A237E),
+                    ),
+                  ),
+                ),
+                // Test Data Generation Button
+                IconButton(
+                  icon: const Icon(Icons.science, color: Colors.orange),
+                  tooltip: 'Generate 1000 Test Beneficiaries',
+                  onPressed: _generateTestBeneficiaries,
+                ),
+              ],
             ),
           ),
           // Distribution Area Dropdown (Collapsible)
