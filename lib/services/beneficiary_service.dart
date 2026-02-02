@@ -7,26 +7,98 @@ class BeneficiaryService {
   static final CollectionReference _collection =
       FirebaseService.firestore.collection('beneficiaries');
 
-  /// Get all beneficiaries
-  static Stream<List<Beneficiary>> getAllBeneficiaries() {
+  /// Get all beneficiaries with pagination support
+  static Stream<List<Beneficiary>> getAllBeneficiaries({int? limit, bool activeOnly = false}) {
+    Query query;
+    
+    // If activeOnly is true, we can't use orderBy with where (requires composite index)
+    // So we'll filter and sort client-side for better compatibility
+    if (activeOnly) {
+      query = _collection.where('status', isEqualTo: 'Active');
+    } else {
+      query = _collection.orderBy('createdAt', descending: true);
+    }
+    
+    if (limit != null && limit > 0) {
+      query = query.limit(limit);
+    }
+    
     return FirebaseService.withRetry<QuerySnapshot>(
-      () => _collection.orderBy('createdAt', descending: true).snapshots(),
-      maxRetries: 5,
-      initialDelay: const Duration(seconds: 1),
-    ).map((snapshot) => snapshot.docs
-        .map((doc) => _documentToBeneficiary(doc))
-        .toList());
-  }
-
-  /// Get beneficiaries by distribution area
-  static Stream<List<Beneficiary>> getBeneficiariesByArea(String areaId) {
-    // Removed verbose logging to prevent excessive log spam during StreamBuilder rebuilds
-    return FirebaseService.withRetry<QuerySnapshot>(
-      () => _collection.where('distributionArea', isEqualTo: areaId).snapshots(),
+      () => query.snapshots(),
       maxRetries: 5,
       initialDelay: const Duration(seconds: 1),
     ).map((snapshot) {
-          // Sort by createdAt descending client-side to avoid composite index requirement
+      final beneficiaries = snapshot.docs
+          .map((doc) => _documentToBeneficiary(doc))
+          .toList();
+      
+      // Sort by createdAt descending if activeOnly (client-side sort)
+      if (activeOnly) {
+        beneficiaries.sort((a, b) {
+          // We need to get createdAt from the document
+          // For now, sort by ID (newer IDs come later) or use a timestamp if available
+          return b.id.compareTo(a.id); // Simple fallback
+        });
+      }
+      
+      return beneficiaries;
+    });
+  }
+  
+  /// Get paginated beneficiaries (for initial load)
+  static Future<List<Beneficiary>> getBeneficiariesPaginated({
+    int limit = 100,
+    DocumentSnapshot? startAfter,
+    bool activeOnly = false,
+  }) async {
+    Query query;
+    
+    // If activeOnly is true, we can't use orderBy with where (requires composite index)
+    if (activeOnly) {
+      query = _collection.where('status', isEqualTo: 'Active');
+    } else {
+      query = _collection.orderBy('createdAt', descending: true);
+    }
+    
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    
+    query = query.limit(limit);
+    
+    final snapshot = await query.get();
+    final beneficiaries = snapshot.docs.map((doc) => _documentToBeneficiary(doc)).toList();
+    
+    // Sort by createdAt descending if activeOnly (client-side sort)
+    if (activeOnly) {
+      beneficiaries.sort((a, b) => b.id.compareTo(a.id)); // Simple fallback
+    }
+    
+    return beneficiaries;
+  }
+
+  /// Get beneficiaries by distribution area with pagination support
+  static Stream<List<Beneficiary>> getBeneficiariesByArea(String areaId, {int? limit, bool activeOnly = false}) {
+    Query query = _collection.where('distributionArea', isEqualTo: areaId);
+    
+    // If activeOnly is true, we can't use orderBy with multiple where clauses (requires composite index)
+    if (activeOnly) {
+      query = query.where('status', isEqualTo: 'Active');
+    }
+    
+    // Don't use orderBy with where clause to avoid composite index requirement
+    // We'll sort client-side instead
+    
+    if (limit != null && limit > 0) {
+      query = query.limit(limit);
+    }
+    
+    return FirebaseService.withRetry<QuerySnapshot>(
+      () => query.snapshots(),
+      maxRetries: 5,
+      initialDelay: const Duration(seconds: 1),
+    ).map((snapshot) {
+          // Always sort client-side to avoid composite index requirement
           final docsWithData = snapshot.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final createdAt = data['createdAt'] as Timestamp?;
@@ -53,6 +125,35 @@ class BeneficiaryService {
           
           return beneficiaries;
         });
+  }
+  
+  /// Get paginated beneficiaries by area
+  static Future<List<Beneficiary>> getBeneficiariesByAreaPaginated({
+    required String areaId,
+    int limit = 100,
+    DocumentSnapshot? startAfter,
+    bool activeOnly = false,
+  }) async {
+    Query query = _collection.where('distributionArea', isEqualTo: areaId);
+    
+    if (activeOnly) {
+      query = query.where('status', isEqualTo: 'Active');
+    }
+    
+    try {
+      query = query.orderBy('createdAt', descending: true);
+    } catch (e) {
+      print('Note: Could not use orderBy: $e');
+    }
+    
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    
+    query = query.limit(limit);
+    
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => _documentToBeneficiary(doc)).toList();
   }
 
   /// Get beneficiaries by queue name

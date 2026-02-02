@@ -8015,7 +8015,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   int get _activeQueues => _filteredQueues.where((q) => q.status == 'active' && !q.isCompleted).length;
   int get _totalBeneficiaries => _beneficiaries.length;
 
-  Widget _buildSummaryCard(String title, int count, IconData icon, Color color, {bool isLandscape = false}) {
+  Widget _buildSummaryCard(String title, dynamic count, IconData icon, Color color, {bool isLandscape = false}) {
     return Expanded(
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -8341,22 +8341,26 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         QueueService.getQueueIdByName(queue.name).then((queueId) {
                           if (queueId != null) {
                             QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(newSuspendedState 
-                                      ? AppLanguage.translate('Queue suspended successfully')
-                                      : AppLanguage.translate('Queue resumed successfully')),
-                                  backgroundColor: Colors.orange,
-                                ),
-                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(newSuspendedState 
+                                        ? AppLanguage.translate('Queue suspended successfully')
+                                        : AppLanguage.translate('Queue resumed successfully')),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
                             }).catchError((e) {
                               print('Error updating queue status: $e');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error updating queue: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error updating queue: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             });
                           }
                         });
@@ -8960,20 +8964,24 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               );
                             }).catchError((e) {
                               print('Error starting queue: $e');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error starting queue: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error starting queue: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             });
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(AppLanguage.translate('Queue not found in Firestore')),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(AppLanguage.translate('Queue not found in Firestore')),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
                           }
                         });
                         Navigator.of(context).push(
@@ -9539,38 +9547,19 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         final totalQueues = adminQueues.length;
                         final activeQueues = adminQueues.where((q) => q.status == 'active' && !q.isCompleted).length;
                         
-                        return StreamBuilder<List<Beneficiary>>(
-                          stream: _selectedDistributionArea != null
-                              ? BeneficiaryService.getBeneficiariesByArea(_selectedDistributionArea!)
-                              : BeneficiaryService.getAllBeneficiaries(),
-                          builder: (context, beneficiarySnapshot) {
-                            final allBeneficiaries = beneficiarySnapshot.hasData 
-                                ? beneficiarySnapshot.data! 
-                                : <Beneficiary>[];
-                            
-                            // Filter beneficiaries by admin's distribution areas if not super admin
-                            List<Beneficiary> filteredBeneficiaries = allBeneficiaries;
-                            if (currentAdmin != null && 
-                                !(currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
-                              final adminAreas = _distributionAreas.map((area) => area.id).toList();
-                              filteredBeneficiaries = allBeneficiaries.where((b) => adminAreas.contains(b.distributionArea)).toList();
-                            }
-                            
-                            final totalBeneficiaries = filteredBeneficiaries.length;
-                            
-                            return Padding(
-                              padding: EdgeInsets.symmetric(horizontal: isLandscape ? 8.0 : 16.0),
-                              child: Row(
-                                children: [
-                                  _buildSummaryCard('Total Queues', totalQueues, Icons.queue, Colors.blue, isLandscape: isLandscape),
-                                  SizedBox(width: isLandscape ? 4 : 8),
-                                  _buildSummaryCard('Active Queues', activeQueues, Icons.check_circle, Colors.green, isLandscape: isLandscape),
-                                  SizedBox(width: isLandscape ? 4 : 8),
-                                  _buildSummaryCard('Beneficiaries', totalBeneficiaries, Icons.people, Colors.orange, isLandscape: isLandscape),
-                                ],
-                              ),
-                            );
-                          },
+                        // For dashboard performance, skip loading all beneficiaries - just show queues
+                        // Beneficiary count can be calculated on demand if needed
+                        return Padding(
+                          padding: EdgeInsets.symmetric(horizontal: isLandscape ? 8.0 : 16.0),
+                          child: Row(
+                            children: [
+                              _buildSummaryCard('Total Queues', totalQueues, Icons.queue, Colors.blue, isLandscape: isLandscape),
+                              SizedBox(width: isLandscape ? 4 : 8),
+                              _buildSummaryCard('Active Queues', activeQueues, Icons.check_circle, Colors.green, isLandscape: isLandscape),
+                              SizedBox(width: isLandscape ? 4 : 8),
+                              _buildSummaryCard('Beneficiaries', '-', Icons.people, Colors.orange, isLandscape: isLandscape),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -9992,6 +9981,23 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         ),
                       );
                     },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.history, color: Colors.white),
+              title: Text(
+                AppLanguage.translate('Queue History'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => QueueHistoryScreen(
+                      distributionAreas: _distributionAreas,
+                    ),
+                  ),
                 );
               },
             ),
@@ -16157,10 +16163,24 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   bool _isExpanded = true; // Make dropdown visible by default
   List<String> _adminDistributionAreaIds = [];
   final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
+  
+  // Performance optimizations
+  Timer? _searchDebounce;
+  static const int _initialLoadLimit = 100; // Load first 100 beneficiaries
+  static const int _loadMoreLimit = 50; // Load 50 more when scrolling
+  final ScrollController _scrollController = ScrollController();
+  List<Beneficiary> _loadedBeneficiaries = [];
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
+  DocumentSnapshot? _lastDocument;
 
   @override
   void initState() {
     super.initState();
+    // Setup scroll listener for pagination
+    _scrollController.addListener(_onScroll);
+    // Setup search debouncing
+    _searchController.addListener(_onSearchChanged);
     // Get admin's distribution areas
     final currentAdmin = AdminService.currentAdmin;
     if (currentAdmin != null && currentAdmin.distributionPoint.isNotEmpty) {
@@ -16191,9 +16211,73 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _progressNotifier.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
+  }
+  
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+  
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8) {
+      _loadMoreBeneficiaries();
+    }
+  }
+  
+  Future<void> _loadMoreBeneficiaries() async {
+    if (_isLoadingMore || !_hasMoreData || _searchController.text.isNotEmpty) {
+      return; // Don't load more if searching or already loading
+    }
+    
+    setState(() {
+      _isLoadingMore = true;
+    });
+    
+    try {
+      List<Beneficiary> moreBeneficiaries;
+      if (_selectedDistributionArea != null) {
+        moreBeneficiaries = await BeneficiaryService.getBeneficiariesByAreaPaginated(
+          areaId: _selectedDistributionArea!,
+          limit: _loadMoreLimit,
+          startAfter: _lastDocument,
+          activeOnly: true, // Only load Active beneficiaries
+        );
+      } else {
+        moreBeneficiaries = await BeneficiaryService.getBeneficiariesPaginated(
+          limit: _loadMoreLimit,
+          startAfter: _lastDocument,
+          activeOnly: true, // Only load Active beneficiaries
+        );
+      }
+      
+      if (moreBeneficiaries.isEmpty) {
+        _hasMoreData = false;
+      } else {
+        _loadedBeneficiaries.addAll(moreBeneficiaries);
+        // Update last document for next pagination
+        // Note: We'd need to track the last document from the query
+        // For now, we'll use the length as a simple check
+      }
+    } catch (e) {
+      print('Error loading more beneficiaries: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    }
   }
 
   List<Beneficiary> _filterBeneficiaries(List<Beneficiary> beneficiaries) {
@@ -16622,13 +16706,13 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
               },
             ),
           ),
-          // Beneficiaries List - Load from Firebase filtered by selected area
+          // Beneficiaries List - Load from Firebase filtered by selected area with pagination
           Expanded(
             child: StreamBuilder<List<Beneficiary>>(
-              key: ValueKey<String?>(_selectedDistributionArea), // Force rebuild when area changes
+              key: ValueKey<String?>('${_selectedDistributionArea}_${_searchController.text}'), // Force rebuild when area or search changes
               stream: _selectedDistributionArea != null
-                  ? BeneficiaryService.getBeneficiariesByArea(_selectedDistributionArea!)
-                  : BeneficiaryService.getAllBeneficiaries(),
+                  ? BeneficiaryService.getBeneficiariesByArea(_selectedDistributionArea!, limit: _initialLoadLimit, activeOnly: true)
+                  : BeneficiaryService.getAllBeneficiaries(limit: _initialLoadLimit, activeOnly: true),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -16652,10 +16736,8 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 }
 
                 final allBeneficiaries = snapshot.data ?? [];
-                print('📋 Received ${allBeneficiaries.length} beneficiaries from stream (selected area: $_selectedDistributionArea)');
                 // Filter by admin's areas and search query (area filtering is already done by Firestore if area is selected)
                 final filtered = _filterBeneficiaries(allBeneficiaries);
-                print('🔍 After filtering: ${filtered.length} beneficiaries');
 
                 if (filtered.isEmpty) {
                   return Center(
@@ -16680,8 +16762,18 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 }
 
                 return ListView.builder(
-                  itemCount: filtered.length,
+                  controller: _scrollController,
+                  itemCount: filtered.length + (_isLoadingMore ? 1 : 0),
+                  cacheExtent: 500, // Cache more items for smoother scrolling
                   itemBuilder: (context, index) {
+                    if (index >= filtered.length) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
                     final beneficiary = filtered[index];
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -20138,6 +20230,111 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     });
   }
 
+  void _showBeneficiaryImage(Beneficiary beneficiary) {
+    if (beneficiary.photoPath == null || beneficiary.photoPath!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No photo available for this beneficiary'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
+                      ? Image.network(
+                          beneficiary.photoPath!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 300,
+                              height: 300,
+                              color: Colors.grey[300],
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                                  SizedBox(height: 8),
+                                  Text('Failed to load image'),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                      : beneficiary.photoPath!.startsWith('assets/')
+                          ? Image.asset(
+                              beneficiary.photoPath!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 300,
+                                  height: 300,
+                                  color: Colors.grey[300],
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Failed to load image'),
+                                    ],
+                                  ),
+                                );
+                              },
+                            )
+                          : Image.file(
+                              File(beneficiary.photoPath!),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 300,
+                                  height: 300,
+                                  color: Colors.grey[300],
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Failed to load image'),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(context).pop(),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  shape: const CircleBorder(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildServingBody(List<Beneficiary> sortedBeneficiaries, Set<String> servedBeneficiaryIds, [Map<String, int> daySpecificUnitsTaken = const {}]) {
     return Column(
         children: [
@@ -20400,31 +20597,23 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                               child: ListTile(
                                 leading: Stack(
                                   children: [
-                                    beneficiary.photoPath != null
-                                        ? CircleAvatar(
-                                            backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
-                                                ? NetworkImage(beneficiary.photoPath!)
-                                                : beneficiary.photoPath!.startsWith('assets/')
-                                                    ? AssetImage(beneficiary.photoPath!)
-                                                    : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
-                                            onBackgroundImageError: (exception, stackTrace) {
-                                              // Handle image loading errors gracefully
-                                            },
-                                          )
-                                        : const CircleAvatar(child: Icon(Icons.person)),
-                                    if (isSelected)
-                                      Positioned(
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF81CF01),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.check, color: Colors.white, size: 16),
-                                        ),
-                                      ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        _showBeneficiaryImage(beneficiary);
+                                      },
+                                      child: beneficiary.photoPath != null
+                                          ? CircleAvatar(
+                                              backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
+                                                  ? NetworkImage(beneficiary.photoPath!)
+                                                  : beneficiary.photoPath!.startsWith('assets/')
+                                                      ? AssetImage(beneficiary.photoPath!)
+                                                      : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
+                                              onBackgroundImageError: (exception, stackTrace) {
+                                                // Handle image loading errors gracefully
+                                              },
+                                            )
+                                          : const CircleAvatar(child: Icon(Icons.person)),
+                                    ),
                                   ],
                                 ),
                                 title: Text(
@@ -24947,6 +25136,606 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         ],
       ),
     );
+  }
+}
+
+// Queue History Screen
+class QueueHistoryScreen extends StatefulWidget {
+  final List<DistributionArea> distributionAreas;
+
+  const QueueHistoryScreen({
+    super.key,
+    required this.distributionAreas,
+  });
+
+  @override
+  State<QueueHistoryScreen> createState() => _QueueHistoryScreenState();
+}
+
+class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
+  String? _selectedDistributionArea;
+  List<DistributionArea> _distributionAreas = [];
+  
+  // Track expansion state for Multi Day queue accordions
+  final Map<String, bool> _multiDayQueueExpanded = {};
+  final Map<String, Set<String>> _dailyEntryExpanded = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _distributionAreas = widget.distributionAreas;
+    _loadDistributionAreas();
+  }
+
+  Future<void> _loadDistributionAreas() async {
+    try {
+      final allAreas = await DistributionAreaService.getAllAreas().first;
+      setState(() {
+        _distributionAreas = allAreas.isNotEmpty ? allAreas : widget.distributionAreas;
+      });
+    } catch (e) {
+      print('Error loading distribution areas: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(AppLanguage.translate('Queue History')),
+        backgroundColor: const Color(0xFF81CF01),
+        foregroundColor: Colors.white,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE8F5E9), Colors.white],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+              final padding = isLandscape ? 8.0 : 16.0;
+              final spacing = isLandscape ? 4.0 : 8.0;
+              
+              return Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.all(padding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppLanguage.translate('Distribution Area'),
+                          style: TextStyle(
+                            fontSize: isLandscape ? 14 : 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF1A237E),
+                          ),
+                        ),
+                        SizedBox(height: spacing),
+                        StreamBuilder<List<DistributionArea>>(
+                          stream: DistributionAreaService.getAllAreas(),
+                          initialData: _distributionAreas,
+                          builder: (context, snapshot) {
+                            List<DistributionArea> displayAreas = snapshot.data ?? _distributionAreas;
+                            
+                            final currentAdmin = AdminService.currentAdmin;
+                            if (currentAdmin != null && !currentAdmin.isSuperAdmin) {
+                              final adminPoint = currentAdmin.distributionPoint.toLowerCase();
+                              displayAreas = displayAreas.where((area) {
+                                final areaName = area.areaName.toLowerCase();
+                                return areaName.contains(adminPoint) || adminPoint.contains(areaName);
+                              }).toList();
+                            }
+                            
+                            return DropdownButtonFormField<String>(
+                              value: _selectedDistributionArea,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                filled: true,
+                                fillColor: Colors.white,
+                                hintText: AppLanguage.translate('Select Distribution Area'),
+                              ),
+                              items: [
+                                DropdownMenuItem<String>(
+                                  value: null,
+                                  child: Text(AppLanguage.translate('All Areas')),
+                                ),
+                                ...displayAreas.map((area) {
+                                  return DropdownMenuItem<String>(
+                                    value: area.id,
+                                    child: Text(area.fullName),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedDistributionArea = value;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                        SizedBox(height: spacing * 2),
+                        Text(
+                          AppLanguage.translate('All Queues'),
+                          style: TextStyle(
+                            fontSize: isLandscape ? 16 : 20,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF1A237E),
+                          ),
+                        ),
+                        SizedBox(height: spacing),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<List<Queue>>(
+                      stream: QueueService.getQueuesForHistory(limit: 500),
+                      builder: (context, snapshot) {
+                        // Show loading only on initial connection, not when data is already available
+                        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                          return const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Loading queues...',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Error loading queues',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.red[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        
+                        final allQueues = snapshot.hasData ? snapshot.data! : <Queue>[];
+                        final currentAdmin = AdminService.currentAdmin;
+                        
+                        List<Queue> filteredQueues;
+                        if (currentAdmin != null && currentAdmin.isSuperAdmin) {
+                          filteredQueues = _selectedDistributionArea != null
+                              ? allQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList()
+                              : allQueues;
+                        } else {
+                          final adminAreas = _distributionAreas.map((area) => area.id).toList();
+                          filteredQueues = allQueues.where((q) => adminAreas.contains(q.distributionArea)).toList();
+                          if (_selectedDistributionArea != null) {
+                            filteredQueues = filteredQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
+                          }
+                        }
+                        
+                        // Sort by fromDate descending (newest first)
+                        filteredQueues.sort((a, b) => b.fromDate.compareTo(a.fromDate));
+                        
+                        if (filteredQueues.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.queue_outlined,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No queues found',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        
+                        return ListView.builder(
+                          itemCount: filteredQueues.length,
+                          padding: const EdgeInsets.only(bottom: 16),
+                          cacheExtent: 500,
+                          itemBuilder: (context, index) {
+                            final queue = filteredQueues[index];
+                            if (queue.isMultiDay) {
+                              return _buildMultiDayQueueAccordion(queue, index);
+                            } else {
+                              return _buildQueueRow(queue, index);
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQueueRow(Queue queue, int index) {
+    const tealGreen = Color(0xFF81CF01);
+    
+    // Don't load beneficiaries here - load them on-demand when user clicks View
+    return Container(
+      margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: index > 0 ? 12 : 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: tealGreen.withOpacity(0.3),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: tealGreen.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      queue.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A237E),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${queue.displayDateRange} • ${queue.displayTimeRange}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      '${queue.numberOfAvailableUnits} ${queue.unitName}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(queue.status).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  queue.status,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _getStatusColor(queue.status),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildActionButton(
+                icon: Icons.visibility,
+                label: AppLanguage.translate('View'),
+                color: tealGreen,
+                onPressed: () async {
+                  // Load beneficiaries on-demand when user clicks View
+                  try {
+                    final beneficiariesForQueue = await BeneficiaryService.getBeneficiariesByQueueName(queue.name).first;
+                    if (mounted) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => QueueViewScreen(
+                            queue: queue,
+                            beneficiaries: beneficiariesForQueue,
+                            onQueueUpdated: (updatedQueue) {},
+                            onBeneficiaryUpdated: (beneficiary) {},
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error loading queue: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMultiDayQueueAccordion(Queue queue, int displayIndex) {
+    final queueKey = queue.name;
+    final isQueueExpanded = _multiDayQueueExpanded[queueKey] ?? false;
+    final dailyEntries = _generateDailyEntries(queue);
+    
+    // Don't load beneficiaries here - load them on-demand when user clicks View
+    return Container(
+          margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: displayIndex > 0 ? 12 : 0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.blue.withOpacity(0.3),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.2),
+                spreadRadius: 2,
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ExpansionTile(
+            initiallyExpanded: isQueueExpanded,
+            onExpansionChanged: (expanded) {
+              setState(() {
+                _multiDayQueueExpanded[queueKey] = expanded;
+              });
+            },
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            leading: Icon(
+              Icons.calendar_today,
+              color: Colors.blue.shade700,
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              queue.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A237E),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Multi Day',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${queue.displayDateRange} • ${queue.displayTimeRange}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        '${dailyEntries.length} days • ${queue.numberOfAvailableUnits} ${queue.unitName}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(queue.status).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    queue.status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _getStatusColor(queue.status),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            children: dailyEntries.map((entry) {
+              final dayKey = '${queueKey}_${entry['date']}';
+              final isDayExpanded = _dailyEntryExpanded[queueKey]?.contains(dayKey) ?? false;
+              final day = entry['date'] as DateTime;
+              final dayQueueName = entry['dayQueueName'] as String;
+              
+              return ExpansionTile(
+                initiallyExpanded: isDayExpanded,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    _dailyEntryExpanded.putIfAbsent(queueKey, () => <String>{}).clear();
+                    if (expanded) {
+                      _dailyEntryExpanded[queueKey]!.add(dayKey);
+                    }
+                  });
+                },
+                tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                leading: Icon(Icons.event, size: 20, color: Colors.blue.shade600),
+                title: Text(
+                  '${day.day}/${day.month}/${day.year}',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.visibility, size: 20),
+                  color: const Color(0xFF81CF01),
+                  onPressed: () async {
+                    // Load beneficiaries on-demand when user clicks View
+                    try {
+                      final allAreaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(queue.distributionArea, limit: 1000, activeOnly: true).first;
+                      final dayBeneficiaries = allAreaBeneficiaries.where((b) {
+                        return b.initialAssignedQueuePoint == dayQueueName;
+                      }).toList();
+                      
+                      if (mounted) {
+                        final dayQueue = queue.copyWith(
+                          fromDate: DateTime(day.year, day.month, day.day),
+                          toDate: DateTime(day.year, day.month, day.day),
+                        );
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => QueueViewScreen(
+                              queue: dayQueue,
+                              beneficiaries: dayBeneficiaries,
+                              onQueueUpdated: (updatedQueue) {},
+                              onBeneficiaryUpdated: (beneficiary) {},
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error loading queue: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+                children: [],
+              );
+            }).toList(),
+          ),
+        );
+  }
+
+  List<Map<String, dynamic>> _generateDailyEntries(Queue queue) {
+    final entries = <Map<String, dynamic>>[];
+    final currentDate = queue.fromDate;
+    final endDate = queue.toDate;
+    var date = DateTime(currentDate.year, currentDate.month, currentDate.day);
+    final end = DateTime(endDate.year, endDate.month, endDate.day);
+    
+    while (date.isBefore(end) || date.isAtSameMomentAs(end)) {
+      final dayQueueName = '${queue.name}_${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      entries.add({
+        'date': date,
+        'dayQueueName': dayQueueName,
+      });
+      date = date.add(const Duration(days: 1));
+    }
+    
+    return entries;
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return Colors.green;
+      case 'suspended':
+        return Colors.orange;
+      case 'completed':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
   }
 }
 

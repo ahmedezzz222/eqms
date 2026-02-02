@@ -36,26 +36,85 @@ class QueueService {
     return _streamController!.stream;
   }
 
+  /// Get queues for history view with limit (optimized for performance)
+  static Stream<List<Queue>> getQueuesForHistory({int limit = 200}) {
+    return FirebaseService.withRetry<QuerySnapshot>(
+      () => _collection
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .snapshots(),
+      maxRetries: 3,
+      initialDelay: const Duration(milliseconds: 500),
+    ).map((snapshot) {
+      print('📦 QueueService: History - Received ${snapshot.docs.length} documents');
+      return _processSnapshot(snapshot);
+    });
+  }
+
   static Future<void> _initializeStream() async {
     try {
-      // Fetch initial data from server immediately
-      final initialSnapshot = await _collection
-          .orderBy('createdAt', descending: true)
-          .get(GetOptions(source: Source.server));
-      print('📦 QueueService: Initial fetch - Received ${initialSnapshot.docs.length} documents from Firestore server');
-      
-      final initialQueues = _processSnapshot(initialSnapshot);
-      
-      // Set last emitted IDs
-      final initialIds = initialQueues.map((q) => q.name + q.distributionArea).toList()..sort();
-      _lastEmittedIds = initialIds.join(',');
-      
-      // Emit initial data
-      if (!_streamController!.isClosed) {
-        _streamController!.add(initialQueues);
+      // First, try to get data from cache for instant display (limited to 200 for performance)
+      try {
+        final cacheSnapshot = await _collection
+            .orderBy('createdAt', descending: true)
+            .limit(200)
+            .get(GetOptions(source: Source.cache));
+        
+        if (cacheSnapshot.docs.isNotEmpty) {
+          print('📦 QueueService: Using cache - Received ${cacheSnapshot.docs.length} documents from Firestore cache');
+          final cachedQueues = _processSnapshot(cacheSnapshot);
+          
+          // Set last emitted IDs
+          final cachedIds = cachedQueues.map((q) => q.name + q.distributionArea).toList()..sort();
+          _lastEmittedIds = cachedIds.join(',');
+          
+          // Emit cached data immediately for fast UI
+          if (!_streamController!.isClosed) {
+            _streamController!.add(cachedQueues);
+          }
+        }
+      } catch (cacheError) {
+        print('📦 QueueService: No cache available (${cacheError.toString()}), will fetch from server');
       }
       
-      // Now listen for real-time updates with retry logic
+      // Then fetch from server in the background for fresh data (limited to 200 for initial load)
+      _collection
+          .orderBy('createdAt', descending: true)
+          .limit(200)
+          .get(GetOptions(source: Source.server))
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              print('⏱️ QueueService: Server fetch timed out after 30 seconds');
+              throw TimeoutException('Server fetch timed out');
+            },
+          )
+          .then((serverSnapshot) {
+            if (_streamController == null || _streamController!.isClosed) return;
+            
+            print('📦 QueueService: Server fetch - Received ${serverSnapshot.docs.length} documents from Firestore server');
+            final serverQueues = _processSnapshot(serverSnapshot);
+            
+            // Only emit if the list has changed (check by IDs)
+            final serverIds = serverQueues.map((q) => q.name + q.distributionArea).toList()..sort();
+            final serverIdsStr = serverIds.join(',');
+            
+            if (serverIdsStr != _lastEmittedIds) {
+              _lastEmittedIds = serverIdsStr;
+              if (!_streamController!.isClosed) {
+                _streamController!.add(serverQueues);
+              }
+            }
+          })
+          .catchError((error) {
+            print('❌ Error fetching queues from server: $error');
+            // If we don't have cached data, emit empty list to show something
+            if (_lastEmittedIds == null && !_streamController!.isClosed) {
+              _streamController!.add(<Queue>[]);
+            }
+          });
+      
+      // Now listen for real-time updates with retry logic (no limit for real-time updates)
       _subscription = FirebaseService.withRetry<QuerySnapshot>(
         () => _collection.orderBy('createdAt', descending: true).snapshots(),
         maxRetries: 5,
@@ -88,7 +147,7 @@ class QueueService {
         },
       );
     } catch (e) {
-      print('❌ Error fetching initial queues: $e');
+      print('❌ Error initializing queues stream: $e');
       if (_streamController != null && !_streamController!.isClosed) {
         _streamController!.addError(e);
       }
