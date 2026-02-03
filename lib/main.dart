@@ -16298,11 +16298,29 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
 
     // Filter by search query (name, ID, or mobile number)
     if (_searchController.text.isNotEmpty) {
-      final query = _searchController.text.toLowerCase();
+      final query = _searchController.text.trim();
+      // For Arabic text, we need to search without case conversion as toLowerCase() may not work correctly
+      // We'll do case-insensitive search for English and direct search for Arabic
       filtered = filtered.where((b) {
-        return b.name.toLowerCase().contains(query) ||
-               b.idNumber.toLowerCase().contains(query) ||
-               (b.mobileNumber != null && b.mobileNumber!.toLowerCase().contains(query));
+        final name = b.name;
+        final idNumber = b.idNumber;
+        final mobileNumber = b.mobileNumber ?? '';
+        
+        // Check if query contains Arabic characters
+        final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(query);
+        
+        if (hasArabic) {
+          // For Arabic text, search directly (Arabic is case-insensitive by nature)
+          return name.contains(query) ||
+                 idNumber.contains(query) ||
+                 mobileNumber.contains(query);
+        } else {
+          // For non-Arabic (English/numbers), do case-insensitive search
+          final queryLower = query.toLowerCase();
+          return name.toLowerCase().contains(queryLower) ||
+                 idNumber.toLowerCase().contains(queryLower) ||
+                 mobileNumber.toLowerCase().contains(queryLower);
+        }
       }).toList();
     }
 
@@ -16680,6 +16698,8 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
             color: Colors.white,
             child: TextField(
               controller: _searchController,
+              textDirection: TextDirection.ltr, // Allow both LTR and RTL
+              keyboardType: TextInputType.text, // Use text input to support all characters including Arabic
               decoration: InputDecoration(
                 hintText: AppLanguage.translate('Search by name or ID'),
                 prefixIcon: const Icon(Icons.search),
@@ -16711,8 +16731,15 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
             child: StreamBuilder<List<Beneficiary>>(
               key: ValueKey<String?>('${_selectedDistributionArea}_${_searchController.text}'), // Force rebuild when area or search changes
               stream: _selectedDistributionArea != null
-                  ? BeneficiaryService.getBeneficiariesByArea(_selectedDistributionArea!, limit: _initialLoadLimit, activeOnly: true)
-                  : BeneficiaryService.getAllBeneficiaries(limit: _initialLoadLimit, activeOnly: true),
+                  ? BeneficiaryService.getBeneficiariesByArea(
+                      _selectedDistributionArea!, 
+                      limit: _searchController.text.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
+                      activeOnly: true,
+                    )
+                  : BeneficiaryService.getAllBeneficiaries(
+                      limit: _searchController.text.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
+                      activeOnly: true,
+                    ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -16742,6 +16769,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 if (filtered.isEmpty) {
                   return Center(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
@@ -16755,6 +16783,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                               ? AppLanguage.translate('No beneficiaries yet')
                               : AppLanguage.translate('No beneficiaries found'),
                           style: TextStyle(color: Colors.grey[700], fontSize: 16),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -16783,12 +16812,22 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                         subtitle: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('ID: ${beneficiary.idNumber}'),
+                            Text(
+                              'ID: ${beneficiary.idNumber}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                             if (beneficiary.mobileNumber != null)
-                              Text('Mobile: ${beneficiary.mobileNumber}'),
-                            Text('Status: ${beneficiary.status}'),
+                              Text(
+                                'Mobile: ${beneficiary.mobileNumber}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            Text(
+                              'Status: ${beneficiary.status}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                             if (beneficiary.createdBy != null && beneficiary.createdBy!.isNotEmpty)
                               FutureBuilder<Admin?>(
                                 future: AdminService.getAdminById(beneficiary.createdBy!),
@@ -16807,10 +16846,12 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                                   return Text(
                                     createdByText,
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: Colors.grey[600],
                                       fontStyle: FontStyle.italic,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   );
                                 },
                               ),
@@ -17058,7 +17099,14 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     } else {
       _selectedDistributionArea = null;
     }
-    _selectedQueuePoint = widget.beneficiary.initialAssignedQueuePoint;
+    // Set selected queue point, but validate it will be unique in dropdown
+    final beneficiaryQueuePoint = widget.beneficiary.initialAssignedQueuePoint;
+    if (beneficiaryQueuePoint.isNotEmpty) {
+      // We'll validate this in the dropdown builder to ensure it's unique
+      _selectedQueuePoint = beneficiaryQueuePoint;
+    } else {
+      _selectedQueuePoint = null;
+    }
     // Add null safety checks for enum-like fields
     _type = _typeOptions.contains(widget.beneficiary.type) ? widget.beneficiary.type : 'Normal';
     _gender = _genderOptions.contains(widget.beneficiary.gender) ? widget.beneficiary.gender : 'Male';
@@ -17394,24 +17442,6 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     // Get unique queue names to avoid duplicates - use Set to guarantee uniqueness
     final uniqueQueueNames = _uniqueQueueNames.toSet().toList();
     
-    // Validate selected queue point exists in the list and ensure it's unique
-    String? validSelectedQueuePoint = _selectedQueuePoint;
-    if (validSelectedQueuePoint != null) {
-      // Count how many times this value appears (should be exactly 1)
-      final count = uniqueQueueNames.where((name) => name == validSelectedQueuePoint).length;
-      if (count != 1) {
-        // Value doesn't exist or appears multiple times, reset it
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {
-              _selectedQueuePoint = null;
-            });
-          }
-        });
-        validSelectedQueuePoint = null;
-      }
-    }
-    
     // Ensure no duplicate values in dropdown items
     final dropdownItems = <DropdownMenuItem<String>>[];
     final usedValues = <String>{};
@@ -17429,6 +17459,36 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
             ),
           ),
         );
+      }
+    }
+    
+    // Validate selected queue point exists exactly once in the items list
+    String? validSelectedQueuePoint = _selectedQueuePoint;
+    if (validSelectedQueuePoint != null && validSelectedQueuePoint.isNotEmpty) {
+      // Count how many items have this value
+      final matchingItems = dropdownItems.where((item) => item.value == validSelectedQueuePoint).toList();
+      if (matchingItems.length != 1) {
+        // Value doesn't exist or appears multiple times, reset it immediately
+        // Use a synchronous check to prevent the error
+        validSelectedQueuePoint = null;
+        // Also update the state asynchronously to prevent future issues
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedQueuePoint = null;
+            });
+          }
+        });
+      }
+    } else {
+      validSelectedQueuePoint = null;
+    }
+    
+    // Final safety check: ensure the value exists in items exactly once
+    if (validSelectedQueuePoint != null) {
+      final count = dropdownItems.where((item) => item.value == validSelectedQueuePoint).length;
+      if (count != 1) {
+        validSelectedQueuePoint = null;
       }
     }
     
@@ -19498,7 +19558,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         .where((b) => b.initialAssignedQueuePoint == _effectiveQueueName)
         .toList();
 
-    // Load beneficiaries from Firebase assigned to this queue
+    // Load beneficiaries from Firebase assigned to this queue (async, non-blocking)
     _loadQueueBeneficiaries();
     
     // Listen to search controller changes to clear last processed tag when user manually edits
@@ -19523,8 +19583,13 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
   Future<void> _loadQueueBeneficiaries() async {
     try {
-      // Load all beneficiaries from Firebase
-      final allBeneficiaries = await BeneficiaryService.getAllBeneficiaries().first;
+      // Use a more efficient query: load by distribution area with limit and activeOnly
+      // This is much faster than loading all beneficiaries
+      final allAreaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(
+        widget.queue.distributionArea,
+        limit: 1000, // Reasonable limit for a distribution area
+        activeOnly: true, // Only active beneficiaries
+      ).first;
       
       // For multi-day queues, also check queueHistory to find beneficiaries with queue numbers for this day
       Set<String> beneficiaryIdsFromHistory = {};
@@ -19534,6 +19599,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               .collection('queueHistory')
               .where('dayQueueName', isEqualTo: _effectiveQueueName)
               .where('action', isEqualTo: 'issued')
+              .limit(500) // Limit to avoid loading too much
               .get();
           
           beneficiaryIdsFromHistory = historyQuery.docs
@@ -19547,7 +19613,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
       
       // Filter by queue name OR by queueHistory
-      final queueBeneficiaries = allBeneficiaries.where((b) {
+      final queueBeneficiaries = allAreaBeneficiaries.where((b) {
         // Direct assignment to this queue/day
         if (b.initialAssignedQueuePoint == _effectiveQueueName) {
           return true;
@@ -21119,9 +21185,13 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   .toSet()
               : <String>{};
           
-          // Load beneficiaries from stream
+          // Load beneficiaries from stream (with limit for performance)
           return StreamBuilder<List<Beneficiary>>(
-            stream: BeneficiaryService.getBeneficiariesByArea(widget.queue.distributionArea),
+            stream: BeneficiaryService.getBeneficiariesByArea(
+              widget.queue.distributionArea,
+              limit: 1000, // Limit to reasonable number for performance
+              activeOnly: true, // Only active beneficiaries
+            ),
             builder: (context, snapshot) {
               // Filter beneficiaries to include those with queue numbers for this day
               final allAreaBeneficiaries = snapshot.hasData ? snapshot.data! : <Beneficiary>[];
