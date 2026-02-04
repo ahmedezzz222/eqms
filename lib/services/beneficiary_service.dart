@@ -157,40 +157,53 @@ class BeneficiaryService {
   }
 
   /// Get beneficiaries by queue name
+  /// Note: This method now uses queueHistory as the primary source, with initialAssignedQueuePoint as fallback
   static Stream<List<Beneficiary>> getBeneficiariesByQueueName(String queueName) {
-    // Removed verbose logging to prevent excessive log spam during StreamBuilder rebuilds
-    return FirebaseService.withRetry<QuerySnapshot>(
-      () => _collection.where('initialAssignedQueuePoint', isEqualTo: queueName).snapshots(),
-      maxRetries: 5,
-      initialDelay: const Duration(seconds: 1),
-    ).map((snapshot) {
-          // Sort by createdAt descending client-side to avoid composite index requirement
-          final docsWithData = snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final createdAt = data['createdAt'] as Timestamp?;
-            return {
-              'doc': doc,
-              'createdAt': createdAt,
-            };
-          }).toList();
-          
-          // Sort by createdAt descending (newest first)
-          docsWithData.sort((a, b) {
-            final aTime = a['createdAt'] as Timestamp?;
-            final bTime = b['createdAt'] as Timestamp?;
-            if (aTime == null && bTime == null) return 0;
-            if (aTime == null) return 1;
-            if (bTime == null) return -1;
-            return bTime.compareTo(aTime);
-          });
-          
-          // Convert sorted documents to beneficiaries
-          final beneficiaries = docsWithData
-              .map((item) => _documentToBeneficiary(item['doc'] as DocumentSnapshot))
-              .toList();
-          
-          return beneficiaries;
-        });
+    // Listen to both queueHistory and beneficiaries streams
+    return Stream.periodic(const Duration(seconds: 2), (_) {}).asyncMap((_) async {
+      // Get beneficiaries from queueHistory (primary source)
+      final historyQuery = await FirebaseService.firestore
+          .collection('queueHistory')
+          .where('dayQueueName', isEqualTo: queueName)
+          .where('action', isEqualTo: 'issued')
+          .get();
+      
+      final beneficiaryIdsFromHistory = historyQuery.docs
+          .map((doc) => doc.data()['beneficiaryId'] as String?)
+          .where((id) => id != null)
+          .cast<String>()
+          .toSet();
+      
+      // Get all beneficiaries from distribution area (more efficient than all beneficiaries)
+      // We need to get beneficiaries by area, but we don't know the area here
+      // So we'll get all active beneficiaries and filter
+      final allBeneficiaries = await getAllBeneficiaries(activeOnly: true).first;
+      
+      // Filter beneficiaries that either:
+      // 1. Have this queue in their initialAssignedQueuePoint (legacy support)
+      // 2. Have a queue number in queueHistory for this queue (primary method)
+      final filtered = allBeneficiaries.where((b) {
+        // Check queueHistory first (primary method)
+        if (beneficiaryIdsFromHistory.contains(b.id)) {
+          return true;
+        }
+        // Fallback to legacy initialAssignedQueuePoint
+        if (b.initialAssignedQueuePoint != null && 
+            b.initialAssignedQueuePoint!.isNotEmpty &&
+            b.initialAssignedQueuePoint == queueName) {
+          return true;
+        }
+        return false;
+      }).toList();
+      
+      // Sort by createdAt descending
+      filtered.sort((a, b) {
+        // Simple sort by ID for now (newer IDs come later)
+        return b.id.compareTo(a.id);
+      });
+      
+      return filtered;
+    });
   }
 
   /// Get beneficiary by ID
@@ -228,8 +241,78 @@ class BeneficiaryService {
 
   /// Get beneficiary by NFC code
   static Future<Beneficiary?> getBeneficiaryByNFC(String nfcCode) async {
+    // Normalize the NFC code for searching
+    String normalizedNfc = nfcCode.trim();
+    
+    // Try exact match first
+    var query = await _collection
+        .where('nfcPreprintedCode', isEqualTo: normalizedNfc)
+        .limit(1)
+        .get();
+    if (query.docs.isNotEmpty) {
+      return _documentToBeneficiary(query.docs.first);
+    }
+    
+    // Try with NFC_ prefix if not already present
+    if (!normalizedNfc.toUpperCase().startsWith('NFC_')) {
+      query = await _collection
+          .where('nfcPreprintedCode', isEqualTo: 'NFC_$normalizedNfc')
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        return _documentToBeneficiary(query.docs.first);
+      }
+    }
+    
+    // Try without 0x prefix if present
+    if (normalizedNfc.toLowerCase().startsWith('0x')) {
+      final withoutPrefix = normalizedNfc.substring(2);
+      query = await _collection
+          .where('nfcPreprintedCode', isEqualTo: withoutPrefix)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        return _documentToBeneficiary(query.docs.first);
+      }
+      
+      // Also try with NFC_ prefix
+      query = await _collection
+          .where('nfcPreprintedCode', isEqualTo: 'NFC_$withoutPrefix')
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        return _documentToBeneficiary(query.docs.first);
+      }
+    }
+    
+    // Try case-insensitive search by getting all and filtering (less efficient but more flexible)
+    // This is a fallback for edge cases
+    final allQuery = await _collection.get();
+    for (var doc in allQuery.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final storedNfc = data['nfcPreprintedCode'] as String?;
+      if (storedNfc != null) {
+        final storedNormalized = storedNfc.trim().toLowerCase();
+        final searchNormalized = normalizedNfc.toLowerCase();
+        // Check if they match (with or without prefixes)
+        if (storedNormalized == searchNormalized ||
+            storedNormalized == 'nfc_$searchNormalized' ||
+            storedNormalized == searchNormalized.replaceFirst('0x', '') ||
+            storedNormalized.replaceFirst('nfc_', '') == searchNormalized ||
+            storedNormalized.replaceFirst('nfc_', '') == searchNormalized.replaceFirst('0x', '')) {
+          return _documentToBeneficiary(doc);
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /// Get beneficiary by NFC reference
+  static Future<Beneficiary?> getBeneficiaryByNFCReference(String nfcReference) async {
+    if (nfcReference.isEmpty) return null;
     final query = await _collection
-        .where('nfcPreprintedCode', isEqualTo: nfcCode)
+        .where('nfcReference', isEqualTo: nfcReference)
         .limit(1)
         .get();
     if (query.docs.isNotEmpty) {
@@ -243,7 +326,7 @@ class BeneficiaryService {
       Beneficiary beneficiary, String createdBy) async {
     final docRef = await _collection.add({
       'distributionArea': beneficiary.distributionArea,
-      'initialAssignedQueuePoint': beneficiary.initialAssignedQueuePoint,
+      'initialAssignedQueuePoint': beneficiary.initialAssignedQueuePoint ?? '', // Deprecated: keep for backward compatibility
       'type': beneficiary.type,
       'idCopyPath': beneficiary.idCopyPath,
       'gender': beneficiary.gender,
@@ -254,6 +337,7 @@ class BeneficiaryService {
       'entityName': beneficiary.entityName,
       'numberOfUnits': beneficiary.numberOfUnits,
       'nfcPreprintedCode': beneficiary.nfcPreprintedCode,
+      'nfcReference': beneficiary.nfcReference,
       'photoPath': beneficiary.photoPath,
       'status': beneficiary.status,
       'birthDate': beneficiary.birthDate != null
@@ -275,7 +359,7 @@ class BeneficiaryService {
   static Future<void> updateBeneficiary(String id, Beneficiary beneficiary) async {
     await _collection.doc(id).update({
       'distributionArea': beneficiary.distributionArea,
-      'initialAssignedQueuePoint': beneficiary.initialAssignedQueuePoint,
+      'initialAssignedQueuePoint': beneficiary.initialAssignedQueuePoint ?? '', // Deprecated: keep for backward compatibility
       'type': beneficiary.type,
       'idCopyPath': beneficiary.idCopyPath,
       'gender': beneficiary.gender,
@@ -286,6 +370,7 @@ class BeneficiaryService {
       'entityName': beneficiary.entityName,
       'numberOfUnits': beneficiary.numberOfUnits,
       'nfcPreprintedCode': beneficiary.nfcPreprintedCode,
+      'nfcReference': beneficiary.nfcReference,
       'photoPath': beneficiary.photoPath,
       'status': beneficiary.status,
       'birthDate': beneficiary.birthDate != null
@@ -368,7 +453,7 @@ class BeneficiaryService {
     return Beneficiary(
       id: doc.id,
       distributionArea: data['distributionArea'] ?? '',
-      initialAssignedQueuePoint: data['initialAssignedQueuePoint'] ?? '',
+      initialAssignedQueuePoint: data['initialAssignedQueuePoint'], // Nullable: deprecated field
       type: data['type'] ?? 'Normal',
       idCopyPath: data['idCopyPath'],
       gender: data['gender'] ?? 'Male',
@@ -379,6 +464,7 @@ class BeneficiaryService {
       entityName: data['entityName'],
       numberOfUnits: data['numberOfUnits'] ?? '1',
       nfcPreprintedCode: data['nfcPreprintedCode'],
+      nfcReference: data['nfcReference'],
       photoPath: data['photoPath'],
       status: data['status'] ?? 'Active',
       birthDate: data['birthDate'] != null

@@ -3134,7 +3134,7 @@ class Queue {
 class Beneficiary {
   final String id;
   final String distributionArea;
-  final String initialAssignedQueuePoint;
+  final String? initialAssignedQueuePoint; // Deprecated: Use queueHistory collection instead
   final String type;
   final String? idCopyPath;
   final String gender;
@@ -3145,6 +3145,7 @@ class Beneficiary {
   final String? entityName;
   final String numberOfUnits;
   final String? nfcPreprintedCode;
+  final String? nfcReference;
   final String? photoPath;
   final String status;
   final DateTime? birthDate;
@@ -3156,7 +3157,7 @@ class Beneficiary {
   Beneficiary({
     required this.id,
     required this.distributionArea,
-    required this.initialAssignedQueuePoint,
+    this.initialAssignedQueuePoint, // Optional: Deprecated field
     required this.type,
     this.idCopyPath,
     required this.gender,
@@ -3167,6 +3168,7 @@ class Beneficiary {
     this.entityName,
     required this.numberOfUnits,
     this.nfcPreprintedCode,
+    this.nfcReference,
     this.photoPath,
     required this.status,
     this.birthDate,
@@ -3190,6 +3192,7 @@ class Beneficiary {
     String? entityName,
     String? numberOfUnits,
     String? nfcPreprintedCode,
+    String? nfcReference,
     String? photoPath,
     String? status,
     DateTime? birthDate,
@@ -3212,6 +3215,7 @@ class Beneficiary {
       entityName: entityName ?? this.entityName,
       numberOfUnits: numberOfUnits ?? this.numberOfUnits,
       nfcPreprintedCode: nfcPreprintedCode ?? this.nfcPreprintedCode,
+      nfcReference: nfcReference ?? this.nfcReference,
       photoPath: photoPath ?? this.photoPath,
       status: status ?? this.status,
       birthDate: birthDate ?? this.birthDate,
@@ -4670,6 +4674,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   final _idNumberController = TextEditingController();
   final _mobileNumberController = TextEditingController();
   final _nfcCodeController = TextEditingController();
+  final _nfcReferenceController = TextEditingController();
   final _customEntityController = TextEditingController();
   final _customUnitsController = TextEditingController();
 
@@ -5583,6 +5588,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
     _idNumberController.dispose();
     _mobileNumberController.dispose();
     _nfcCodeController.dispose();
+    _nfcReferenceController.dispose();
     _customEntityController.dispose();
     _customUnitsController.dispose();
     super.dispose();
@@ -5769,6 +5775,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         entityName: _isEntity ? entityName : null,
         numberOfUnits: units,
           nfcPreprintedCode: null, // NFC disabled in guest mode
+          nfcReference: _nfcReferenceController.text.trim().isNotEmpty ? _nfcReferenceController.text.trim() : null,
         photoPath: _photoPath,
         status: _status,
         birthDate: _extractedBirthDate,
@@ -6637,7 +6644,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             (b) => b.idNumber == idNumber,
           );
           setState(() {
-            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
+            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same National ID.';
           });
         } catch (e) {
           // ID not found - no duplicate
@@ -6690,7 +6697,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
           );
           setState(() {
-            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same Mobile Number.';
           });
         } catch (e) {
           // Mobile number not found - no duplicate
@@ -7584,6 +7591,28 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                   ),
                 ],
                 const SizedBox(height: 24),
+                Row(
+                  children: [
+                    _buildLabel('NFC Reference'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _nfcReferenceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          hintText: 'Enter NFC reference',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () => _handleRegister(),
                   style: ElevatedButton.styleFrom(
@@ -8149,7 +8178,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         final prefix = '${queue.name}_';
         final beneficiariesForQueue = allAreaBeneficiaries.where((b) {
           final q = b.initialAssignedQueuePoint;
-          return q == queue.name || q.startsWith(prefix);
+          return q != null && q.isNotEmpty && (q == queue.name || q.startsWith(prefix));
         }).toList();
         
         return Container(
@@ -8506,7 +8535,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   // 2. Have a queue number recorded in queueHistory for this day
                   final dayBeneficiaries = beneficiariesForQueue.where((b) {
                     // Check if assigned directly to this day
-                    if (b.initialAssignedQueuePoint == dayQueueName) {
+                    if (b.initialAssignedQueuePoint != null && 
+                        b.initialAssignedQueuePoint!.isNotEmpty &&
+                        b.initialAssignedQueuePoint == dayQueueName) {
                       return true;
                     }
                     // Check if they have a queue number in history for this day
@@ -14032,6 +14063,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   final _idNumberController = TextEditingController();
   final _mobileNumberController = TextEditingController();
   final _nfcCodeController = TextEditingController();
+  final _nfcReferenceController = TextEditingController();
   final _customEntityController = TextEditingController();
   final _customUnitsController = TextEditingController();
   
@@ -14059,6 +14091,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   String? _duplicateIDMessage;
   String? _duplicateMobileMessage; // Track duplicate mobile number message
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
+  String? _duplicateNFCReferenceMessage; // Track duplicate NFC reference message
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
 
@@ -14090,6 +14123,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
     _idNumberController.dispose();
     _mobileNumberController.dispose();
     _nfcCodeController.dispose();
+    _nfcReferenceController.dispose();
     _customEntityController.dispose();
     _customUnitsController.dispose();
     // Dispose FocusNodes
@@ -15193,7 +15227,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             (b) => b.idNumber == idNumber,
           );
           setState(() {
-            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
+            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same National ID.';
           });
         } catch (e) {
           // ID not found - no duplicate
@@ -15246,7 +15280,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             (b) => b.mobileNumber != null && b.mobileNumber!.replaceAll(RegExp(r'[\s\-]'), '') == cleanMobile,
           );
           setState(() {
-            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same Mobile Number.';
+            _duplicateMobileMessage = 'This Mobile Number is already registered with another beneficiary (Name: ${localBeneficiary.name}, National ID: ${localBeneficiary.idNumber}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same Mobile Number.';
           });
         } catch (e) {
           // Mobile number not found - no duplicate
@@ -15323,6 +15357,56 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
     }
   }
 
+  Future<void> _checkDuplicateNFCReference(String nfcReference) async {
+    if (nfcReference.isEmpty) {
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+      return;
+    }
+
+    // Check if NFC reference already exists in Firestore
+    try {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(nfcReference);
+      
+      if (existingBeneficiary != null) {
+        setState(() {
+          _duplicateNFCReferenceMessage = 'This NFC reference is already registered to: ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
+        });
+      } else {
+        // Also check local list as fallback
+        try {
+          final localBeneficiary = widget.beneficiaries.firstWhere(
+            (b) => b.nfcReference != null && b.nfcReference == nfcReference,
+          );
+          setState(() {
+            _duplicateNFCReferenceMessage = 'This NFC reference is already registered to: ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
+          });
+        } catch (e) {
+          // NFC reference not found - no duplicate
+          setState(() {
+            _duplicateNFCReferenceMessage = null;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error checking duplicate NFC reference: $e');
+      // On error, also check local list
+      try {
+        final localBeneficiary = widget.beneficiaries.firstWhere(
+          (b) => b.nfcReference != null && b.nfcReference == nfcReference,
+        );
+        setState(() {
+          _duplicateNFCReferenceMessage = 'This NFC reference is already registered to: ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
+        });
+      } catch (e2) {
+        setState(() {
+          _duplicateNFCReferenceMessage = null;
+        });
+      }
+    }
+  }
+
   Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedDistributionArea == null) {
@@ -15337,6 +15421,18 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_duplicateNFCMessage!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Prevent saving if there's a duplicate NFC reference message
+      if (_duplicateNFCReferenceMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_duplicateNFCReferenceMessage!),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -15468,6 +15564,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           entityName: _isEntity ? entityName : null,
           numberOfUnits: units,
           nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.isNotEmpty ? _nfcCodeController.text : null),
+          nfcReference: _nfcReferenceController.text.trim().isNotEmpty ? _nfcReferenceController.text.trim() : null,
           photoPath: _photoPath,
           status: _status,
           birthDate: _extractedBirthDate,
@@ -16037,6 +16134,28 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ),
                   ),
                 ],
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    _buildLabel('NFC Reference'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _nfcReferenceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          hintText: 'Enter NFC reference',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () => _handleRegister(),
@@ -16860,12 +16979,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (beneficiary.queueNumber != null)
-                              Chip(
-                                label: Text('Q#${beneficiary.queueNumber}'),
-                                backgroundColor: const Color(0xFF81CF01).withOpacity(0.2),
-                                labelStyle: const TextStyle(fontSize: 12),
-                              ),
+                            // Queue number chip removed - not shown in list
                             IconButton(
                               icon: const Icon(Icons.edit, color: Colors.orange),
                               tooltip: 'Update',
@@ -17030,6 +17144,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
   final _idNumberController = TextEditingController();
   final _mobileNumberController = TextEditingController();
   final _nfcCodeController = TextEditingController();
+  final _nfcReferenceController = TextEditingController();
   final _customEntityController = TextEditingController();
   final _customUnitsController = TextEditingController();
   
@@ -17091,6 +17206,8 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     } else {
       _nfcCodeController.text = '';
     }
+    // Load existing NFC reference
+    _nfcReferenceController.text = widget.beneficiary.nfcReference ?? '';
     // Validate distribution area exists in the list
     final beneficiaryAreaId = widget.beneficiary.distributionArea;
     if (widget.distributionAreas.isNotEmpty && beneficiaryAreaId.isNotEmpty) {
@@ -17099,14 +17216,9 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     } else {
       _selectedDistributionArea = null;
     }
-    // Set selected queue point, but validate it will be unique in dropdown
-    final beneficiaryQueuePoint = widget.beneficiary.initialAssignedQueuePoint;
-    if (beneficiaryQueuePoint.isNotEmpty) {
-      // We'll validate this in the dropdown builder to ensure it's unique
-      _selectedQueuePoint = beneficiaryQueuePoint;
-    } else {
-      _selectedQueuePoint = null;
-    }
+    // Note: initialAssignedQueuePoint is deprecated - queue assignments are tracked in queueHistory
+    // Set to null to avoid dropdown issues and crashes
+    _selectedQueuePoint = null;
     // Add null safety checks for enum-like fields
     _type = _typeOptions.contains(widget.beneficiary.type) ? widget.beneficiary.type : 'Normal';
     _gender = _genderOptions.contains(widget.beneficiary.gender) ? widget.beneficiary.gender : 'Male';
@@ -17129,6 +17241,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     _idNumberController.dispose();
     _mobileNumberController.dispose();
     _nfcCodeController.dispose();
+    _nfcReferenceController.dispose();
     _customEntityController.dispose();
     _customUnitsController.dispose();
     super.dispose();
@@ -17195,21 +17308,9 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
       }
     }
 
-    String entityName = '';
-    if (_isEntity) {
-      if (_useCustomEntity) {
-        if (_customEntityController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter entity name')),
-          );
-          return;
-        }
-        entityName = _customEntityController.text;
-        widget.onEntityAdded(entityName);
-      } else {
-        entityName = _selectedEntity ?? '';
-      }
-    }
+    // Preserve existing entity values - entity section is not editable
+    final entityName = widget.beneficiary.entityName;
+    final isEntity = widget.beneficiary.isEntity;
 
     String units = _numberOfUnits;
     if (_useCustomUnits) {
@@ -17232,7 +17333,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     try {
       final updated = widget.beneficiary.copyWith(
         distributionArea: _selectedDistributionArea!,
-        initialAssignedQueuePoint: _selectedQueuePoint ?? '',
+        initialAssignedQueuePoint: null, // Deprecated: queue assignments are in queueHistory
         name: _nameController.text,
         idNumber: _idNumberController.text,
         mobileNumber: _mobileNumberController.text, // Required field - validated by form
@@ -17240,9 +17341,10 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
         gender: _gender,
         status: _status,
         numberOfUnits: units,
-        isEntity: _isEntity,
-        entityName: _isEntity ? entityName : null,
+        isEntity: isEntity, // Preserve existing value
+        entityName: entityName, // Preserve existing value
         nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.isNotEmpty ? _nfcCodeController.text : null),
+        nfcReference: _nfcReferenceController.text.trim().isNotEmpty ? _nfcReferenceController.text.trim() : null,
         idCopyPath: _idCopyPath,
         photoPath: _photoPath,
         birthDate: _birthDate,
@@ -18217,12 +18319,9 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                 _buildLabel('Distribution Area *'),
                 const SizedBox(height: 8),
                 _buildDistributionAreaDropdown(),
-                if (_selectedDistributionArea != null) ...[
-                  const SizedBox(height: 24),
-                  _buildLabel('Initial Assigned Queue Point'),
-                  const SizedBox(height: 8),
-                  _buildQueuePointDropdown(),
-                ],
+                // Note: Initial Assigned Queue Point is deprecated
+                // Queue assignments are now tracked in queueHistory collection
+                // This field is kept for backward compatibility only
                 const SizedBox(height: 24),
                 _buildLabel('ID Copy'),
                 const SizedBox(height: 8),
@@ -18356,53 +18455,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                     decoration: _buildInputDecoration('Enter custom number of units'),
                   ),
                 ],
-                const SizedBox(height: 24),
-                CheckboxListTile(
-                  title: Text(AppLanguage.translate('Entity')),
-                  value: _isEntity,
-                  onChanged: (value) => setState(() => _isEntity = value ?? false),
-                ),
-                if (_isEntity) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE0E0E0)),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedEntity,
-                              isExpanded: true,
-                              hint: const Text('Select entity'),
-                              items: [...widget.entities, 'Other'].map((entity) {
-                                return DropdownMenuItem(
-                                  value: entity,
-                                  child: Text(entity),
-                                );
-                              }).toList(),
-                              onChanged: (value) => setState(() {
-                                _selectedEntity = value;
-                                _useCustomEntity = value == 'Other';
-                              }),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_useCustomEntity) ...[
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _customEntityController,
-                      decoration: _buildInputDecoration('Enter custom entity name'),
-                    ),
-                  ],
-                ],
+                // Entity section removed - not editable in edit screen
                 const SizedBox(height: 24),
                 _buildLabel('Status *'),
                 const SizedBox(height: 8),
@@ -18589,6 +18642,28 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    _buildLabel('NFC Reference'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _nfcReferenceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          hintText: 'Enter NFC reference',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: () => _handleUpdate(),
@@ -19555,7 +19630,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
     // Filter initial beneficiaries to only include those assigned to this queue
     _localBeneficiaries = widget.beneficiaries
-        .where((b) => b.initialAssignedQueuePoint == _effectiveQueueName)
+        .where((b) => b.initialAssignedQueuePoint != null && 
+                     b.initialAssignedQueuePoint!.isNotEmpty &&
+                     b.initialAssignedQueuePoint == _effectiveQueueName)
         .toList();
 
     // Load beneficiaries from Firebase assigned to this queue (async, non-blocking)
@@ -19704,6 +19781,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   }
 
   Future<void> _handleSearchInput(String value) async {
+    print('🔍 _handleSearchInput called with value: "$value"');
     if (value.isEmpty) {
       setState(() {
         _selectedBeneficiary = null;
@@ -19840,57 +19918,121 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     }
 
     // For "No Order" mode, if not found in local/area list, search directly in Firebase
-    if (foundBeneficiary == null && _servingOption == 'noOrder') {
+    // Search in Firebase for "noOrder" or "withoutTickets" modes
+    if (foundBeneficiary == null && (_servingOption == 'noOrder' || _servingOption == 'withoutTickets')) {
       try {
         final cleanValue = normalizedValue.replaceAll(RegExp(r'[\s\-]'), '');
+        print('🔍 Searching in Firebase for: "$normalizedValue" (clean: "$cleanValue")');
         
         // Try NFC first (if value looks like NFC code)
-        if (normalizedValue.length >= 8 && (normalizedValue.toUpperCase().contains('NFC') || !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
-          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(normalizedValue);
+        // Handle NFC codes that start with "0x" (hexadecimal format)
+        String nfcSearchValue = normalizedValue;
+        if (normalizedValue.toLowerCase().startsWith('0x')) {
+          nfcSearchValue = normalizedValue.toLowerCase();
+        } else if (normalizedValue.length >= 8 && (normalizedValue.toUpperCase().contains('NFC') || !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
+          nfcSearchValue = normalizedValue.toUpperCase();
+        }
+        
+        if (normalizedValue.length >= 8 && (normalizedValue.toUpperCase().contains('NFC') || normalizedValue.toLowerCase().startsWith('0x') || !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
+          print('🔍 Trying NFC search with value: "$nfcSearchValue"');
+          // Try exact match first
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(nfcSearchValue);
+          print('🔍 NFC search result (exact): ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+          
+          // If not found, try with NFC_ prefix
+          if (foundBeneficiary == null && !nfcSearchValue.toUpperCase().startsWith('NFC_')) {
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC('NFC_$nfcSearchValue');
+            print('🔍 NFC search result (with NFC_ prefix): ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+          }
+          
+          // If still not found, try without 0x prefix
+          if (foundBeneficiary == null && nfcSearchValue.toLowerCase().startsWith('0x')) {
+            final withoutPrefix = nfcSearchValue.substring(2);
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(withoutPrefix);
+            print('🔍 NFC search result (without 0x): ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+            
+            // Also try with NFC_ prefix
+            if (foundBeneficiary == null) {
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC('NFC_$withoutPrefix');
+              print('🔍 NFC search result (without 0x, with NFC_): ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+            }
+          }
+          
+          // Also try searching by NFC reference if it's all digits
+          if (foundBeneficiary == null && RegExp(r'^[0-9]+$').hasMatch(cleanValue)) {
+            print('🔍 Trying NFC reference search: "$cleanValue"');
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(cleanValue);
+            print('🔍 NFC reference search result: ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+          }
         }
         
         // Try mobile number (if it looks like a mobile number)
         if (foundBeneficiary == null && RegExp(r'^01[0-2,5]?[0-9]{8,9}$').hasMatch(cleanValue)) {
+          print('🔍 Trying mobile search: "$cleanValue"');
           foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(cleanValue);
+          print('🔍 Mobile search result: ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
         }
         
         // Try national ID (if it looks like an ID - all digits, 11+ characters)
         if (foundBeneficiary == null && RegExp(r'^[0-9]{11,}$').hasMatch(cleanValue)) {
+          print('🔍 Trying ID search: "$cleanValue"');
           foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(cleanValue);
+          print('🔍 ID search result: ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
         }
         
         // If found in Firebase and not in local list, add to local list temporarily for serving
         if (foundBeneficiary != null) {
+          print('✅ Beneficiary found: ${foundBeneficiary.name}, Distribution Area: ${foundBeneficiary.distributionArea}, Queue Area: ${widget.queue.distributionArea}');
           // Check if beneficiary is from the same distribution area
           if (foundBeneficiary.distributionArea != widget.queue.distributionArea) {
             // Not from same area - show error
+            print('❌ Beneficiary is not in the same distribution area');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Beneficiary is not assigned to this distribution area'),
+                SnackBar(
+                  content: Text('Beneficiary "${foundBeneficiary.name}" is not assigned to this distribution area. Their area: ${foundBeneficiary.distributionArea}'),
                   backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 4),
                 ),
               );
             }
             foundBeneficiary = null;
           } else if (!_localBeneficiaries.any((b) => b.id == foundBeneficiary!.id)) {
             // Add to local list if not already present
+            print('✅ Adding beneficiary to local list');
             setState(() {
               _localBeneficiaries.add(foundBeneficiary!);
             });
           }
+        } else {
+          print('❌ Beneficiary not found in Firebase for: "$normalizedValue"');
         }
-      } catch (e) {
-        print('Error searching in Firebase for No Order mode: $e');
+      } catch (e, stackTrace) {
+        print('❌ Error searching in Firebase for ${_servingOption} mode: $e');
+        print('Stack trace: $stackTrace');
       }
     }
 
     // If "without tickets" mode and beneficiary found, check eligibility and add to queue if needed
     if (foundBeneficiary != null && _servingOption == 'withoutTickets') {
-      final isEligible = await _checkWithoutTicketsEligibility(foundBeneficiary);
+      final beneficiaryToCheck = foundBeneficiary; // Store in non-nullable variable
+      final isEligible = await _checkWithoutTicketsEligibility(beneficiaryToCheck);
       if (isEligible) {
         // Add beneficiary to queue without queue number
-        await _addBeneficiaryToQueueWithoutTicket(foundBeneficiary);
+        await _addBeneficiaryToQueueWithoutTicket(beneficiaryToCheck);
+        // Refresh beneficiary data after adding to queue
+        final updatedBeneficiary = await BeneficiaryService.getBeneficiaryById(beneficiaryToCheck.id);
+        if (updatedBeneficiary != null) {
+          // Update local reference
+          final index = _localBeneficiaries.indexWhere((b) => b.id == beneficiaryToCheck.id);
+          if (index != -1) {
+            setState(() {
+              _localBeneficiaries[index] = updatedBeneficiary;
+            });
+          }
+          // Update foundBeneficiary reference for selection
+          foundBeneficiary = updatedBeneficiary;
+        }
       } else {
         // Not eligible - show message and don't select
         if (mounted) {
@@ -19902,52 +20044,95 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             ),
           );
         }
-        return;
+        foundBeneficiary = null; // Clear found beneficiary so it doesn't get selected
       }
     }
 
-    // Update selection if found
-    if (foundBeneficiary != null) {
-      setState(() {
-        _selectedBeneficiary = foundBeneficiary;
-        if (normalizedValue.toUpperCase().contains('NFC') || 
-            (normalizedValue.length >= 8 && !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
-          _nfcCode = normalizedValue;
+      // Update selection if found
+      if (foundBeneficiary != null) {
+        setState(() {
+          _selectedBeneficiary = foundBeneficiary;
+          // Store NFC code if it looks like an NFC code
+          if (normalizedValue.toUpperCase().contains('NFC') || 
+              normalizedValue.toLowerCase().startsWith('0x') ||
+              (normalizedValue.length >= 8 && !RegExp(r'^[0-9]+$').hasMatch(normalizedValue))) {
+            _nfcCode = normalizedValue;
+          }
+        });
+        _scrollToBeneficiary(foundBeneficiary);
+        
+        // Show success feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
-      });
-      _scrollToBeneficiary(foundBeneficiary);
-      
-      // Show success feedback
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      } else {
+        // Clear selection if no match found
+        setState(() {
+          _selectedBeneficiary = null;
+        });
+        
+        // Show error message if searching in Firebase but not found
+        if ((_servingOption == 'noOrder' || _servingOption == 'withoutTickets') && normalizedValue.length >= 8) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${AppLanguage.translate('Beneficiary not found')} for: ${normalizedValue.length > 20 ? normalizedValue.substring(0, 20) + '...' : normalizedValue}'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
       }
-    } else {
-      // Clear selection if no match found
-      setState(() {
-        _selectedBeneficiary = null;
-      });
-    }
   }
   
   // Check if beneficiary is eligible for "without tickets" serving
   Future<bool> _checkWithoutTicketsEligibility(Beneficiary beneficiary) async {
-    // 1. Check if beneficiary is NOT in this queue
-    if (beneficiary.initialAssignedQueuePoint == _effectiveQueueName) {
-      return false; // Already in this queue
-    }
-    
-    // 2. Check if beneficiary IS assigned to the queue's distribution area
+    // 1. Check if beneficiary IS assigned to the queue's distribution area
     if (beneficiary.distributionArea != widget.queue.distributionArea) {
       return false; // Not assigned to this distribution area
     }
     
-    // 3. Check if beneficiary does NOT have a queue number for this queue
+    // 2. Check if beneficiary is already in this queue
+    final isInQueue = beneficiary.initialAssignedQueuePoint == _effectiveQueueName;
+    
+    // 3. If in queue, check if they have a queue number
+    if (isInQueue) {
+      // If already in queue, they're eligible only if they don't have a queue number
+      if (beneficiary.queueNumber != null) {
+        return false; // Has a queue number, not eligible for without tickets
+      }
+      
+      // Check queueHistory for issued queue numbers (for multi-day queues)
+      if (widget.queue.isMultiDay) {
+        try {
+          final historyQuery = await FirebaseService.firestore
+              .collection('queueHistory')
+              .where('dayQueueName', isEqualTo: _effectiveQueueName)
+              .where('beneficiaryId', isEqualTo: beneficiary.id)
+              .where('action', isEqualTo: 'issued')
+              .get();
+          
+          if (historyQuery.docs.isNotEmpty) {
+            return false; // Has a queue number for this day
+          }
+        } catch (e) {
+          print('Error checking queueHistory: $e');
+          // If we can't check, assume eligible (fail open)
+        }
+      }
+      
+      // In queue but no queue number - eligible for without tickets serving
+      return true;
+    }
+    
+    // 4. If not in queue, check if they have a queue number for this queue
     // For multi-day queues, check queueHistory
     if (widget.queue.isMultiDay) {
       try {
@@ -19972,7 +20157,8 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
     }
     
-    return true; // All conditions met
+    // Not in queue and no queue number - eligible (will be added to queue first)
+    return true;
   }
   
   // Add beneficiary to queue without issuing a queue number
@@ -20888,6 +21074,49 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       return;
     }
     
+    // Use a mutable reference for beneficiary (may be updated if added to queue)
+    Beneficiary currentBeneficiary = beneficiary;
+    
+    // If "without tickets" mode, check eligibility and add to queue if needed
+    if (_servingOption == 'withoutTickets') {
+      // Check if beneficiary is eligible for without tickets serving
+      final isEligible = await _checkWithoutTicketsEligibility(currentBeneficiary);
+      if (!isEligible) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Beneficiary is not eligible for without tickets serving. They may already be in this queue or have a queue number.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check if beneficiary is already in this queue
+      final isInQueue = currentBeneficiary.initialAssignedQueuePoint == _effectiveQueueName;
+      
+      // If not in queue, add them first
+      if (!isInQueue) {
+        await _addBeneficiaryToQueueWithoutTicket(currentBeneficiary);
+        // Refresh beneficiary data after adding to queue
+        final updatedBeneficiary = await BeneficiaryService.getBeneficiaryById(currentBeneficiary.id);
+        if (updatedBeneficiary != null) {
+          // Update local reference to use the updated beneficiary
+          final index = _localBeneficiaries.indexWhere((b) => b.id == currentBeneficiary.id);
+          if (index != -1) {
+            _localBeneficiaries[index] = updatedBeneficiary;
+          } else {
+            // Add to local list if not found
+            _localBeneficiaries.add(updatedBeneficiary);
+          }
+          // Update current beneficiary reference for the rest of the serving process
+          currentBeneficiary = updatedBeneficiary;
+        }
+      }
+    }
+    
     // Check if beneficiary was already served today in another queue with the same unit type
     try {
       final today = DateTime.now();
@@ -20900,7 +21129,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       try {
         servedHistoryQuery = await FirebaseService.firestore
             .collection('queueHistory')
-            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
             .where('action', isEqualTo: 'served')
             .where('unitName', isEqualTo: widget.queue.unitName)
             .where('performedAt', isGreaterThanOrEqualTo: FirebaseService.dateTimeToTimestamp(todayStart))
@@ -20911,7 +21140,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         print('Note: Could not query with unitName filter, trying without: $e');
         servedHistoryQuery = await FirebaseService.firestore
             .collection('queueHistory')
-            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
             .where('action', isEqualTo: 'served')
             .where('performedAt', isGreaterThanOrEqualTo: FirebaseService.dateTimeToTimestamp(todayStart))
             .where('performedAt', isLessThan: FirebaseService.dateTimeToTimestamp(todayEnd))
@@ -20977,8 +21206,8 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       // Continue with serving if check fails (fail open)
     }
     
-    // Eligibility is based on beneficiary.numberOfUnits set during registration
-    final eligibleUnits = int.tryParse(beneficiary.numberOfUnits) ?? 1;
+    // Eligibility is based on currentBeneficiary.numberOfUnits set during registration
+    final eligibleUnits = int.tryParse(currentBeneficiary.numberOfUnits) ?? 1;
     
     // For multi-day queues, validate against day-specific units served, not global
     if (widget.queue.isMultiDay) {
@@ -20987,7 +21216,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         final dayHistoryQuery = await FirebaseService.firestore
             .collection('queueHistory')
             .where('dayQueueName', isEqualTo: _effectiveQueueName)
-            .where('beneficiaryId', isEqualTo: beneficiary.id)
+            .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
             .where('action', isEqualTo: 'served')
             .get();
         
@@ -21008,7 +21237,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       } catch (e) {
         print('⚠️ Warning: Could not check day-specific units served: $e');
         // Fall back to global validation if history check fails
-        final newUnitsTaken = beneficiary.unitsTaken + units;
+        final newUnitsTaken = currentBeneficiary.unitsTaken + units;
         if (newUnitsTaken > eligibleUnits) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Cannot exceed eligible units')),
@@ -21018,7 +21247,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
     } else {
       // For single-day queues, use global validation
-      final newUnitsTaken = beneficiary.unitsTaken + units;
+      final newUnitsTaken = currentBeneficiary.unitsTaken + units;
       if (newUnitsTaken > eligibleUnits) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cannot exceed eligible units')),
@@ -21028,7 +21257,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     }
     
     // Calculate newUnitsTaken for updating beneficiary (still update global for tracking)
-    final newUnitsTaken = beneficiary.unitsTaken + units;
+    final newUnitsTaken = currentBeneficiary.unitsTaken + units;
 
     // Show loading indicator
     showDialog(
@@ -21043,32 +21272,35 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       
       // Update beneficiary in Firebase with exact unitsTaken value
       // This ensures the "Eligible for X/Y meals" label updates correctly
-      final updatedBeneficiary = beneficiary.copyWith(
+      final updatedBeneficiary = currentBeneficiary.copyWith(
         unitsTaken: newUnitsTaken,
         isServed: newUnitsTaken >= eligibleUnits,
       );
       
-      print('🔄 Updating beneficiary ${beneficiary.id}: unitsTaken from ${beneficiary.unitsTaken} to $newUnitsTaken');
+      print('🔄 Updating beneficiary ${currentBeneficiary.id}: unitsTaken from ${currentBeneficiary.unitsTaken} to $newUnitsTaken');
       
       // Update beneficiary with new unitsTaken and isServed status
-      await BeneficiaryService.updateBeneficiary(beneficiary.id, updatedBeneficiary);
+      await BeneficiaryService.updateBeneficiary(currentBeneficiary.id, updatedBeneficiary);
       
       print('✅ Beneficiary updated in Firebase: unitsTaken = $newUnitsTaken, isServed = ${updatedBeneficiary.isServed}');
       
       // Record serving action in queueHistory for all queues (for tracking and validation)
       try {
+        final isWithoutTicket = _servingOption == 'withoutTickets' || 
+                                 (currentBeneficiary.initialAssignedQueuePoint == _effectiveQueueName && currentBeneficiary.queueNumber == null);
         await FirebaseService.firestore.collection('queueHistory').add({
           'queueId': widget.queue.name,
           'dayQueueName': widget.queue.isMultiDay ? _effectiveQueueName : widget.queue.name, // Store the day-specific queue name for multi-day, or queue name for single-day
-          'beneficiaryId': beneficiary.id,
+          'beneficiaryId': currentBeneficiary.id,
           'action': 'served',
           'unitsServed': units,
           'totalUnitsTaken': newUnitsTaken,
           'unitName': widget.queue.unitName, // Store unitName for easier validation
           'performedBy': AdminService.currentAdmin?.fullName ?? 'system',
           'performedAt': FieldValue.serverTimestamp(),
+          'withoutTicket': isWithoutTicket, // Mark if served without ticket
         });
-        print('✅ Recorded serving action in queueHistory for beneficiary ${beneficiary.id}');
+        print('✅ Recorded serving action in queueHistory for beneficiary ${currentBeneficiary.id}${isWithoutTicket ? ' (without ticket)' : ''}');
       } catch (e) {
         print('⚠️ Warning: Could not record serving action in queueHistory: $e');
         // Don't fail the operation if history tracking fails
@@ -21077,7 +21309,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       // Also record serving metadata (servedAt, servedBy) if needed
       // We can add this to updateBeneficiary later, or use a separate update
       try {
-        await FirebaseService.firestore.collection('beneficiaries').doc(beneficiary.id).update({
+        await FirebaseService.firestore.collection('beneficiaries').doc(currentBeneficiary.id).update({
           'servedAt': FieldValue.serverTimestamp(),
           'servedBy': servedBy,
         });
@@ -21100,7 +21332,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         Navigator.pop(context); // Close loading dialog
         
         // Update beneficiary in local list by ID (not index, since list might be filtered/sorted)
-        final beneficiaryIndex = _localBeneficiaries.indexWhere((b) => b.id == beneficiary.id);
+        final beneficiaryIndex = _localBeneficiaries.indexWhere((b) => b.id == currentBeneficiary.id);
         if (beneficiaryIndex != -1) {
           _localBeneficiaries[beneficiaryIndex] = updatedBeneficiary;
         } else {
@@ -21124,7 +21356,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             final dayHistoryQuery = await FirebaseService.firestore
                 .collection('queueHistory')
                 .where('dayQueueName', isEqualTo: _effectiveQueueName)
-                .where('beneficiaryId', isEqualTo: beneficiary.id)
+                .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
                 .where('action', isEqualTo: 'served')
                 .get();
             
@@ -21148,7 +21380,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           ),
         );
         
-        print('✅ UI updated: beneficiary ${beneficiary.name} now shows $dayUnitsAfterServing/$eligibleUnits');
+        print('✅ UI updated: beneficiary ${currentBeneficiary.name} now shows $dayUnitsAfterServing/$eligibleUnits');
       }
     } catch (e) {
       print('Error serving beneficiary: $e');
@@ -21206,7 +21438,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   return true;
                 }
                 // Check if queue point is for this multi-day queue
-                if (b.initialAssignedQueuePoint.startsWith(queuePrefix)) {
+                if (b.initialAssignedQueuePoint != null && 
+                    b.initialAssignedQueuePoint!.isNotEmpty &&
+                    b.initialAssignedQueuePoint!.startsWith(queuePrefix)) {
                   // Check if they have a queue number in history for this specific day
                   if (beneficiaryIdsFromHistory.contains(b.id)) {
                     return true;
@@ -21257,6 +21491,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                 sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
               }
 
+              // Apply Grace 5 filter if selected
               final title = widget.queue.isMultiDay
                   ? 'Serving: ${widget.queue.name} (${widget.queue.fromDate.day}/${widget.queue.fromDate.month}/${widget.queue.fromDate.year})'
                   : 'Serving: ${widget.queue.name}';
@@ -21292,6 +21527,48 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     if (dayUnitsTaken >= eligibleUnits) {
                       fullyServedBeneficiaryIds.add(beneficiary.id);
                     }
+                  }
+
+                  // Apply Grace 5 or Grace 10 filter if selected (after calculating served IDs)
+                  List<Beneficiary> filteredBeneficiaries = sortedBeneficiaries;
+                  if (_servingOption == 'grace5') {
+                    // Get the highest served queue number
+                    int highestServedQueueNumber = 0;
+                    for (var beneficiary in sortedBeneficiaries) {
+                      if (beneficiary.queueNumber != null && 
+                          fullyServedBeneficiaryIds.contains(beneficiary.id)) {
+                        if (beneficiary.queueNumber! > highestServedQueueNumber) {
+                          highestServedQueueNumber = beneficiary.queueNumber!;
+                        }
+                      }
+                    }
+                    
+                    // Filter to show only beneficiaries within the next 5 positions
+                    final graceStart = highestServedQueueNumber + 1;
+                    final graceEnd = highestServedQueueNumber + 5;
+                    filteredBeneficiaries = sortedBeneficiaries.where((b) {
+                      if (b.queueNumber == null) return false;
+                      return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
+                    }).toList();
+                  } else if (_servingOption == 'grace10') {
+                    // Get the highest served queue number
+                    int highestServedQueueNumber = 0;
+                    for (var beneficiary in sortedBeneficiaries) {
+                      if (beneficiary.queueNumber != null && 
+                          fullyServedBeneficiaryIds.contains(beneficiary.id)) {
+                        if (beneficiary.queueNumber! > highestServedQueueNumber) {
+                          highestServedQueueNumber = beneficiary.queueNumber!;
+                        }
+                      }
+                    }
+                    
+                    // Filter to show only beneficiaries within the next 10 positions
+                    final graceStart = highestServedQueueNumber + 1;
+                    final graceEnd = highestServedQueueNumber + 10;
+                    filteredBeneficiaries = sortedBeneficiaries.where((b) {
+                      if (b.queueNumber == null) return false;
+                      return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
+                    }).toList();
                   }
 
                   return Scaffold(
@@ -21418,7 +21695,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                         ),
                       ],
                     ),
-                    body: _buildServingBody(sortedBeneficiaries, fullyServedBeneficiaryIds, daySpecificUnitsTaken),
+                    body: _buildServingBody(filteredBeneficiaries, fullyServedBeneficiaryIds, daySpecificUnitsTaken),
                   );
                 },
               );
@@ -21434,7 +21711,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           // Use stream data if available, otherwise use local list filtered by queue
           // Filter local list to only include beneficiaries for this queue
           final filteredLocalBeneficiaries = _localBeneficiaries
-              .where((b) => b.initialAssignedQueuePoint == _effectiveQueueName)
+              .where((b) => b.initialAssignedQueuePoint != null && 
+                     b.initialAssignedQueuePoint!.isNotEmpty &&
+                     b.initialAssignedQueuePoint == _effectiveQueueName)
               .toList();
           List<Beneficiary> currentBeneficiaries = filteredLocalBeneficiaries;
           
@@ -21488,10 +21767,6 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
           }
 
-          final title = widget.queue.isMultiDay
-              ? 'Serving: ${widget.queue.name} (${widget.queue.fromDate.day}/${widget.queue.fromDate.month}/${widget.queue.fromDate.year})'
-              : 'Serving: ${widget.queue.name}';
-
           // For non-multi-day queues, only mark as served if they've received full eligible units
           final servedBeneficiaryIds = <String>{};
           for (var b in sortedBeneficiaries) {
@@ -21500,6 +21775,52 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               servedBeneficiaryIds.add(b.id);
             }
           }
+
+          // Apply Grace 5 or Grace 10 filter if selected
+          List<Beneficiary> filteredBeneficiaries = sortedBeneficiaries;
+          if (_servingOption == 'grace5') {
+            // Get the highest served queue number
+            int highestServedQueueNumber = 0;
+            for (var beneficiary in sortedBeneficiaries) {
+              if (beneficiary.queueNumber != null && 
+                  servedBeneficiaryIds.contains(beneficiary.id)) {
+                if (beneficiary.queueNumber! > highestServedQueueNumber) {
+                  highestServedQueueNumber = beneficiary.queueNumber!;
+                }
+              }
+            }
+            
+            // Filter to show only beneficiaries within the next 5 positions
+            final graceStart = highestServedQueueNumber + 1;
+            final graceEnd = highestServedQueueNumber + 5;
+            filteredBeneficiaries = sortedBeneficiaries.where((b) {
+              if (b.queueNumber == null) return false;
+              return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
+            }).toList();
+          } else if (_servingOption == 'grace10') {
+            // Get the highest served queue number
+            int highestServedQueueNumber = 0;
+            for (var beneficiary in sortedBeneficiaries) {
+              if (beneficiary.queueNumber != null && 
+                  servedBeneficiaryIds.contains(beneficiary.id)) {
+                if (beneficiary.queueNumber! > highestServedQueueNumber) {
+                  highestServedQueueNumber = beneficiary.queueNumber!;
+                }
+              }
+            }
+            
+            // Filter to show only beneficiaries within the next 10 positions
+            final graceStart = highestServedQueueNumber + 1;
+            final graceEnd = highestServedQueueNumber + 10;
+            filteredBeneficiaries = sortedBeneficiaries.where((b) {
+              if (b.queueNumber == null) return false;
+              return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
+            }).toList();
+          }
+
+          final title = widget.queue.isMultiDay
+              ? 'Serving: ${widget.queue.name} (${widget.queue.fromDate.day}/${widget.queue.fromDate.month}/${widget.queue.fromDate.year})'
+              : 'Serving: ${widget.queue.name}';
 
           return Scaffold(
               appBar: AppBar(
@@ -21625,7 +21946,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   ),
                 ],
               ),
-              body: _buildServingBody(sortedBeneficiaries, servedBeneficiaryIds, {}),
+              body: _buildServingBody(filteredBeneficiaries, servedBeneficiaryIds, {}),
             );
         },
       );
@@ -22323,13 +22644,15 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       final queueNamePrefix = '${_selectedQueue!.name}_';
       print('🔍 Current beneficiary queue point: ${beneficiary.initialAssignedQueuePoint}');
       // Check if beneficiary's current queue point is for a different day of this same multi-day queue
-      if (beneficiary.initialAssignedQueuePoint.startsWith(queueNamePrefix) && 
+      if (beneficiary.initialAssignedQueuePoint != null &&
+          beneficiary.initialAssignedQueuePoint!.isNotEmpty &&
+          beneficiary.initialAssignedQueuePoint!.startsWith(queueNamePrefix) && 
           beneficiary.initialAssignedQueuePoint != queueName) {
         // Beneficiary already has a queue number for a different day
         // Keep their original queue assignment to preserve them in that day's list
         // This allows issuing queue numbers for multiple days independently
         print('ℹ️ Beneficiary has queue number for different day, preserving original queue point: ${beneficiary.initialAssignedQueuePoint}');
-        queuePointToUse = beneficiary.initialAssignedQueuePoint;
+        queuePointToUse = beneficiary.initialAssignedQueuePoint ?? '';
       } else {
         print('ℹ️ Setting queue point to current day: $queueName');
       }
@@ -23827,7 +24150,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final queuesToSearch = _allQueues.isNotEmpty ? _allQueues : widget.queues;
       
       // First try to find queue by initialAssignedQueuePoint (queue name)
-      if (beneficiary.initialAssignedQueuePoint.isNotEmpty) {
+      if (beneficiary.initialAssignedQueuePoint != null && 
+          beneficiary.initialAssignedQueuePoint!.isNotEmpty) {
         final queuesByName = queuesToSearch.where(
           (q) => q.name == beneficiary.initialAssignedQueuePoint,
         ).toList();
@@ -24023,7 +24347,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           servingTime,
           beneficiary.name,
           distributionAreaName, // Use area name instead of ID
-          beneficiary.initialAssignedQueuePoint.isNotEmpty ? beneficiary.initialAssignedQueuePoint : 'N/A',
+          beneficiary.initialAssignedQueuePoint != null && beneficiary.initialAssignedQueuePoint!.isNotEmpty ? beneficiary.initialAssignedQueuePoint! : 'N/A',
           beneficiary.unitsTaken,
           unitName ?? 'N/A',
         ];
