@@ -311,13 +311,33 @@ class BeneficiaryService {
   /// Get beneficiary by NFC reference
   static Future<Beneficiary?> getBeneficiaryByNFCReference(String nfcReference) async {
     if (nfcReference.isEmpty) return null;
-    final query = await _collection
-        .where('nfcReference', isEqualTo: nfcReference)
+    final trimmedRef = nfcReference.trim();
+    if (trimmedRef.isEmpty) return null;
+    
+    // Try exact match first
+    var query = await _collection
+        .where('nfcReference', isEqualTo: trimmedRef)
         .limit(1)
         .get();
     if (query.docs.isNotEmpty) {
       return _documentToBeneficiary(query.docs.first);
     }
+    
+    // If not found, try without leading zeros (in case stored differently)
+    // But only if the value has leading zeros
+    if (trimmedRef.startsWith('0') && trimmedRef.length > 1) {
+      final withoutLeadingZeros = trimmedRef.replaceFirst(RegExp(r'^0+'), '');
+      if (withoutLeadingZeros.isNotEmpty && withoutLeadingZeros != trimmedRef) {
+        query = await _collection
+            .where('nfcReference', isEqualTo: withoutLeadingZeros)
+            .limit(1)
+            .get();
+        if (query.docs.isNotEmpty) {
+          return _documentToBeneficiary(query.docs.first);
+        }
+      }
+    }
+    
     return null;
   }
 

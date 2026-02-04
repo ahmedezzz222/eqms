@@ -19605,6 +19605,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   DateTime? _lastTagDetectionTime; // Track last tag detection time
   static const Duration _tagDetectionCooldown = Duration(milliseconds: 1500); // Cooldown period
   final Map<String, int> _unitsToServe = {}; // Track units to serve for each beneficiary
+  Timer? _searchDebounceTimer; // Debounce timer for search input
 
   late final String _effectiveQueueName; // Day-specific key for Multi Day queues
 
@@ -19638,16 +19639,28 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // Load beneficiaries from Firebase assigned to this queue (async, non-blocking)
     _loadQueueBeneficiaries();
     
-    // Listen to search controller changes to clear last processed tag when user manually edits
+    // Listen to search controller changes
     _searchController.addListener(() {
+      final currentText = _searchController.text.trim();
+      
       // Clear last processed tag ID if user manually edits the field
       // This allows re-searching for the same tag if needed
-      if (_lastProcessedTagId != null) {
-        final currentText = _searchController.text.trim();
-        if (currentText != _lastProcessedTagId) {
-          _lastProcessedTagId = null;
-          _lastTagDetectionTime = null;
-        }
+      if (_lastProcessedTagId != null && currentText != _lastProcessedTagId) {
+        _lastProcessedTagId = null;
+        _lastTagDetectionTime = null;
+      }
+      
+      // Debounce search to avoid too many Firebase calls while typing
+      _searchDebounceTimer?.cancel();
+      if (currentText.isNotEmpty) {
+        _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+          _handleSearchInput(currentText);
+        });
+      } else {
+        // Clear selection immediately if search is empty
+        setState(() {
+          _selectedBeneficiary = null;
+        });
       }
     });
     
@@ -19717,6 +19730,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   void dispose() {
     // Stop NFC session when screen is disposed
     NFCHelper.stopNFCSession();
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _scrollController.dispose();
@@ -19825,6 +19839,45 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
     } catch (e) {
       // Continue to other methods
+    }
+
+    // 1b. Try NFC reference (for numeric values like "01192")
+    if (foundBeneficiary == null) {
+      try {
+        final cleanValue = normalizedValue.replaceAll(RegExp(r'[\s\-]'), '');
+        if (RegExp(r'^[0-9]+$').hasMatch(cleanValue)) {
+          print('🔍 Trying NFC reference search in local list: "$cleanValue"');
+          final nfcRefMatches = searchList.where((b) {
+            if (b.nfcReference == null || b.nfcReference!.isEmpty) return false;
+            final storedRef = b.nfcReference!.trim();
+            // Exact match
+            if (storedRef == cleanValue) return true;
+            // Try without leading zeros (if search value has them)
+            if (cleanValue.startsWith('0') && cleanValue.length > 1) {
+              final withoutLeadingZeros = cleanValue.replaceFirst(RegExp(r'^0+'), '');
+              if (withoutLeadingZeros.isNotEmpty && storedRef == withoutLeadingZeros) return true;
+            }
+            // Try with leading zeros (if stored value has them)
+            if (storedRef.startsWith('0') && storedRef.length > 1) {
+              final storedWithoutZeros = storedRef.replaceFirst(RegExp(r'^0+'), '');
+              if (storedWithoutZeros.isNotEmpty && storedWithoutZeros == cleanValue) return true;
+            }
+            return false;
+          }).toList();
+          
+          if (nfcRefMatches.length == 1) {
+            foundBeneficiary = nfcRefMatches.first;
+            print('✅ Found beneficiary by NFC reference in local list: ${foundBeneficiary.name}');
+          } else if (nfcRefMatches.length > 1) {
+            print('⚠️ Multiple beneficiaries found with NFC reference "$cleanValue"');
+          } else {
+            print('❌ No beneficiary found with NFC reference "$cleanValue" in local list');
+          }
+        }
+      } catch (e) {
+        print('❌ Error searching NFC reference in local list: $e');
+        // Continue to other methods
+      }
     }
 
     // 2. Try mobile number (flexible matching - exact or partial)
@@ -19966,6 +20019,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           }
         }
         
+        // Try NFC reference search separately (for short numeric values like "01192")
+        // This should run regardless of length, as NFC references can be any length
+        if (foundBeneficiary == null && RegExp(r'^[0-9]+$').hasMatch(cleanValue)) {
+          print('🔍 Trying NFC reference search (standalone): "$cleanValue"');
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(cleanValue);
+          print('🔍 NFC reference search result (standalone): ${foundBeneficiary != null ? "Found: ${foundBeneficiary.name}" : "Not found"}');
+        }
+        
         // Try mobile number (if it looks like a mobile number)
         if (foundBeneficiary == null && RegExp(r'^01[0-2,5]?[0-9]{8,9}$').hasMatch(cleanValue)) {
           print('🔍 Trying mobile search: "$cleanValue"');
@@ -20016,35 +20077,81 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // If "without tickets" mode and beneficiary found, check eligibility and add to queue if needed
     if (foundBeneficiary != null && _servingOption == 'withoutTickets') {
       final beneficiaryToCheck = foundBeneficiary; // Store in non-nullable variable
-      final isEligible = await _checkWithoutTicketsEligibility(beneficiaryToCheck);
-      if (isEligible) {
-        // Add beneficiary to queue without queue number
-        await _addBeneficiaryToQueueWithoutTicket(beneficiaryToCheck);
-        // Refresh beneficiary data after adding to queue
-        final updatedBeneficiary = await BeneficiaryService.getBeneficiaryById(beneficiaryToCheck.id);
-        if (updatedBeneficiary != null) {
-          // Update local reference
-          final index = _localBeneficiaries.indexWhere((b) => b.id == beneficiaryToCheck.id);
-          if (index != -1) {
-            setState(() {
-              _localBeneficiaries[index] = updatedBeneficiary;
-            });
-          }
-          // Update foundBeneficiary reference for selection
-          foundBeneficiary = updatedBeneficiary;
-        }
-      } else {
-        // Not eligible - show message and don't select
+      
+      // First verify distribution area match
+      if (beneficiaryToCheck.distributionArea != widget.queue.distributionArea) {
+        print('❌ Distribution area mismatch: Beneficiary area: ${beneficiaryToCheck.distributionArea}, Queue area: ${widget.queue.distributionArea}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Beneficiary is not eligible for without tickets serving. They may already be in this queue or have a queue number.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: Text('Beneficiary "${beneficiaryToCheck.name}" belongs to distribution area "${beneficiaryToCheck.distributionArea}", but this queue is for area "${widget.queue.distributionArea}". Cannot serve.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
         }
-        foundBeneficiary = null; // Clear found beneficiary so it doesn't get selected
+        foundBeneficiary = null;
+      } else {
+        // Check eligibility (includes ticket check)
+        final isEligible = await _checkWithoutTicketsEligibility(beneficiaryToCheck);
+        if (isEligible) {
+          print('✅ Beneficiary is eligible for without tickets serving');
+          
+          // Check if already in queue
+          final isInQueue = beneficiaryToCheck.initialAssignedQueuePoint == _effectiveQueueName;
+          
+          if (!isInQueue) {
+            // Add beneficiary to queue without queue number
+            print('📝 Adding beneficiary to queue without ticket...');
+            await _addBeneficiaryToQueueWithoutTicket(beneficiaryToCheck);
+          } else {
+            print('✅ Beneficiary already in queue (without ticket)');
+          }
+          
+          // Refresh beneficiary data after adding to queue
+          final updatedBeneficiary = await BeneficiaryService.getBeneficiaryById(beneficiaryToCheck.id);
+          if (updatedBeneficiary != null) {
+            print('✅ Beneficiary updated: ${updatedBeneficiary.name}, Queue: ${updatedBeneficiary.initialAssignedQueuePoint}, Queue Number: ${updatedBeneficiary.queueNumber}');
+            
+            // Update or add to local list to ensure it appears in the UI
+            final index = _localBeneficiaries.indexWhere((b) => b.id == beneficiaryToCheck.id);
+            setState(() {
+              if (index != -1) {
+                _localBeneficiaries[index] = updatedBeneficiary;
+              } else {
+                // Add to local list if not present (important for UI visibility)
+                _localBeneficiaries.add(updatedBeneficiary);
+              }
+            });
+            
+            // Update foundBeneficiary reference for selection
+            foundBeneficiary = updatedBeneficiary;
+            
+            // Show success message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Beneficiary "${updatedBeneficiary.name}" added to queue without ticket. Ready to serve.'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } else {
+          // Not eligible - show specific message
+          print('❌ Beneficiary is not eligible for without tickets serving');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Beneficiary is not eligible for without tickets serving. They may already have a ticket issued for this queue.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+          foundBeneficiary = null; // Clear found beneficiary so it doesn't get selected
+        }
       }
     }
 
@@ -20094,70 +20201,53 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   
   // Check if beneficiary is eligible for "without tickets" serving
   Future<bool> _checkWithoutTicketsEligibility(Beneficiary beneficiary) async {
+    print('🔍 Checking eligibility for without tickets: ${beneficiary.name}');
+    
     // 1. Check if beneficiary IS assigned to the queue's distribution area
     if (beneficiary.distributionArea != widget.queue.distributionArea) {
+      print('❌ Beneficiary distribution area (${beneficiary.distributionArea}) does not match queue area (${widget.queue.distributionArea})');
       return false; // Not assigned to this distribution area
     }
+    print('✅ Beneficiary belongs to the correct distribution area');
     
-    // 2. Check if beneficiary is already in this queue
-    final isInQueue = beneficiary.initialAssignedQueuePoint == _effectiveQueueName;
-    
-    // 3. If in queue, check if they have a queue number
-    if (isInQueue) {
-      // If already in queue, they're eligible only if they don't have a queue number
-      if (beneficiary.queueNumber != null) {
-        return false; // Has a queue number, not eligible for without tickets
-      }
+    // 2. Check if beneficiary has a queue number issued for this queue (in queueHistory)
+    // This is the most important check - they should NOT have a ticket
+    try {
+      final historyQuery = await FirebaseService.firestore
+          .collection('queueHistory')
+          .where('dayQueueName', isEqualTo: _effectiveQueueName)
+          .where('beneficiaryId', isEqualTo: beneficiary.id)
+          .where('action', isEqualTo: 'issued')
+          .get();
       
-      // Check queueHistory for issued queue numbers (for multi-day queues)
-      if (widget.queue.isMultiDay) {
-        try {
-          final historyQuery = await FirebaseService.firestore
-              .collection('queueHistory')
-              .where('dayQueueName', isEqualTo: _effectiveQueueName)
-              .where('beneficiaryId', isEqualTo: beneficiary.id)
-              .where('action', isEqualTo: 'issued')
-              .get();
-          
-          if (historyQuery.docs.isNotEmpty) {
-            return false; // Has a queue number for this day
-          }
-        } catch (e) {
-          print('Error checking queueHistory: $e');
-          // If we can't check, assume eligible (fail open)
-        }
+      if (historyQuery.docs.isNotEmpty) {
+        print('❌ Beneficiary already has a ticket issued for this queue (found ${historyQuery.docs.length} issued records)');
+        return false; // Has a queue number/ticket issued for this queue
       }
-      
-      // In queue but no queue number - eligible for without tickets serving
-      return true;
+      print('✅ No ticket issued for this queue in queueHistory');
+    } catch (e) {
+      print('⚠️ Error checking queueHistory for issued tickets: $e');
+      // If we can't check, continue with other checks
     }
     
-    // 4. If not in queue, check if they have a queue number for this queue
-    // For multi-day queues, check queueHistory
-    if (widget.queue.isMultiDay) {
-      try {
-        final historyQuery = await FirebaseService.firestore
-            .collection('queueHistory')
-            .where('dayQueueName', isEqualTo: _effectiveQueueName)
-            .where('beneficiaryId', isEqualTo: beneficiary.id)
-            .where('action', isEqualTo: 'issued')
-            .get();
-        
-        if (historyQuery.docs.isNotEmpty) {
-          return false; // Has a queue number for this day
-        }
-      } catch (e) {
-        print('Error checking queueHistory: $e');
-        // If we can't check, assume eligible (fail open)
-      }
-    } else {
-      // For single-day queues, check if beneficiary has a queue number for this queue
-      if (beneficiary.initialAssignedQueuePoint == widget.queue.name && beneficiary.queueNumber != null) {
+    // 3. Also check if beneficiary has a queueNumber field set (for backward compatibility)
+    if (beneficiary.queueNumber != null) {
+      // Check if this queue number is for the current queue
+      if (beneficiary.initialAssignedQueuePoint == _effectiveQueueName) {
+        print('❌ Beneficiary has queue number ${beneficiary.queueNumber} for this queue');
         return false; // Has a queue number for this queue
       }
     }
     
-    // Not in queue and no queue number - eligible (will be added to queue first)
+    // 4. Check if beneficiary is already in this queue (but without ticket)
+    final isInQueue = beneficiary.initialAssignedQueuePoint == _effectiveQueueName;
+    if (isInQueue) {
+      print('✅ Beneficiary is already in this queue (without ticket) - eligible to serve');
+      return true; // Already in queue without ticket - can be served
+    }
+    
+    // 5. Not in queue and no ticket - eligible (will be added to queue first)
+    print('✅ Beneficiary is eligible - will be added to queue without ticket');
     return true;
   }
   
@@ -20646,11 +20736,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     ),
                     keyboardType: TextInputType.text,
                     textInputAction: TextInputAction.search,
-                    onChanged: (value) {
-                      _handleSearchInput(value);
-                    },
                     onSubmitted: (value) {
-                      _handleSearchInput(value);
+                      // Cancel debounce and search immediately on submit
+                      _searchDebounceTimer?.cancel();
+                      _handleSearchInput(value.trim());
                     },
                   ),
                 ),
@@ -21430,12 +21519,12 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               final queuePrefix = '${widget.queue.name}_';
               
               // Get beneficiaries who either:
-              // 1. Have initialAssignedQueuePoint matching this day, OR
+              // 1. Have initialAssignedQueuePoint matching this day (with or without ticket), OR
               // 2. Have a queue number in history for this day
               final filteredBeneficiaries = allAreaBeneficiaries.where((b) {
-                // Direct assignment
+                // Direct assignment (includes beneficiaries without tickets)
                 if (b.initialAssignedQueuePoint == _effectiveQueueName) {
-                  return true;
+                  return true; // Include even if they don't have a queue number (without tickets)
                 }
                 // Check if queue point is for this multi-day queue
                 if (b.initialAssignedQueuePoint != null && 
