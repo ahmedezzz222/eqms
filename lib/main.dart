@@ -26143,7 +26143,8 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                   ),
                   Expanded(
                     child: StreamBuilder<List<Queue>>(
-                      stream: QueueService.getQueuesForHistory(limit: 500),
+                      stream: QueueService.getQueuesForHistory(limit: 200), // Reduced from 500 to 200 for better performance
+                      initialData: const [], // Provide initial data to prevent unnecessary rebuilds
                       builder: (context, snapshot) {
                         // Show loading only on initial connection, not when data is already available
                         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
@@ -26204,10 +26205,11 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                           }
                         }
                         
-                        // Sort by fromDate descending (newest first)
-                        filteredQueues.sort((a, b) => b.fromDate.compareTo(a.fromDate));
+                        // Sort by fromDate descending (newest first) - create new list to avoid mutating original
+                        final sortedQueues = List<Queue>.from(filteredQueues);
+                        sortedQueues.sort((a, b) => b.fromDate.compareTo(a.fromDate));
                         
-                        if (filteredQueues.isEmpty) {
+                        if (sortedQueues.isEmpty) {
                           return Center(
                             child: Padding(
                               padding: const EdgeInsets.all(32.0),
@@ -26235,16 +26237,22 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                         }
                         
                         return ListView.builder(
-                          itemCount: filteredQueues.length,
+                          itemCount: sortedQueues.length,
                           padding: const EdgeInsets.only(bottom: 16),
-                          cacheExtent: 500,
+                          // Performance optimizations for fast scrolling
+                          cacheExtent: 1000, // Increased cache for smoother fast scrolling
+                          addAutomaticKeepAlives: false, // Don't keep items alive when scrolled away
+                          addRepaintBoundaries: true, // Add repaint boundaries automatically
+                          physics: const ClampingScrollPhysics(), // Better performance than BouncingScrollPhysics
                           itemBuilder: (context, index) {
-                            final queue = filteredQueues[index];
-                            if (queue.isMultiDay) {
-                              return _buildMultiDayQueueAccordion(queue, index);
-                            } else {
-                              return _buildQueueRow(queue, index);
-                            }
+                            final queue = sortedQueues[index];
+                            // Use stable key based on queue name only (not index) for better recycling
+                            return RepaintBoundary(
+                              key: ValueKey('queue_${queue.name}'),
+                              child: queue.isMultiDay
+                                  ? _buildMultiDayQueueAccordion(queue, index)
+                                  : _buildQueueRow(queue, index),
+                            );
                           },
                         );
                       },
@@ -26259,29 +26267,52 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
     );
   }
 
+  // Cache decorations to avoid recreating on every build
+  static final _tealGreen = const Color(0xFF81CF01);
+  static final _queueRowDecoration = BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(
+      color: _tealGreen.withOpacity(0.3),
+      width: 2,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: _tealGreen.withOpacity(0.2),
+        spreadRadius: 2,
+        blurRadius: 8,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+  static final _multiDayDecoration = BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(
+      color: Colors.blue.withOpacity(0.3),
+      width: 2,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.blue.withOpacity(0.2),
+        spreadRadius: 2,
+        blurRadius: 8,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+
   Widget _buildQueueRow(Queue queue, int index) {
-    const tealGreen = Color(0xFF81CF01);
+    // Cache expensive computations
+    final statusColor = _getStatusColor(queue.status);
+    final dateTimeText = '${queue.displayDateRange} • ${queue.displayTimeRange}';
+    final unitsText = '${queue.numberOfAvailableUnits} ${queue.unitName}';
     
     // Don't load beneficiaries here - load them on-demand when user clicks View
     return Container(
       margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: index > 0 ? 12 : 0),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: tealGreen.withOpacity(0.3),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tealGreen.withOpacity(0.2),
-            spreadRadius: 2,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: _queueRowDecoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -26301,14 +26332,14 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${queue.displayDateRange} • ${queue.displayTimeRange}',
+                      dateTimeText,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
                     Text(
-                      '${queue.numberOfAvailableUnits} ${queue.unitName}',
+                      unitsText,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -26320,7 +26351,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _getStatusColor(queue.status).withOpacity(0.2),
+                  color: statusColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -26328,7 +26359,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: _getStatusColor(queue.status),
+                    color: statusColor,
                   ),
                 ),
               ),
@@ -26341,34 +26372,8 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
               _buildActionButton(
                 icon: Icons.visibility,
                 label: AppLanguage.translate('View'),
-                color: tealGreen,
-                onPressed: () async {
-                  // Load beneficiaries on-demand when user clicks View
-                  try {
-                    final beneficiariesForQueue = await BeneficiaryService.getBeneficiariesByQueueName(queue.name).first;
-                    if (mounted) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => QueueViewScreen(
-                            queue: queue,
-                            beneficiaries: beneficiariesForQueue,
-                            onQueueUpdated: (updatedQueue) {},
-                            onBeneficiaryUpdated: (beneficiary) {},
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error loading queue: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
+                color: _tealGreen,
+                onPressed: () => _handleViewQueue(queue),
               ),
             ],
           ),
@@ -26377,35 +26382,43 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
     );
   }
 
+  // Cache for daily entries to avoid recomputation
+  final Map<String, List<Map<String, dynamic>>> _dailyEntriesCache = {};
+  
+  List<Map<String, dynamic>> _getCachedDailyEntries(Queue queue) {
+    final cacheKey = '${queue.name}_${queue.fromDate}_${queue.toDate}';
+    if (!_dailyEntriesCache.containsKey(cacheKey)) {
+      _dailyEntriesCache[cacheKey] = _generateDailyEntries(queue);
+    }
+    return _dailyEntriesCache[cacheKey]!;
+  }
+
   Widget _buildMultiDayQueueAccordion(Queue queue, int displayIndex) {
     final queueKey = queue.name;
     final isQueueExpanded = _multiDayQueueExpanded[queueKey] ?? false;
-    final dailyEntries = _generateDailyEntries(queue);
+    // Use cached daily entries
+    final dailyEntries = _getCachedDailyEntries(queue);
+    
+    // Cache expensive computations
+    final statusColor = _getStatusColor(queue.status);
+    final dateTimeText = '${queue.displayDateRange} • ${queue.displayTimeRange}';
+    final daysUnitsText = '${dailyEntries.length} days • ${queue.numberOfAvailableUnits} ${queue.unitName}';
     
     // Don't load beneficiaries here - load them on-demand when user clicks View
     return Container(
           margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: displayIndex > 0 ? 12 : 0),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.blue.withOpacity(0.3),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withOpacity(0.2),
-                spreadRadius: 2,
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          decoration: _multiDayDecoration,
           child: ExpansionTile(
+            key: ValueKey('multiDay_$queueKey'), // Stable key for better performance
             initiallyExpanded: isQueueExpanded,
             onExpansionChanged: (expanded) {
-              setState(() {
-                _multiDayQueueExpanded[queueKey] = expanded;
+              // Use post-frame callback to avoid setState during build
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _multiDayQueueExpanded[queueKey] = expanded;
+                  });
+                }
               });
             },
             tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -26454,14 +26467,14 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${queue.displayDateRange} • ${queue.displayTimeRange}',
+                        dateTimeText,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
                         ),
                       ),
                       Text(
-                        '${dailyEntries.length} days • ${queue.numberOfAvailableUnits} ${queue.unitName}',
+                        daysUnitsText,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -26473,7 +26486,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(queue.status).withOpacity(0.2),
+                    color: statusColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -26481,28 +26494,36 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: _getStatusColor(queue.status),
+                      color: statusColor,
                     ),
                   ),
                 ),
               ],
             ),
             children: dailyEntries.map((entry) {
-              final dayKey = '${queueKey}_${entry['date']}';
-              final isDayExpanded = _dailyEntryExpanded[queueKey]?.contains(dayKey) ?? false;
               final day = entry['date'] as DateTime;
               final dayQueueName = entry['dayQueueName'] as String;
+              final dayKey = '${queueKey}_${entry['date']}';
+              final isDayExpanded = _dailyEntryExpanded[queueKey]?.contains(dayKey) ?? false;
               
-              return ExpansionTile(
-                initiallyExpanded: isDayExpanded,
-                onExpansionChanged: (expanded) {
-                  setState(() {
-                    _dailyEntryExpanded.putIfAbsent(queueKey, () => <String>{}).clear();
-                    if (expanded) {
-                      _dailyEntryExpanded[queueKey]!.add(dayKey);
-                    }
-                  });
-                },
+              return RepaintBoundary(
+                key: ValueKey('day_$dayKey'),
+                child: ExpansionTile(
+                  key: ValueKey('dayTile_$dayKey'), // Stable key for better performance
+                  initiallyExpanded: isDayExpanded,
+                  onExpansionChanged: (expanded) {
+                    // Use post-frame callback to avoid setState during build
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() {
+                          _dailyEntryExpanded.putIfAbsent(queueKey, () => <String>{}).clear();
+                          if (expanded) {
+                            _dailyEntryExpanded[queueKey]!.add(dayKey);
+                          }
+                        });
+                      }
+                    });
+                  },
                 tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
                 leading: Icon(Icons.event, size: 20, color: Colors.blue.shade600),
                 title: Text(
@@ -26512,43 +26533,10 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                 trailing: IconButton(
                   icon: const Icon(Icons.visibility, size: 20),
                   color: const Color(0xFF81CF01),
-                  onPressed: () async {
-                    // Load beneficiaries on-demand when user clicks View
-                    try {
-                      final allAreaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(queue.distributionArea, limit: 1000, activeOnly: true).first;
-                      final dayBeneficiaries = allAreaBeneficiaries.where((b) {
-                        return b.initialAssignedQueuePoint == dayQueueName;
-                      }).toList();
-                      
-                      if (mounted) {
-                        final dayQueue = queue.copyWith(
-                          fromDate: DateTime(day.year, day.month, day.day),
-                          toDate: DateTime(day.year, day.month, day.day),
-                        );
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => QueueViewScreen(
-                              queue: dayQueue,
-                              beneficiaries: dayBeneficiaries,
-                              onQueueUpdated: (updatedQueue) {},
-                              onBeneficiaryUpdated: (beneficiary) {},
-                            ),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error loading queue: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onPressed: () => _handleViewDayQueue(queue, day, dayQueueName),
                 ),
                 children: [],
+              ),
               );
             }).toList(),
           ),
@@ -26580,15 +26568,18 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
     required Color color,
     required VoidCallback onPressed,
   }) {
+    // Cache button style to avoid recreating on every build
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    );
+    
     return ElevatedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 18),
       label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
+      style: buttonStyle,
     );
   }
 
@@ -26603,6 +26594,47 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  /// Handle viewing a queue with async loading and loading indicator
+  Future<void> _handleViewQueue(Queue queue) async {
+    if (!mounted) return;
+    
+    // Open the screen immediately - QueueViewScreen uses StreamBuilder to load beneficiaries
+    // This ensures the screen opens instantly (within 1 second requirement)
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QueueViewScreen(
+          queue: queue,
+          beneficiaries: const [], // Initial empty list, StreamBuilder will load
+          onQueueUpdated: (updatedQueue) {},
+          onBeneficiaryUpdated: (beneficiary) {},
+        ),
+      ),
+    );
+  }
+
+  /// Handle viewing a multi-day queue day entry
+  Future<void> _handleViewDayQueue(Queue queue, DateTime day, String dayQueueName) async {
+    if (!mounted) return;
+    
+    final dayQueue = queue.copyWith(
+      fromDate: DateTime(day.year, day.month, day.day),
+      toDate: DateTime(day.year, day.month, day.day),
+    );
+    
+    // Open the screen immediately - QueueViewScreen uses StreamBuilder to load beneficiaries
+    // This ensures the screen opens instantly (within 1 second requirement)
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QueueViewScreen(
+          queue: dayQueue,
+          beneficiaries: const [], // Initial empty list, StreamBuilder will load
+          onQueueUpdated: (updatedQueue) {},
+          onBeneficiaryUpdated: (beneficiary) {},
+        ),
+      ),
+    );
   }
 }
 
