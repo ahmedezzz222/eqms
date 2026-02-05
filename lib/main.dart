@@ -35,6 +35,7 @@ import 'services/distribution_area_service.dart';
 import 'services/queue_service.dart';
 import 'services/unit_service.dart';
 import 'services/beneficiary_service.dart';
+import 'services/serving_transaction_service.dart';
 import 'utils/firebase_init.dart';
 import 'screens/setup_screen.dart';
 import 'live_text_detection_screen.dart';
@@ -16292,6 +16293,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   
   // Performance optimizations
   Timer? _searchDebounce;
+  VoidCallback? _searchListener; // Store listener reference for proper cleanup
   static const int _initialLoadLimit = 100; // Load first 100 beneficiaries
   static const int _loadMoreLimit = 50; // Load 50 more when scrolling
   final ScrollController _scrollController = ScrollController();
@@ -16306,7 +16308,8 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     // Setup scroll listener for pagination
     _scrollController.addListener(_onScroll);
     // Setup search debouncing
-    _searchController.addListener(_onSearchChanged);
+    _searchListener = _onSearchChanged;
+    _searchController.addListener(_searchListener!);
     // Get admin's distribution areas
     final currentAdmin = AdminService.currentAdmin;
     if (currentAdmin != null && currentAdmin.distributionPoint.isNotEmpty) {
@@ -16337,12 +16340,22 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
+    // Cancel search debounce timer
+    _searchDebounce?.cancel();
+    
+    // Remove listener before disposing controller
+    if (_searchListener != null) {
+      _searchController.removeListener(_searchListener!);
+    }
     _searchController.dispose();
+    
+    // Dispose progress notifier
     _progressNotifier.dispose();
+    
+    // Remove scroll listener and dispose scroll controller
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _searchDebounce?.cancel();
+    
     super.dispose();
   }
   
@@ -19600,6 +19613,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   late int _availableUnits;
   int? _totalAvailableUnits; // Total available units (initial value set at queue creation/update)
   int _totalServedUnits = 0; // Cache total served units for synchronous calculation
+  bool _isCalculatingServedUnits = false; // Flag to prevent concurrent calculations
   bool _isQueueDetailsExpanded = false;
   String? _servingOption;
   late List<Beneficiary> _localBeneficiaries;
@@ -19654,7 +19668,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     _loadQueueBeneficiaries();
     
     // Listen to search controller changes
-    _searchController.addListener(() {
+    void _onSearchChanged() {
+      if (!mounted) return; // Prevent operations if widget is disposed
+      
       final currentText = _searchController.text.trim();
       
       // Clear last processed tag ID if user manually edits the field
@@ -19668,15 +19684,23 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       _searchDebounceTimer?.cancel();
       if (currentText.isNotEmpty) {
         _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-          _handleSearchInput(currentText);
+          if (mounted) {
+            _handleSearchInput(currentText);
+          }
         });
       } else {
         // Clear selection immediately if search is empty
-        setState(() {
-          _selectedBeneficiary = null;
-        });
+        if (mounted) {
+          setState(() {
+            _selectedBeneficiary = null;
+          });
+        }
       }
-    });
+    }
+    
+    // Store listener reference for proper cleanup
+    _searchListener = _onSearchChanged;
+    _searchController.addListener(_searchListener!);
     
     // Auto-focus search field and start NFC detection
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -19839,14 +19863,27 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     }
   }
 
+  // Store the listener reference so we can remove it
+  VoidCallback? _searchListener;
+  
   @override
   void dispose() {
     // Stop NFC session when screen is disposed
     NFCHelper.stopNFCSession();
+    
+    // Cancel timer
     _searchDebounceTimer?.cancel();
+    
+    // Remove listener before disposing controller
+    if (_searchListener != null) {
+      _searchController.removeListener(_searchListener!);
+    }
     _searchController.dispose();
+    
+    // Dispose focus node and scroll controller
     _searchFocusNode.dispose();
     _scrollController.dispose();
+    
     super.dispose();
   }
 
@@ -20899,9 +20936,17 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               ),
             ),
           // Statistics Section
+          // Use a debounced stream to prevent excessive rebuilds
           StreamBuilder<List<Queue>>(
             stream: QueueService.getAllQueues(),
             builder: (context, queueSnapshot) {
+              // Early return if no data to prevent unnecessary processing
+              if (!queueSnapshot.hasData) {
+                return _buildStatisticsSection(
+                  _availableUnits,
+                  _totalAvailableUnits ?? widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits,
+                );
+              }
               // Get current queue data to ensure accurate available units
               int currentAvailableUnits = _availableUnits;
               int totalAvailableUnits = _totalAvailableUnits ?? widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits;
@@ -20948,84 +20993,38 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   // Calculate synchronously using cached total served
                   currentAvailableUnits = totalAvailableUnits - _totalServedUnits;
                   
-                  // Recalculate asynchronously to ensure accuracy
-                  _calculateTotalServedUnits().then((totalServed) {
-                    if (mounted && totalAvailableUnits != null) {
-                      final calculatedRemaining = totalAvailableUnits - totalServed;
-                      if (calculatedRemaining != _availableUnits || totalServed != _totalServedUnits) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                  // Recalculate asynchronously only if not already calculating (prevent concurrent calls)
+                  if (!_isCalculatingServedUnits) {
+                    _isCalculatingServedUnits = true;
+                    _calculateTotalServedUnits().then((totalServed) {
+                      _isCalculatingServedUnits = false;
+                      if (mounted && totalAvailableUnits != null) {
+                        final calculatedRemaining = totalAvailableUnits - totalServed;
+                        // Only update if values actually changed
+                        if (calculatedRemaining != _availableUnits || totalServed != _totalServedUnits) {
                           if (mounted) {
                             setState(() {
                               _availableUnits = calculatedRemaining;
                               _totalServedUnits = totalServed;
                             });
                           }
-                        });
+                        }
                       }
-                    }
-                  });
+                    }).catchError((e) {
+                      _isCalculatingServedUnits = false;
+                      print('Error calculating total served units: $e');
+                    });
+                  }
                 } else {
                   // Fallback to Firebase value if total not available
                   currentAvailableUnits = currentQueue.numberOfAvailableUnits;
                 }
-                
-                // Update local state if different
-                if (currentAvailableUnits != _availableUnits && mounted) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _availableUnits = currentAvailableUnits;
-                      });
-                    }
-                  });
-                }
               }
               
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                color: Colors.white,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        'Served',
-                        '${sortedBeneficiaries.where((b) => servedBeneficiaryIds.contains(b.id)).length}',
-                        Icons.check_circle,
-                        Colors.green,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Attendees',
-                        '${_localBeneficiaries.where((b) => 
-                          b.initialAssignedQueuePoint == _effectiveQueueName
-                        ).length}',
-                        Icons.people,
-                        Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Available',
-                        // Calculate current remaining: Total Available - Total Served
-                        '${totalAvailableUnits != null ? (totalAvailableUnits - _totalServedUnits) : currentAvailableUnits} / ${totalAvailableUnits ?? currentAvailableUnits}',
-                        Icons.inventory,
-                        Colors.orange,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Est. Q Size',
-                        '${widget.queue.estimatedQueueSize}',
-                        Icons.assessment,
-                        Colors.purple,
-                      ),
-                    ),
-                  ],
-                ),
+              // Build statistics section (cached computations)
+              return _buildStatisticsSection(
+                totalAvailableUnits != null ? (totalAvailableUnits - _totalServedUnits) : currentAvailableUnits,
+                totalAvailableUnits ?? currentAvailableUnits,
               );
             },
           ),
@@ -21351,6 +21350,77 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     Navigator.pop(context);
   }
 
+  /// Build statistics section widget (extracted for performance optimization)
+  Widget _buildStatisticsSection(int currentAvailable, int totalAvailable) {
+    // Compute sorted beneficiaries and served IDs from local data
+    final sortedBeneficiaries = List<Beneficiary>.from(_localBeneficiaries);
+    if (_servingOption != 'noOrder') {
+      sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
+    }
+    
+    // Get served beneficiary IDs from local beneficiaries
+    final servedBeneficiaryIds = sortedBeneficiaries
+        .where((b) {
+          final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+          final dayUnitsTaken = widget.queue.isMultiDay 
+              ? (b.unitsTaken) // For multi-day, we'd need day-specific calculation, but using unitsTaken as fallback
+              : b.unitsTaken;
+          return dayUnitsTaken >= eligibleUnits;
+        })
+        .map((b) => b.id)
+        .toSet();
+    
+    // Cache expensive computations to avoid recalculating on every rebuild
+    final servedCount = sortedBeneficiaries.where((b) => servedBeneficiaryIds.contains(b.id)).length;
+    final attendeesCount = _localBeneficiaries.where((b) => 
+      b.initialAssignedQueuePoint == _effectiveQueueName
+    ).length;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildStatCard(
+              'Served',
+              '$servedCount',
+              Icons.check_circle,
+              Colors.green,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildStatCard(
+              'Attendees',
+              '$attendeesCount',
+              Icons.people,
+              Colors.blue,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildStatCard(
+              'Available',
+              '$currentAvailable / $totalAvailable',
+              Icons.inventory,
+              Colors.orange,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildStatCard(
+              'Est. Q Size',
+              '${widget.queue.estimatedQueueSize}',
+              Icons.assessment,
+              Colors.purple,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _getServingOptionDisplayName() {
     switch (_servingOption) {
       case 'queueOrder':
@@ -21530,18 +21600,31 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     if (widget.queue.isMultiDay) {
       // Get day-specific units already served today
       try {
-        final dayHistoryQuery = await FirebaseService.firestore
-            .collection('queueHistory')
-            .where('dayQueueName', isEqualTo: _effectiveQueueName)
-            .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
-            .where('action', isEqualTo: 'served')
-            .get();
+        // Use the new servingTransactions service
+        int dayUnitsTaken = await ServingTransactionService.getUnitsServedByBeneficiaryInDayQueue(
+          currentBeneficiary.id,
+          _effectiveQueueName,
+        );
         
-        int dayUnitsTaken = 0;
-        for (var doc in dayHistoryQuery.docs) {
-          final data = doc.data();
-          final unitsServed = data['unitsServed'] as int? ?? 0;
-          dayUnitsTaken += unitsServed;
+        // Fallback to queueHistory for backward compatibility
+        try {
+          final dayHistoryQuery = await FirebaseService.firestore
+              .collection('queueHistory')
+              .where('dayQueueName', isEqualTo: _effectiveQueueName)
+              .where('beneficiaryId', isEqualTo: currentBeneficiary.id)
+              .where('action', isEqualTo: 'served')
+              .get();
+          
+          int dayUnitsTakenFallback = 0;
+          for (var doc in dayHistoryQuery.docs) {
+            final data = doc.data();
+            final unitsServed = data['unitsServed'] as int? ?? 0;
+            dayUnitsTakenFallback += unitsServed;
+          }
+          // Use the higher value (in case one source is incomplete)
+          dayUnitsTaken = math.max(dayUnitsTaken, dayUnitsTakenFallback);
+        } catch (e) {
+          print('Note: Could not query queueHistory fallback: $e');
         }
         
         // Validate: day-specific units taken + new units must not exceed eligible units
@@ -21616,26 +21699,59 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       
       print('✅ Beneficiary updated in Firebase: unitsTaken = $newUnitsTaken, isServed = ${updatedBeneficiary.isServed}');
       
-      // Record serving action in queueHistory for all queues (for tracking and validation)
+      // Record serving transaction in servingTransactions collection
+      try {
+        final isWithoutTicket = _servingOption == 'withoutTickets' || 
+                                 (currentBeneficiary.initialAssignedQueuePoint == _effectiveQueueName && currentBeneficiary.queueNumber == null);
+        
+        // Get queue ID for reference
+        final queueId = await QueueService.getQueueIdByName(widget.queue.name);
+        if (queueId == null) {
+          print('⚠️ Warning: Could not find queue ID for ${widget.queue.name}');
+        } else {
+          // Create serving transaction record
+          await ServingTransactionService.createServingTransaction(
+            queueId: queueId,
+            queueName: widget.queue.name,
+            dayQueueName: widget.queue.isMultiDay ? _effectiveQueueName : widget.queue.name,
+            beneficiaryId: currentBeneficiary.id,
+            beneficiaryName: currentBeneficiary.name,
+            beneficiaryIdNumber: currentBeneficiary.idNumber,
+            queueNumber: currentBeneficiary.queueNumber,
+            unitsTaken: units, // Units taken in this transaction
+            totalUnitsTaken: newUnitsTaken, // Total units taken (cumulative)
+            unitName: widget.queue.unitName,
+            servedBy: servedBy, // Admin ID
+            servedByName: AdminService.currentAdmin?.fullName,
+            withoutTicket: isWithoutTicket,
+            distributionArea: currentBeneficiary.distributionArea,
+            servingOption: _servingOption,
+          );
+          print('✅ Recorded serving transaction for beneficiary ${currentBeneficiary.name}${isWithoutTicket ? ' (without ticket)' : ''}');
+        }
+      } catch (e) {
+        print('⚠️ Warning: Could not record serving transaction: $e');
+        // Don't fail the operation if transaction tracking fails
+      }
+      
+      // Also keep queueHistory for backward compatibility (can be removed later)
       try {
         final isWithoutTicket = _servingOption == 'withoutTickets' || 
                                  (currentBeneficiary.initialAssignedQueuePoint == _effectiveQueueName && currentBeneficiary.queueNumber == null);
         await FirebaseService.firestore.collection('queueHistory').add({
           'queueId': widget.queue.name,
-          'dayQueueName': widget.queue.isMultiDay ? _effectiveQueueName : widget.queue.name, // Store the day-specific queue name for multi-day, or queue name for single-day
+          'dayQueueName': widget.queue.isMultiDay ? _effectiveQueueName : widget.queue.name,
           'beneficiaryId': currentBeneficiary.id,
           'action': 'served',
           'unitsServed': units,
           'totalUnitsTaken': newUnitsTaken,
-          'unitName': widget.queue.unitName, // Store unitName for easier validation
+          'unitName': widget.queue.unitName,
           'performedBy': AdminService.currentAdmin?.fullName ?? 'system',
           'performedAt': FieldValue.serverTimestamp(),
-          'withoutTicket': isWithoutTicket, // Mark if served without ticket
+          'withoutTicket': isWithoutTicket,
         });
-        print('✅ Recorded serving action in queueHistory for beneficiary ${currentBeneficiary.id}${isWithoutTicket ? ' (without ticket)' : ''}');
       } catch (e) {
-        print('⚠️ Warning: Could not record serving action in queueHistory: $e');
-        // Don't fail the operation if history tracking fails
+        print('Note: Could not record in queueHistory (backward compatibility): $e');
       }
       
       // Also record serving metadata (servedAt, servedBy) if needed
