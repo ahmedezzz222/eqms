@@ -2960,6 +2960,7 @@ class Queue {
   final TimeOfDay toTime;
   final String unitName;
   final int numberOfAvailableUnits;
+  final int? totalAvailableUnits; // Initial total available units set at queue creation (never changes)
   final int estimatedQueueSize;
   final bool directServe;
   final List<String> priority;
@@ -2984,6 +2985,7 @@ class Queue {
     required this.toTime,
     required this.unitName,
     required this.numberOfAvailableUnits,
+    this.totalAvailableUnits,
     required this.estimatedQueueSize,
     required this.directServe,
     required this.priority,
@@ -3009,6 +3011,7 @@ class Queue {
     TimeOfDay? toTime,
     String? unitName,
     int? numberOfAvailableUnits,
+    int? totalAvailableUnits,
     int? estimatedQueueSize,
     bool? directServe,
     List<String>? priority,
@@ -3033,6 +3036,7 @@ class Queue {
       toTime: toTime ?? this.toTime,
       unitName: unitName ?? this.unitName,
       numberOfAvailableUnits: numberOfAvailableUnits ?? this.numberOfAvailableUnits,
+      totalAvailableUnits: totalAvailableUnits ?? this.totalAvailableUnits,
       estimatedQueueSize: estimatedQueueSize ?? this.estimatedQueueSize,
       directServe: directServe ?? this.directServe,
       priority: priority ?? this.priority,
@@ -8330,10 +8334,13 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         label: AppLanguage.translate('Start'),
                         color: Colors.green,
                         onPressed: () {
+                        // When starting the queue, set totalAvailableUnits if not already set
+                        // This preserves the initial total available units
                         final updatedQueue = queue.copyWith(
                           isStarted: true,
                           isSuspended: false,
                           status: 'active',
+                          totalAvailableUnits: queue.totalAvailableUnits ?? queue.numberOfAvailableUnits, // Set total if not already set
                         );
                         QueueService.getQueueIdByName(queue.name).then((queueId) {
                           if (queueId != null) {
@@ -19591,6 +19598,8 @@ class QueueServingScreen extends StatefulWidget {
 
 class _QueueServingScreenState extends State<QueueServingScreen> {
   late int _availableUnits;
+  int? _totalAvailableUnits; // Total available units (initial value set at queue creation/update)
+  int _totalServedUnits = 0; // Cache total served units for synchronous calculation
   bool _isQueueDetailsExpanded = false;
   String? _servingOption;
   late List<Beneficiary> _localBeneficiaries;
@@ -19606,6 +19615,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   static const Duration _tagDetectionCooldown = Duration(milliseconds: 1500); // Cooldown period
   final Map<String, int> _unitsToServe = {}; // Track units to serve for each beneficiary
   Timer? _searchDebounceTimer; // Debounce timer for search input
+  final Set<String> _servingInProgress = {}; // Track beneficiaries currently being served to prevent duplicate calls
 
   late final String _effectiveQueueName; // Day-specific key for Multi Day queues
 
@@ -19614,7 +19624,11 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   void initState() {
     super.initState();
     _availableUnits = widget.queue.numberOfAvailableUnits;
+    _totalAvailableUnits = widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits; // Use stored total or current as fallback
     _servingOption = 'queueOrder'; // Default to Queue order sequence
+    
+    // Load current queue data from Firebase to get accurate available units and calculate total
+    _loadCurrentQueueData();
 
     // Multi Day beneficiaries are saved under a day-specific queue key:
     //   <queue.name>_YYYY-MM-DD
@@ -19723,6 +19737,105 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     } catch (e) {
       print('Error loading queue beneficiaries: $e');
       // Keep existing beneficiaries if loading fails
+    }
+  }
+  
+  Future<void> _loadCurrentQueueData() async {
+    try {
+      // Get the current queue data from Firebase to ensure accurate available units
+      final queueId = await QueueService.getQueueIdByName(widget.queue.name);
+      if (queueId != null) {
+        final currentQueue = await QueueService.getQueueById(queueId);
+        if (currentQueue != null && mounted) {
+          // Get total available units: Use totalAvailableUnits from queue if available
+          // Otherwise, use numberOfAvailableUnits (for queues created before this field was added)
+          int? totalAvailable = currentQueue.totalAvailableUnits;
+          if (totalAvailable == null) {
+            // For old queues without totalAvailableUnits, use numberOfAvailableUnits as total
+            // (assuming queue hasn't been started yet, or use current + served calculation)
+            if (!currentQueue.isStarted) {
+              totalAvailable = currentQueue.numberOfAvailableUnits;
+            } else {
+              // Calculate from current + served for backward compatibility
+              totalAvailable = await _calculateTotalAvailableUnitsForOldQueues(currentQueue);
+            }
+          }
+          
+          // Current remaining = numberOfAvailableUnits (already decremented when serving)
+          // OR calculate as: Total Available - Total Served
+          int currentRemaining = currentQueue.numberOfAvailableUnits;
+          
+          // Calculate total served units from queueHistory
+          int totalServed = await _calculateTotalServedUnits();
+          
+          // Verify: Current Remaining should equal Total Available - Total Served
+          // If they don't match, use the calculated value for consistency
+          if (totalAvailable != null) {
+            final calculatedRemaining = totalAvailable - totalServed;
+            if (calculatedRemaining != currentRemaining) {
+              print('⚠️ Warning: Current remaining mismatch. Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using calculated value.');
+              currentRemaining = calculatedRemaining;
+            }
+          }
+          
+          setState(() {
+            _availableUnits = currentRemaining;
+            _totalAvailableUnits = totalAvailable;
+            _totalServedUnits = totalServed; // Cache for synchronous calculation
+          });
+          
+          print('📊 Available Units: Total Available=$totalAvailable, Total Served=$totalServed, Current Remaining=$currentRemaining');
+          print('📊 Queue data: numberOfAvailableUnits=${currentQueue.numberOfAvailableUnits}, totalAvailableUnits=${currentQueue.totalAvailableUnits}');
+        }
+      }
+    } catch (e) {
+      print('Error loading current queue data: $e');
+      // Continue with widget.queue data if loading fails
+      if (mounted) {
+        setState(() {
+          _totalAvailableUnits = widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits;
+        });
+      }
+    }
+  }
+  
+  /// Calculate total served units from queueHistory
+  /// This is the sum of all unitsServed for this queue
+  Future<int> _calculateTotalServedUnits() async {
+    try {
+      // Query queueHistory for all served actions for this queue
+      final servedHistoryQuery = await FirebaseService.firestore
+          .collection('queueHistory')
+          .where('queueId', isEqualTo: widget.queue.name)
+          .where('action', isEqualTo: 'served')
+          .get();
+      
+      int totalServedUnits = 0;
+      for (var doc in servedHistoryQuery.docs) {
+        final data = doc.data();
+        final unitsServed = data['unitsServed'] as int? ?? 0;
+        totalServedUnits += unitsServed;
+      }
+      
+      return totalServedUnits;
+    } catch (e) {
+      print('⚠️ Warning: Could not calculate total served units: $e');
+      return 0;
+    }
+  }
+  
+  /// Calculate total available units for old queues (backward compatibility)
+  /// Only used if totalAvailableUnits is not stored in the queue
+  Future<int?> _calculateTotalAvailableUnitsForOldQueues(Queue currentQueue) async {
+    try {
+      final totalServed = await _calculateTotalServedUnits();
+      // For old queues: Total = Current Remaining + Total Served
+      final calculatedTotal = currentQueue.numberOfAvailableUnits + totalServed;
+      print('📊 Calculated total for old queue: current remaining=${currentQueue.numberOfAvailableUnits}, total served=$totalServed, initial total=$calculatedTotal');
+      return calculatedTotal;
+    } catch (e) {
+      print('⚠️ Warning: Could not calculate total for old queue: $e');
+      return null;
     }
   }
 
@@ -20786,48 +20899,135 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               ),
             ),
           // Statistics Section
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    'Served',
-                    '${sortedBeneficiaries.where((b) => servedBeneficiaryIds.contains(b.id)).length}',
-                    Icons.check_circle,
-                    Colors.green,
-                  ),
+          StreamBuilder<List<Queue>>(
+            stream: QueueService.getAllQueues(),
+            builder: (context, queueSnapshot) {
+              // Get current queue data to ensure accurate available units
+              int currentAvailableUnits = _availableUnits;
+              int totalAvailableUnits = _totalAvailableUnits ?? widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits;
+              
+              if (queueSnapshot.hasData) {
+                final currentQueue = queueSnapshot.data!.firstWhere(
+                  (q) => q.name == widget.queue.name,
+                  orElse: () => widget.queue,
+                );
+                
+                // Use totalAvailableUnits from queue (set at creation/update/start)
+                if (currentQueue.totalAvailableUnits != null) {
+                  totalAvailableUnits = currentQueue.totalAvailableUnits!;
+                  // Update local state if different
+                  if (_totalAvailableUnits != currentQueue.totalAvailableUnits && mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() {
+                          _totalAvailableUnits = currentQueue.totalAvailableUnits;
+                        });
+                      }
+                    });
+                  }
+                } else {
+                  // For old queues without totalAvailableUnits, calculate it
+                  if (_totalAvailableUnits == null) {
+                    _calculateTotalAvailableUnitsForOldQueues(currentQueue).then((total) {
+                      if (mounted && total != null) {
+                        setState(() {
+                          _totalAvailableUnits = total;
+                        });
+                      }
+                    });
+                    // Use current as fallback while calculating
+                    totalAvailableUnits = currentQueue.numberOfAvailableUnits;
+                  } else {
+                    totalAvailableUnits = _totalAvailableUnits!;
+                  }
+                }
+                
+                // Calculate current remaining: Total Available - Total Served
+                // Use cached total served for synchronous calculation, then update async
+                if (totalAvailableUnits != null) {
+                  // Calculate synchronously using cached total served
+                  currentAvailableUnits = totalAvailableUnits - _totalServedUnits;
+                  
+                  // Recalculate asynchronously to ensure accuracy
+                  _calculateTotalServedUnits().then((totalServed) {
+                    if (mounted && totalAvailableUnits != null) {
+                      final calculatedRemaining = totalAvailableUnits - totalServed;
+                      if (calculatedRemaining != _availableUnits || totalServed != _totalServedUnits) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _availableUnits = calculatedRemaining;
+                              _totalServedUnits = totalServed;
+                            });
+                          }
+                        });
+                      }
+                    }
+                  });
+                } else {
+                  // Fallback to Firebase value if total not available
+                  currentAvailableUnits = currentQueue.numberOfAvailableUnits;
+                }
+                
+                // Update local state if different
+                if (currentAvailableUnits != _availableUnits && mounted) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() {
+                        _availableUnits = currentAvailableUnits;
+                      });
+                    }
+                  });
+                }
+              }
+              
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Served',
+                        '${sortedBeneficiaries.where((b) => servedBeneficiaryIds.contains(b.id)).length}',
+                        Icons.check_circle,
+                        Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Attendees',
+                        '${_localBeneficiaries.where((b) => 
+                          b.initialAssignedQueuePoint == _effectiveQueueName
+                        ).length}',
+                        Icons.people,
+                        Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Available',
+                        // Calculate current remaining: Total Available - Total Served
+                        '${totalAvailableUnits != null ? (totalAvailableUnits - _totalServedUnits) : currentAvailableUnits} / ${totalAvailableUnits ?? currentAvailableUnits}',
+                        Icons.inventory,
+                        Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Est. Q Size',
+                        '${widget.queue.estimatedQueueSize}',
+                        Icons.assessment,
+                        Colors.purple,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _buildStatCard(
-                    'Attendees',
-                    '${_localBeneficiaries.where((b) => b.queueNumber != null).length}',
-                    Icons.people,
-                    Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _buildStatCard(
-                    'Available',
-                    '$_availableUnits / ${widget.queue.numberOfAvailableUnits}',
-                    Icons.inventory,
-                    Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _buildStatCard(
-                    'Est. Q Size',
-                    '${widget.queue.estimatedQueueSize}',
-                    Icons.assessment,
-                    Colors.purple,
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -20912,11 +21112,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                 : ListView.builder(
                     controller: _scrollController,
                     itemCount: sortedBeneficiaries.length,
+                    // Performance optimizations
+                    cacheExtent: 500, // Cache 500 pixels worth of items
+                    addAutomaticKeepAlives: false, // Don't keep items alive when scrolled away
+                    addRepaintBoundaries: true, // Add repaint boundaries automatically
                     itemBuilder: (context, index) {
                       final beneficiary = sortedBeneficiaries[index];
-                      // Eligibility is based on beneficiary.numberOfUnits set during registration
+                      // Cache expensive computations
                       final eligibleUnits = int.tryParse(beneficiary.numberOfUnits) ?? 1;
-                      // For multi-day queues, use day-specific units taken; otherwise use global
                       final dayUnitsTaken = widget.queue.isMultiDay 
                           ? (daySpecificUnitsTaken[beneficiary.id] ?? 0)
                           : beneficiary.unitsTaken;
@@ -20924,13 +21127,17 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                       final maxUnitsToServe = remainingUnits > 0 && _availableUnits > 0
                           ? (remainingUnits < _availableUnits ? remainingUnits : _availableUnits)
                           : 1;
-                      
+                      final isServed = servedBeneficiaryIds.contains(beneficiary.id);
                       final isSelected = _selectedBeneficiary?.id == beneficiary.id;
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        elevation: isSelected ? 4 : 1,
-                        color: isSelected ? const Color(0xFF81CF01).withOpacity(0.1) : Colors.white,
-                        child: Column(
+                      final isServing = _servingInProgress.contains(beneficiary.id);
+                      
+                      return RepaintBoundary(
+                        key: ValueKey('beneficiary_${beneficiary.id}'),
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          elevation: isSelected ? 4 : 1,
+                          color: isSelected ? const Color(0xFF81CF01).withOpacity(0.1) : Colors.white,
+                          child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             InkWell(
@@ -20945,7 +21152,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                       child: beneficiary.photoPath != null
                                           ? CircleAvatar(
                                               backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
-                                                  ? NetworkImage(beneficiary.photoPath!)
+                                                  ? NetworkImage(beneficiary.photoPath!, scale: 1.0) // Use scale for better performance
                                                   : beneficiary.photoPath!.startsWith('assets/')
                                                       ? AssetImage(beneficiary.photoPath!)
                                                       : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
@@ -20998,12 +21205,12 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                     if (beneficiary.idNumber.isNotEmpty) Text('ID: ${beneficiary.idNumber}'),
                                   ],
                                 ),
-                                trailing: servedBeneficiaryIds.contains(beneficiary.id)
+                                trailing: isServed
                                     ? const Icon(Icons.check_circle, color: Colors.green)
                                     : null,
                               ),
                             ),
-                            if (!servedBeneficiaryIds.contains(beneficiary.id) && remainingUnits > 0 && _availableUnits > 0)
+                            if (!isServed && remainingUnits > 0 && _availableUnits > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
@@ -21063,30 +21270,36 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                     ),
                                     const SizedBox(width: 16),
                                     ElevatedButton(
-                                      onPressed: () {
+                                      onPressed: isServing ? null : () {
                                         final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
                                         if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
                                           _serveBeneficiary(beneficiary, units);
-                                          setState(() {
-                                            _unitsToServe.remove(beneficiary.id);
-                                            _selectedBeneficiary = null;
-                                          });
                                         }
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue,
+                                        backgroundColor: isServing ? Colors.grey : Colors.blue,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                         minimumSize: const Size(80, 40),
                                       ),
-                                      child: Text(AppLanguage.translate('Serve'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                      child: isServing
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                              ),
+                                            )
+                                          : Text(AppLanguage.translate('Serve'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                     ),
                                   ],
                                 ),
                               ),
                           ],
                         ),
-                      );
+                      ),
+                    );
                     },
                   ),
           ),
@@ -21157,16 +21370,31 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
   Future<void> _serveBeneficiary(Beneficiary beneficiary, int units) async {
     if (units <= 0 || _availableUnits < units) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough units available')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not enough units available')),
+        );
+      }
       return;
     }
     
-    // Use a mutable reference for beneficiary (may be updated if added to queue)
-    Beneficiary currentBeneficiary = beneficiary;
+    // Prevent duplicate serving calls
+    if (_servingInProgress.contains(beneficiary.id)) {
+      return;
+    }
     
-    // If "without tickets" mode, check eligibility and add to queue if needed
+    // Mark as serving in progress
+    setState(() {
+      _servingInProgress.add(beneficiary.id);
+      _unitsToServe.remove(beneficiary.id);
+      _selectedBeneficiary = null;
+    });
+    
+    try {
+      // Use a mutable reference for beneficiary (may be updated if added to queue)
+      Beneficiary currentBeneficiary = beneficiary;
+      
+      // If "without tickets" mode, check eligibility and add to queue if needed
     if (_servingOption == 'withoutTickets') {
       // Check if beneficiary is eligible for without tickets serving
       final isEligible = await _checkWithoutTicketsEligibility(currentBeneficiary);
@@ -21318,9 +21546,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         
         // Validate: day-specific units taken + new units must not exceed eligible units
         if (dayUnitsTaken + units > eligibleUnits) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Cannot exceed eligible units. Already served $dayUnitsTaken units today.')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Cannot exceed eligible units. Already served $dayUnitsTaken units today.')),
+            );
+          }
+          setState(() {
+            _servingInProgress.remove(beneficiary.id);
+          });
           return;
         }
       } catch (e) {
@@ -21328,9 +21561,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         // Fall back to global validation if history check fails
         final newUnitsTaken = currentBeneficiary.unitsTaken + units;
         if (newUnitsTaken > eligibleUnits) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cannot exceed eligible units')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Cannot exceed eligible units')),
+            );
+          }
+          setState(() {
+            _servingInProgress.remove(beneficiary.id);
+          });
           return;
         }
       }
@@ -21338,9 +21576,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       // For single-day queues, use global validation
       final newUnitsTaken = currentBeneficiary.unitsTaken + units;
       if (newUnitsTaken > eligibleUnits) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot exceed eligible units')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cannot exceed eligible units')),
+          );
+        }
+        setState(() {
+          _servingInProgress.remove(beneficiary.id);
+        });
         return;
       }
     }
@@ -21430,7 +21673,13 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         }
         
         setState(() {
+          // Update current available units (remaining after serving)
           _availableUnits = newAvailableUnits;
+          // Note: Total should remain constant (initial value set at queue creation/update)
+          // We don't recalculate it here because:
+          // - Total = Initial value (set at creation/update)
+          // - Current = Total - Served units (already decremented in Firebase)
+          // The total is calculated once when the screen loads and should not change
           // Force rebuild to show updated unitsTaken immediately
           // StreamBuilder will also update when Firebase stream emits new data
         });
@@ -21481,6 +21730,25 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+    } catch (e) {
+      // Catch any errors from the outer try block (validation, eligibility checks, etc.)
+      print('Error in _serveBeneficiary (outer): $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // Always remove from serving in progress, even if there was an error or early return
+      if (mounted) {
+        setState(() {
+          _servingInProgress.remove(beneficiary.id);
+        });
       }
     }
   }
@@ -22564,11 +22832,11 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             _searchController.clear();
             }
           return;
-          }
+        }
         
         // Beneficiary is assigned to the correct distribution area - proceed with verification
-          if (mounted) {
-            _verifyAndIssueQueueNumber(foundBeneficiary);
+        if (mounted) {
+          _verifyAndIssueQueueNumber(foundBeneficiary);
         }
       } else {
         // Beneficiary not found

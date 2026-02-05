@@ -230,6 +230,7 @@ class QueueService {
       'unitName': queue.unitName,
       'customUnitName': queue.unitName == 'Others' ? queue.unitName : null,
       'numberOfAvailableUnits': queue.numberOfAvailableUnits,
+      'totalAvailableUnits': queue.totalAvailableUnits ?? queue.numberOfAvailableUnits, // Store initial total (same as numberOfAvailableUnits at creation)
       'estimatedQueueSize': queue.estimatedQueueSize,
       'directServe': queue.directServe,
       'priority': queue.priority,
@@ -263,6 +264,7 @@ class QueueService {
       'unitName': queue.unitName,
       'customUnitName': queue.unitName == 'Others' ? queue.unitName : null,
       'numberOfAvailableUnits': queue.numberOfAvailableUnits,
+      'totalAvailableUnits': queue.totalAvailableUnits, // Preserve existing totalAvailableUnits when updating (don't overwrite)
       'estimatedQueueSize': queue.estimatedQueueSize,
       'directServe': queue.directServe,
       'priority': queue.priority,
@@ -306,6 +308,7 @@ class QueueService {
           : const TimeOfDay(hour: 23, minute: 59),
       unitName: data['customUnitName'] ?? data['unitName'] ?? 'Meals',
       numberOfAvailableUnits: data['numberOfAvailableUnits'] ?? 0,
+      totalAvailableUnits: data['totalAvailableUnits'], // Initial total (null for old queues, will be calculated)
       estimatedQueueSize: data['estimatedQueueSize'] ?? 0,
       directServe: data['directServe'] ?? false,
       priority: List<String>.from(data['priority'] ?? []),
