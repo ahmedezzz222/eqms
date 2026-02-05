@@ -9754,18 +9754,24 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                     key: ValueKey('queues_$queueCount'), // Force rebuild if count changes
                                     itemCount: queueCount,
                                     padding: const EdgeInsets.only(bottom: 16),
+                                    // Performance optimizations for fast scrolling
+                                    cacheExtent: 1000, // Increased cache for smoother scrolling
+                                    addAutomaticKeepAlives: false, // Don't keep items alive when scrolled away
+                                    addRepaintBoundaries: true, // Add repaint boundaries automatically
+                                    physics: const ClampingScrollPhysics(), // Better performance than BouncingScrollPhysics
                                     itemBuilder: (context, index) {
                                       // Triple-check bounds to prevent index errors
                                       if (index < 0 || index >= queueCount || index >= queuesToDisplay.length) {
                                         return const SizedBox.shrink();
                                       }
                                       final queue = queuesToDisplay[index];
-                                      // Use accordion for Multi Day queues, regular row for Single Day
-                                      if (queue.isMultiDay) {
-                                        return _buildMultiDayQueueAccordion(queue, index, showOnlyToday: true);
-                                      } else {
-                                        return _buildQueueRow(queue, index);
-                                      }
+                                      // Use stable key based on queue name for better recycling
+                                      return RepaintBoundary(
+                                        key: ValueKey('queue_${queue.name}'),
+                                        child: queue.isMultiDay
+                                            ? _buildMultiDayQueueAccordion(queue, index, showOnlyToday: true)
+                                            : _buildQueueRow(queue, index),
+                                      );
                                     },
                                   );
                                 },
@@ -16932,7 +16938,11 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 return ListView.builder(
                   controller: _scrollController,
                   itemCount: filtered.length + (_isLoadingMore ? 1 : 0),
-                  cacheExtent: 500, // Cache more items for smoother scrolling
+                  // Performance optimizations for fast scrolling
+                  cacheExtent: 1000, // Increased cache for smoother scrolling
+                  addAutomaticKeepAlives: false, // Don't keep items alive when scrolled away
+                  addRepaintBoundaries: true, // Add repaint boundaries automatically
+                  physics: const ClampingScrollPhysics(), // Better performance than BouncingScrollPhysics
                   itemBuilder: (context, index) {
                     if (index >= filtered.length) {
                       return const Center(
@@ -16943,14 +16953,17 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                       );
                     }
                     final beneficiary = filtered[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: ListTile(
-                        title: Text(
-                          beneficiary.name,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        subtitle: Column(
+                    // Use stable key based on beneficiary ID for better recycling
+                    return RepaintBoundary(
+                      key: ValueKey('beneficiary_${beneficiary.id}'),
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: ListTile(
+                          title: Text(
+                            beneficiary.name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -17119,6 +17132,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                           ],
                         ),
                       ),
+                    ),
                     );
                   },
                 );
@@ -19157,8 +19171,13 @@ class QueueViewScreen extends StatelessWidget {
                                 }
                               }
                               
+                              // Use efficient query: get beneficiaries by area instead of all beneficiaries
                               return StreamBuilder<List<Beneficiary>>(
-              stream: BeneficiaryService.getAllBeneficiaries(),
+              stream: BeneficiaryService.getBeneficiariesByArea(
+                queue.distributionArea,
+                limit: 1000, // Reasonable limit for performance
+                activeOnly: true,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -19168,7 +19187,7 @@ class QueueViewScreen extends StatelessWidget {
                   return Text('Error loading beneficiaries: ${snapshot.error}');
                 }
 
-                final allBeneficiaries = snapshot.data ?? [];
+                final areaBeneficiaries = snapshot.data ?? [];
                 
                 // For multi-day queues, calculate the day-specific queue name
                 String effectiveQueueName = queue.name;
@@ -19180,7 +19199,7 @@ class QueueViewScreen extends StatelessWidget {
                 }
                                   
                                   // Filter beneficiaries: either assigned directly OR in queueHistory for this day
-                                  final beneficiariesForQueue = allBeneficiaries.where((b) {
+                                  final beneficiariesForQueue = areaBeneficiaries.where((b) {
                                     if (b.initialAssignedQueuePoint == effectiveQueueName) {
                                       return true;
                                     }
@@ -19195,24 +19214,35 @@ class QueueViewScreen extends StatelessWidget {
                                     return const Text('No beneficiaries assigned to this queue');
                                   }
 
-                                  return Column(
-                                    children: beneficiariesForQueue.map((b) {
+                                  // Use ListView.builder for better performance with many items
+                                  return ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: beneficiariesForQueue.length,
+                                    cacheExtent: 500,
+                                    addAutomaticKeepAlives: false,
+                                    addRepaintBoundaries: true,
+                                    itemBuilder: (context, index) {
+                                      final b = beneficiariesForQueue[index];
                                       // Eligibility is based on beneficiary.numberOfUnits set during registration
                                       final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
                                       final dayUnitsTaken = dayUnitsTakenMap[b.id] ?? 0;
                                       // Only mark as served if they've received full eligible units
                                       final isServedForDay = dayUnitsTaken >= eligibleUnits;
-                                      return Card(
-                                        child: ListTile(
-                                          title: Text(b.name),
-                                          subtitle: Text('ID: ${b.idNumber}${b.queueNumber != null ? '\nQueue #${b.queueNumber}' : ''}'),
-                                          trailing: Text(
-                                            isServedForDay ? 'Served' : 'Not Served',
-                                            style: TextStyle(color: isServedForDay ? Colors.green : Colors.grey),
+                                      return RepaintBoundary(
+                                        key: ValueKey('beneficiary_${b.id}'),
+                                        child: Card(
+                                          child: ListTile(
+                                            title: Text(b.name),
+                                            subtitle: Text('ID: ${b.idNumber}${b.queueNumber != null ? '\nQueue #${b.queueNumber}' : ''}'),
+                                            trailing: Text(
+                                              isServedForDay ? 'Served' : 'Not Served',
+                                              style: TextStyle(color: isServedForDay ? Colors.green : Colors.grey),
+                                            ),
                                           ),
                                         ),
                                       );
-                                    }).toList(),
+                                    },
                                   );
                                 },
                               );
@@ -19223,7 +19253,8 @@ class QueueViewScreen extends StatelessWidget {
                     },
                   )
                 : StreamBuilder<List<Beneficiary>>(
-                    stream: BeneficiaryService.getAllBeneficiaries(),
+                    // Use efficient query: get beneficiaries by queue name instead of all beneficiaries
+                    stream: BeneficiaryService.getBeneficiariesByQueueName(queue.name),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
@@ -19233,30 +19264,36 @@ class QueueViewScreen extends StatelessWidget {
                         return Text('Error loading beneficiaries: ${snapshot.error}');
                       }
 
-                      final allBeneficiaries = snapshot.data ?? [];
-                      
-                      // For single-day queues, use simple filtering
-                      String effectiveQueueName = queue.name;
-                
-                final beneficiariesForQueue = allBeneficiaries
-                    .where((b) => b.initialAssignedQueuePoint == effectiveQueueName)
-                    .toList();
+                      final beneficiariesForQueue = snapshot.data ?? [];
 
-                if (beneficiariesForQueue.isEmpty) {
-                  return const Text('No beneficiaries assigned to this queue');
-                }
+                      if (beneficiariesForQueue.isEmpty) {
+                        return const Text('No beneficiaries assigned to this queue');
+                      }
 
-                return Column(
-                  children: beneficiariesForQueue.map((b) => Card(
-                    child: ListTile(
-                      title: Text(b.name),
-                      subtitle: Text('ID: ${b.idNumber}${b.queueNumber != null ? '\nQueue #${b.queueNumber}' : ''}'),
-                      trailing: Text(b.isServed ? 'Served' : 'Not Served', style: TextStyle(color: b.isServed ? Colors.green : Colors.grey)),
-                    ),
-                  )).toList(),
-                );
-              },
-            ),
+                      // Use ListView.builder for better performance with many items
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: beneficiariesForQueue.length,
+                        cacheExtent: 500,
+                        addAutomaticKeepAlives: false,
+                        addRepaintBoundaries: true,
+                        itemBuilder: (context, index) {
+                          final b = beneficiariesForQueue[index];
+                          return RepaintBoundary(
+                            key: ValueKey('beneficiary_${b.id}'),
+                            child: Card(
+                              child: ListTile(
+                                title: Text(b.name),
+                                subtitle: Text('ID: ${b.idNumber}${b.queueNumber != null ? '\nQueue #${b.queueNumber}' : ''}'),
+                                trailing: Text(b.isServed ? 'Served' : 'Not Served', style: TextStyle(color: b.isServed ? Colors.green : Colors.grey)),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ],
         ),
       ),
