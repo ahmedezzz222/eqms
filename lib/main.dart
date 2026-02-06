@@ -287,7 +287,6 @@ class AppLanguage {
       'Admin request submitted successfully. Waiting for approval.': 'Admin request submitted successfully. Waiting for approval.',
       'Registration successful! You can now login to access your queue number.': 'Registration successful! You can now login to access your queue number.',
       'Required': 'Required',
-      'Invalid Egyptian mobile number': 'Invalid Egyptian mobile number',
       'Please select governorate and city': 'Please select governorate and city',
       'Please select or create a queue point': 'Please select or create a queue point',
       'Please enter queue point name': 'Please enter queue point name',
@@ -300,6 +299,22 @@ class AppLanguage {
       'Admin Requests': 'Admin Requests',
       'Approve': 'Approve',
       'Reject': 'Reject',
+      'Pending': 'Pending',
+      'Approved': 'Approved',
+      'Rejected': 'Rejected',
+      'No pending requests': 'No pending requests',
+      'No approved requests': 'No approved requests',
+      'No rejected requests': 'No rejected requests',
+      'All requests have been processed': 'All requests have been processed',
+      'Reject Request': 'Reject Request',
+      'Are you sure you want to reject this admin request?': 'Are you sure you want to reject this admin request?',
+      'Request rejected': 'Request rejected',
+      'Error rejecting request:': 'Error rejecting request:',
+      'Admin request approved': 'Admin request approved',
+      'Error approving request:': 'Error approving request:',
+      'Error loading admin requests:': 'Error loading admin requests:',
+      'Description:': 'Description:',
+      'Reference:': 'Reference:',
       'Fill in your information to request admin access': 'Fill in your information to request admin access',
       'Admin request approved': 'Admin request approved',
       'Admin request rejected': 'Admin request rejected',
@@ -372,6 +387,26 @@ class AppLanguage {
       'Camera permission is required. Please enable it in app settings.': 'Camera permission is required. Please enable it in app settings.',
       'Storage permission is required. Please enable it in app settings.': 'Storage permission is required. Please enable it in app settings.',
       'Error completing queue:': 'Error completing queue:',
+      'NFC Error:': 'NFC Error:',
+      'Connection issue:': 'Connection issue:',
+      'Attempting login anyway...': 'Attempting login anyway...',
+      'Connection timeout. Please check your internet connection and try again.': 'Connection timeout. Please check your internet connection and try again.',
+      'Invalid mobile number or password': 'Invalid mobile number or password',
+      'Login failed:': 'Login failed:',
+      'This ID number is already registered in the system.': 'This ID number is already registered in the system.',
+      'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.': 'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.',
+      'This NFC card is already registered to:': 'This NFC card is already registered to:',
+      'Error registering beneficiary:': 'Error registering beneficiary:',
+      'Error starting queue:': 'Error starting queue:',
+      'Review Text': 'Review Text',
+      'Review Extracted Data': 'Review Extracted Data',
+      'Use ID Number': 'Use ID Number',
+      'ID Number extracted': 'ID Number extracted',
+      'Custom': 'Custom',
+      'Select entity': 'Select entity',
+      'Enter NFC reference': 'Enter NFC reference',
+      'Select distribution area': 'Select distribution area',
+      'EQMS App': 'EQMS App',
       'Welcome to EQMS': 'Welcome to EQMS',
       'This guide will help you understand and use all features of the Electronic Queue Management System.': 'This guide will help you understand and use all features of the Electronic Queue Management System.',
       'Table of Contents': 'Table of Contents',
@@ -512,7 +547,7 @@ class AppLanguage {
       'Select Language': 'اختر اللغة',
       'English': 'الإنجليزية',
       'Arabic': 'العربية',
-      'EQMS Dashboard': 'لوحة تحكم نظام إدارة الجودة الإلكتروني',
+      'EQMS Dashboard': 'لوحة التحكم الرئيسية',
       'Total Queues': 'إجمالي الطوابير',
       'Active Queues': 'الطوابير النشطة',
       'Total Beneficiaries': 'إجمالي المستفيدين',
@@ -825,6 +860,21 @@ class AppLanguage {
       'Enter NFC code': 'أدخل رمز NFC',
       'Error loading areas:': 'خطأ في تحميل المناطق:',
       'Reject Request': 'رفض الطلب',
+      'Pending': 'قيد الانتظار',
+      'Approved': 'موافق عليه',
+      'Rejected': 'مرفوض',
+      'No pending requests': 'لا توجد طلبات قيد الانتظار',
+      'No approved requests': 'لا توجد طلبات موافق عليها',
+      'No rejected requests': 'لا توجد طلبات مرفوضة',
+      'All requests have been processed': 'تمت معالجة جميع الطلبات',
+      'Are you sure you want to reject this admin request?': 'هل أنت متأكد من رفض طلب المسؤول هذا؟',
+      'Request rejected': 'تم رفض الطلب',
+      'Error rejecting request:': 'خطأ في رفض الطلب:',
+      'Admin request approved': 'تمت الموافقة على طلب المسؤول',
+      'Error approving request:': 'خطأ في الموافقة على الطلب:',
+      'Error loading admin requests:': 'خطأ في تحميل طلبات المسؤول:',
+      'Description:': 'الوصف:',
+      'Reference:': 'المرجع:',
       'active': 'نشط',
       'suspended': 'معلق',
       'completed': 'مكتمل',
@@ -836,6 +886,26 @@ class AppLanguage {
       'Camera permission is required. Please enable it in app settings.': 'إذن الكاميرا مطلوب. يرجى تفعيله في إعدادات التطبيق.',
       'Storage permission is required. Please enable it in app settings.': 'إذن التخزين مطلوب. يرجى تفعيله في إعدادات التطبيق.',
       'Error completing queue:': 'خطأ في إكمال الطابور:',
+      'NFC Error:': 'خطأ NFC:',
+      'Connection issue:': 'مشكلة في الاتصال:',
+      'Attempting login anyway...': 'محاولة تسجيل الدخول على أي حال...',
+      'Connection timeout. Please check your internet connection and try again.': 'انتهت مهلة الاتصال. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.',
+      'Invalid mobile number or password': 'رقم الجوال أو كلمة المرور غير صحيحة',
+      'Login failed:': 'فشل تسجيل الدخول:',
+      'This ID number is already registered in the system.': 'رقم الهوية هذا مسجل بالفعل في النظام.',
+      'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.': 'يرجى مسح بطاقة NFC مرة أخرى. الإدخال اليدوي لرموز NFC المقنعة غير مسموح.',
+      'This NFC card is already registered to:': 'بطاقة NFC هذه مسجلة بالفعل لـ:',
+      'Error registering beneficiary:': 'خطأ في تسجيل المستفيد:',
+      'Error starting queue:': 'خطأ في بدء الطابور:',
+      'Review Text': 'مراجعة النص',
+      'Review Extracted Data': 'مراجعة البيانات المستخرجة',
+      'Use ID Number': 'استخدام رقم الهوية',
+      'ID Number extracted': 'تم استخراج رقم الهوية',
+      'Custom': 'مخصص',
+      'Select entity': 'اختر الكيان',
+      'Enter NFC reference': 'أدخل مرجع NFC',
+      'Select distribution area': 'اختر منطقة التوزيع',
+      'EQMS App': 'تطبيق EQMS',
     },
   };
   
@@ -2730,7 +2800,7 @@ class NFCHelper {
           } else if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('NFC Error: $errorMessage'),
+                content: Text('${AppLanguage.translate('NFC Error:')} $errorMessage'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -3251,7 +3321,7 @@ class MyApp extends StatelessWidget {
       valueListenable: AppLanguage.languageNotifier,
       builder: (context, language, child) {
     return MaterialApp(
-          title: 'EQMS App',
+          title: AppLanguage.translate('EQMS App'),
           debugShowCheckedModeBanner: false,
           locale: AppLanguage.isArabic ? const Locale('ar', 'SA') : const Locale('en', 'US'),
           builder: (context, child) {
@@ -3933,7 +4003,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ScaffoldMessenger.of(context).clearSnackBars();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Connection issue: ${e.toString().length > 50 ? e.toString().substring(0, 50) + "..." : e.toString()}. Attempting login anyway...'),
+                  content: Text('${AppLanguage.translate('Connection issue:')} ${e.toString().length > 50 ? e.toString().substring(0, 50) + "..." : e.toString()}. ${AppLanguage.translate('Attempting login anyway...')}'),
                   backgroundColor: Colors.orange,
                   duration: const Duration(seconds: 3),
                 ),
@@ -3963,10 +4033,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Connection timeout. Please check your internet connection and try again.'),
+            SnackBar(
+              content: Text(AppLanguage.translate('Connection timeout. Please check your internet connection and try again.')),
               backgroundColor: Colors.orange,
-              duration: Duration(seconds: 4),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -3986,10 +4056,10 @@ class _LoginScreenState extends State<LoginScreen> {
           // Clear any existing snackbars before showing a new one
           ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid mobile number or password'),
+            SnackBar(
+              content: Text(AppLanguage.translate('Invalid mobile number or password')),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -4068,7 +4138,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Login failed: $e'),
+            content: Text('${AppLanguage.translate('Login failed:')} $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -4420,7 +4490,7 @@ class _GuestDashboardScreenState extends State<GuestDashboardScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final shouldExit = await showDialog<bool>(
           context: context,
@@ -4622,7 +4692,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   String? _idCopyPath;
   String? _photoPath;
   bool _waitingForGoogleLens = false;
-  bool _isGoogleLensAvailable = true; // Default to true, will be checked on init
+  // bool _isGoogleLensAvailable = true; // Default to true, will be checked on init - UNUSED
   static const MethodChannel _googleLensChannel = MethodChannel('com.et3amapp.eqmsapp/google_lens');
   
   
@@ -4747,7 +4817,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
-              label: 'Review Text',
+              label: AppLanguage.translate('Review Text'),
               textColor: Colors.white,
               onPressed: () => _showManualReviewDialog(text, {}),
             ),
@@ -4764,7 +4834,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Review Extracted Data'),
+        title: Text(AppLanguage.translate('Review Extracted Data')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -4812,14 +4882,14 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 _idNumberController.text = idMatch.group(0)!;
                 _checkDuplicateID(idMatch.group(0)!);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('✅ ID Number extracted'),
+                  SnackBar(
+                    content: Text('✅ ${AppLanguage.translate('ID Number extracted')}'),
                     backgroundColor: Colors.green,
                   ),
                 );
               }
             },
-            child: const Text('Use ID Number'),
+            child: Text(AppLanguage.translate('Use ID Number')),
           ),
         ],
       ),
@@ -4978,8 +5048,8 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
 
   final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
-  final List<String> _genderOptions = ['Male', 'Female'];
-  final List<String> _statusOptions = ['Active', 'Banned'];
+  // final List<String> _genderOptions = ['Male', 'Female']; // UNUSED
+  // final List<String> _statusOptions = ['Active', 'Banned']; // UNUSED
   final List<String> _unitsOptions = ['1', '2'];
 
 
@@ -5023,7 +5093,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         final isAvailable = await _googleLensChannel.invokeMethod('isGoogleLensAvailable');
         if (mounted) {
           setState(() {
-            _isGoogleLensAvailable = isAvailable == true;
+            // _isGoogleLensAvailable = isAvailable == true; // UNUSED
           });
         }
       }
@@ -5031,7 +5101,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       print('Error checking Google Lens availability: $e');
       if (mounted) {
         setState(() {
-          _isGoogleLensAvailable = false;
+          // _isGoogleLensAvailable = false; // UNUSED
         });
       }
     }
@@ -5118,7 +5188,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         if (existingBeneficiary != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('This ID number is already registered in the system.'),
+              content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
               backgroundColor: Colors.red,
             ),
           );
@@ -5149,10 +5219,10 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           // In this case, we should ask user to scan the card again
           if (textFieldValue.contains('*')) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.'),
+              SnackBar(
+                content: Text(AppLanguage.translate('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.')),
                 backgroundColor: Colors.orange,
-                duration: Duration(seconds: 3),
+                duration: const Duration(seconds: 3),
               ),
             );
             return;
@@ -5166,7 +5236,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         if (existingNfcBeneficiary != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('This NFC card is already registered to: ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
+              content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -5275,7 +5345,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error registering beneficiary: $e'),
+              content: Text('${AppLanguage.translate('Error registering beneficiary:')} $e'),
               backgroundColor: Colors.red,
             ),
           );
@@ -6199,7 +6269,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateNFCMessage = 'This NFC card is already registered to: ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
+          _duplicateNFCMessage = '${AppLanguage.translate('This NFC card is already registered to:')} ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
         });
       } else {
         // Also check local list as fallback
@@ -6208,7 +6278,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             (b) => b.nfcPreprintedCode != null && b.nfcPreprintedCode == nfcCode,
           );
           setState(() {
-            _duplicateNFCMessage = 'This NFC card is already registered to: ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
+            _duplicateNFCMessage = '${AppLanguage.translate('This NFC card is already registered to:')} ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
           });
         } catch (e) {
           // NFC code not found - no duplicate
@@ -7187,7 +7257,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   String? _selectedDistributionArea;
   
   // Draggable FAB position
-  Offset _fabPosition = const Offset(0, 0); // Will be initialized in initState
+  // Offset _fabPosition = const Offset(0, 0); // Will be initialized in initState - UNUSED
   bool _isDragging = false;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -7502,7 +7572,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     return adminQueues;
   }
   
-  int get _totalQueues => _filteredQueues.length;
+  // int get _totalQueues => _filteredQueues.length; // UNUSED
   int get _activeQueues => _filteredQueues.where((q) => q.status == 'active' && !q.isCompleted).length;
   int get _totalBeneficiaries => _beneficiaries.length;
 
@@ -7644,7 +7714,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         }).toList();
         
         return Container(
-          margin: EdgeInsets.only(bottom: 12, top: displayIndex > 0 ? 24 : 0),
+          margin: EdgeInsets.only(bottom: 4, top: displayIndex > 0 ? 4 : 0),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -7715,16 +7785,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       const SizedBox(height: 4),
                       Text(
                         '${queue.displayDateRange} • ${queue.displayTimeRange}',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: Colors.black,
                         ),
                       ),
                       Text(
                         '${dailyEntries.length} days • ${queue.numberOfAvailableUnits} ${queue.unitName}',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: Colors.black,
                         ),
                       ),
                     ],
@@ -7813,48 +7883,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               print('Error starting queue: $e');
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Error starting queue: $e'),
+                                  content: Text('${AppLanguage.translate('Error starting queue:')} $e'),
                                   backgroundColor: Colors.red,
                                 ),
                               );
-                            });
-                          }
-                        });
-                      },
-                    ),
-                    _buildActionButton(
-                      icon: queue.isSuspended ? Icons.play_arrow : Icons.pause,
-                      label: queue.isSuspended ? AppLanguage.translate('Resume') : AppLanguage.translate('Suspend'),
-                      color: Colors.orange,
-                      onPressed: () {
-                        final newSuspendedState = !queue.isSuspended;
-                        final updatedQueue = queue.copyWith(
-                          isSuspended: newSuspendedState,
-                          status: newSuspendedState ? 'suspended' : 'active',
-                        );
-                        QueueService.getQueueIdByName(queue.name).then((queueId) {
-                          if (queueId != null) {
-                            QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(newSuspendedState 
-                                        ? AppLanguage.translate('Queue suspended successfully')
-                                        : AppLanguage.translate('Queue resumed successfully')),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                            }).catchError((e) {
-                              print('Error updating queue status: $e');
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Error updating queue: $e'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
                             });
                           }
                         });
@@ -8303,7 +8335,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             : <Beneficiary>[];
     
     return Container(
-      margin: EdgeInsets.only(bottom: 12, top: displayIndex > 0 ? 24 : 0),
+      margin: EdgeInsets.only(bottom: 4, top: displayIndex > 0 ? 4 : 0),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -8462,7 +8494,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Error starting queue: $e'),
+                                    content: Text('${AppLanguage.translate('Error starting queue:')} $e'),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -8528,111 +8560,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       'Start',
                       style: TextStyle(fontSize: 10),
                     ),
-                  ],
-                ),
-                // Hide suspend button for today's queues in dashboard
-                // Column(
-                //   children: [
-                //     IconButton(
-                //       onPressed: () {
-                //         // Update queue in Firestore - Toggle suspend/resume
-                //         final newSuspendedState = !queue.isSuspended;
-                //         final updatedQueue = queue.copyWith(
-                //           isSuspended: newSuspendedState,
-                //           status: newSuspendedState ? 'suspended' : 'active',
-                //         );
-                //         QueueService.getQueueIdByName(queue.name).then((queueId) {
-                //           if (queueId != null) {
-                //             QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                //               ScaffoldMessenger.of(context).showSnackBar(
-                //                 SnackBar(
-                //                   content: Text(newSuspendedState
-                //                       ? AppLanguage.translate('Queue suspended successfully')
-                //                       : AppLanguage.translate('Queue resumed successfully')),
-                //                   backgroundColor: Colors.orange,
-                //                 ),
-                //               );
-                //             }).catchError((e) {
-                //               print('Error updating queue status: $e');
-                //               ScaffoldMessenger.of(context).showSnackBar(
-                //                 SnackBar(
-                //                   content: Text('Error updating queue: $e'),
-                //                   backgroundColor: Colors.red,
-                //                 ),
-                //               );
-                //             });
-                //           } else {
-                //             ScaffoldMessenger.of(context).showSnackBar(
-                //               SnackBar(
-                //                 content: Text(AppLanguage.translate('Queue not found in Firestore')),
-                //                 backgroundColor: Colors.orange,
-                //               ),
-                //             );
-                //           }
-                //         });
-                //       },
-                //       icon: Icon(queue.isSuspended ? Icons.play_arrow : Icons.pause, color: Colors.orange),
-                //       style: IconButton.styleFrom(
-                //         backgroundColor: Colors.orange.withOpacity(0.1),
-                //         padding: const EdgeInsets.all(12),
-                //       ),
-                //     ),
-                //     const SizedBox(height: 4),
-                //     Text(
-                //       queue.isSuspended ? AppLanguage.translate('Resume') : AppLanguage.translate('Suspend'),
-                //       style: const TextStyle(fontSize: 10),
-                //     ),
-                //   ],
-                // ),
-                Column(
-                  children: [
-                    IconButton(
-                      onPressed: () {
-                        // Update queue in Firestore - Complete queue
-                        final updatedQueue = queue.copyWith(
-                          isCompleted: true,
-                          isSuspended: false,
-                          status: 'completed',
-                        );
-                        QueueService.getQueueIdByName(queue.name).then((queueId) {
-                          if (queueId != null) {
-                            QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(AppLanguage.translate('Queue completed successfully')),
-                                  backgroundColor: Colors.blue,
-                                ),
-                              );
-                            }).catchError((e) {
-                              print('Error completing queue: $e');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('${AppLanguage.translate('Error completing queue:')} $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            });
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(AppLanguage.translate('Queue not found in Firestore')),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
-                          }
-                        });
-                      },
-                      icon: const Icon(Icons.check_circle, color: Colors.blue),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.blue.withOpacity(0.1),
-                        padding: const EdgeInsets.all(12),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                  Text(
-                    AppLanguage.translate('Complete'),
-                    style: const TextStyle(fontSize: 10),
-                  ),
                   ],
                 ),
               ],
@@ -9038,26 +8965,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           }
                         }
                         
-                        final totalQueues = adminQueues.length;
-                        final activeQueues = adminQueues.where((q) => q.status == 'active' && !q.isCompleted).length;
-                        
-                        // For dashboard performance, skip loading all beneficiaries - just show queues
-                        // Beneficiary count can be calculated on demand if needed
-                        return Padding(
-                          padding: EdgeInsets.symmetric(horizontal: isLandscape ? 8.0 : 16.0),
-                          child: Row(
-                            children: [
-                              _buildSummaryCard('Total Queues', totalQueues, Icons.queue, Colors.blue, isLandscape: isLandscape),
-                              SizedBox(width: isLandscape ? 4 : 8),
-                              _buildSummaryCard('Active Queues', activeQueues, Icons.check_circle, Colors.green, isLandscape: isLandscape),
-                              SizedBox(width: isLandscape ? 4 : 8),
-                              _buildSummaryCard('Beneficiaries', '-', Icons.people, Colors.orange, isLandscape: isLandscape),
-                            ],
-                          ),
-                        );
+                        // Summary cards removed - no longer displaying statistics
+                        return const SizedBox.shrink();
                       },
                     ),
-                    SizedBox(height: isLandscape ? 8 : 16),
                     Expanded(
                       child: Container(
                         padding: EdgeInsets.all(isLandscape ? 8.0 : 16.0),
@@ -9651,35 +9562,38 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        final shouldExit = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(AppLanguage.translate('Exit App')),
-            content: Text(AppLanguage.translate('Are you sure you want to exit the app?')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(AppLanguage.translate('Cancel')),
+    return ValueListenableBuilder<String>(
+      valueListenable: AppLanguage.languageNotifier,
+      builder: (context, language, child) {
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) async {
+            if (didPop) return;
+            final shouldExit = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(AppLanguage.translate('Exit App')),
+                content: Text(AppLanguage.translate('Are you sure you want to exit the app?')),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(AppLanguage.translate('Cancel')),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(AppLanguage.translate('Exit'), style: const TextStyle(color: Colors.red)),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(AppLanguage.translate('Exit'), style: const TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
-        );
-        if (shouldExit == true && context.mounted) {
-          // Exit the app
-          SystemNavigator.pop();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('EQMS Dashboard'),
+            );
+            if (shouldExit == true && context.mounted) {
+              // Exit the app
+              SystemNavigator.pop();
+            }
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(AppLanguage.translate('EQMS Dashboard')),
           backgroundColor: const Color(0xFF81CF01),
           foregroundColor: Colors.white,
         actions: [
@@ -9745,30 +9659,32 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF81CF01),
         unselectedItemColor: Colors.grey,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            icon: const Icon(Icons.dashboard),
+            label: AppLanguage.translate('Dashboard'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle),
-            label: 'Add Queue',
+            icon: const Icon(Icons.add_circle),
+            label: AppLanguage.translate('Add Queue'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_add),
-            label: 'Add Beneficiary',
+            icon: const Icon(Icons.person_add),
+            label: AppLanguage.translate('Add Beneficiary'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Beneficiaries',
+            icon: const Icon(Icons.people),
+            label: AppLanguage.translate('Beneficiaries'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Add Area',
+            icon: const Icon(Icons.location_on),
+            label: AppLanguage.translate('Add Area'),
           ),
         ],
       ),
       ),
+        );
+      },
     );
   }
 }
@@ -11969,12 +11885,70 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
   String? _selectedRole; // 'Super_Admin', 'Admin', or 'Q_Admin'
 
   final Map<String, List<String>> _egyptGovernoratesCities = {
-    'Cairo': ['Cairo', 'Nasr City', 'Heliopolis', 'Maadi', 'Zamalek'],
-    'Giza': ['Giza', '6th of October', 'Sheikh Zayed', 'Dokki'],
-    'Alexandria': ['Alexandria', 'Montaza', 'Sidi Bishr'],
-    'Luxor': ['Luxor', 'Karnak'],
-    'Aswan': ['Aswan', 'Elephantine'],
+    'Cairo': ['Cairo', 'Nasr City', 'Heliopolis', 'Maadi', 'Zamalek', 'New Cairo', '6th of October City'],
+    'Giza': ['Giza', '6th of October', 'Sheikh Zayed', 'Dokki', 'Mohandessin', 'Agouza', 'Faisal', 'Haram'],
+    'Alexandria': ['Alexandria', 'Montaza', 'Sidi Bishr', 'Stanley', 'Smouha'],
+    'Qalyubia': ['Banha', 'Qalyub', 'Shubra El Kheima', 'Tukh'],
+    'Port Said': ['Port Said', 'Port Fouad'],
+    'Suez': ['Suez', 'Arish'],
+    'Dakahlia': ['Mansoura', 'Talkha', 'Mit Ghamr', 'Aga'],
+    'Sharqia': ['Zagazig', '10th of Ramadan', 'Belbeis', 'Abu Hammad'],
+    'Monufia': ['Shibin El Kom', 'Menouf', 'Tala', 'Ashmoun'],
+    'Beheira': ['Damanhur', 'Kafr El Dawwar', 'Rashid', 'Edku'],
+    'Gharbia': ['Tanta', 'Mahalla', 'Kafr El Zayat', 'Zefta'],
+    'Kafr El Sheikh': ['Kafr El Sheikh', 'Desouk', 'Fuwa', 'Bilqas'],
+    'Damietta': ['Damietta', 'New Damietta', 'Ras El Bar'],
+    'Ismailia': ['Ismailia', 'Fayed', 'Abu Suwayr'],
+    'North Sinai': ['Arish', 'Sheikh Zuweid', 'Rafah'],
+    'South Sinai': ['Sharm El Sheikh', 'Dahab', 'Nuweiba', 'Taba'],
+    'Red Sea': ['Hurghada', 'Marsa Alam', 'Safaga', 'El Gouna'],
+    'New Valley': ['Kharga', 'Dakhla', 'Farafra'],
+    'Matruh': ['Marsa Matruh', 'El Alamein', 'Sidi Barrani'],
+    'Luxor': ['Luxor', 'Esna', 'Armant'],
+    'Aswan': ['Aswan', 'Kom Ombo', 'Edfu'],
+    'Qena': ['Qena', 'Luxor', 'Nag Hammadi'],
+    'Sohag': ['Sohag', 'Akhmim', 'Girga'],
+    'Assiut': ['Assiut', 'Abnoub', 'Manfalut'],
+    'Minya': ['Minya', 'Malawi', 'Abu Qurqas'],
+    'Beni Suef': ['Beni Suef', 'Biba', 'Al Fashn'],
+    'Faiyum': ['Faiyum', 'Tamiya', 'Sinnuris'],
   };
+  
+  // Helper method to get governorate display name based on current language
+  String _getGovernorateDisplayName(String governorate) {
+    const Map<String, Map<String, String>> governorateNames = {
+      'Cairo': {'ar': 'القاهرة', 'en': 'Cairo'},
+      'Alexandria': {'ar': 'الإسكندرية', 'en': 'Alexandria'},
+      'Giza': {'ar': 'الجيزة', 'en': 'Giza'},
+      'Qalyubia': {'ar': 'القليوبية', 'en': 'Qalyubia'},
+      'Sharqia': {'ar': 'الشرقية', 'en': 'Sharqia'},
+      'Dakahlia': {'ar': 'الدقهلية', 'en': 'Dakahlia'},
+      'Beheira': {'ar': 'البحيرة', 'en': 'Beheira'},
+      'Kafr El Sheikh': {'ar': 'كفر الشيخ', 'en': 'Kafr El Sheikh'},
+      'Monufia': {'ar': 'المنوفية', 'en': 'Monufia'},
+      'Gharbia': {'ar': 'الغربية', 'en': 'Gharbia'},
+      'Damietta': {'ar': 'دمياط', 'en': 'Damietta'},
+      'Port Said': {'ar': 'بورسعيد', 'en': 'Port Said'},
+      'Ismailia': {'ar': 'الإسماعيلية', 'en': 'Ismailia'},
+      'Suez': {'ar': 'السويس', 'en': 'Suez'},
+      'Faiyum': {'ar': 'الفيوم', 'en': 'Fayoum'},
+      'Beni Suef': {'ar': 'بني سويف', 'en': 'Beni Suef'},
+      'Minya': {'ar': 'المنيا', 'en': 'Minya'},
+      'Assiut': {'ar': 'أسيوط', 'en': 'Assiut'},
+      'Sohag': {'ar': 'سوهاج', 'en': 'Sohag'},
+      'Qena': {'ar': 'قنا', 'en': 'Qena'},
+      'Luxor': {'ar': 'الأقصر', 'en': 'Luxor'},
+      'Aswan': {'ar': 'أسوان', 'en': 'Aswan'},
+      'Red Sea': {'ar': 'البحر الأحمر', 'en': 'Red Sea'},
+      'New Valley': {'ar': 'الوادي الجديد', 'en': 'New Valley'},
+      'Matruh': {'ar': 'مطروح', 'en': 'Matrouh'},
+      'North Sinai': {'ar': 'شمال سيناء', 'en': 'North Sinai'},
+      'South Sinai': {'ar': 'جنوب سيناء', 'en': 'South Sinai'},
+    };
+    final names = governorateNames[governorate];
+    if (names == null) return governorate;
+    return AppLanguage.isArabic ? names['ar']! : names['en']!;
+  }
 
   List<String> get _availableCities {
     if (_selectedGovernorate == null) return [];
@@ -12367,42 +12341,6 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
     );
   }
 
-  // Helper method to get governorate display name based on current language
-  String _getGovernorateDisplayName(String governorate) {
-    const Map<String, Map<String, String>> governorateNames = {
-      'Cairo': {'ar': 'القاهرة', 'en': 'Cairo'},
-      'Alexandria': {'ar': 'الإسكندرية', 'en': 'Alexandria'},
-      'Giza': {'ar': 'الجيزة', 'en': 'Giza'},
-      'Qalyubia': {'ar': 'القليوبية', 'en': 'Qalyubia'},
-      'Sharqia': {'ar': 'الشرقية', 'en': 'Sharqia'},
-      'Dakahlia': {'ar': 'الدقهلية', 'en': 'Dakahlia'},
-      'Beheira': {'ar': 'البحيرة', 'en': 'Beheira'},
-      'Kafr El Sheikh': {'ar': 'كفر الشيخ', 'en': 'Kafr El Sheikh'},
-      'Monufia': {'ar': 'المنوفية', 'en': 'Monufia'},
-      'Gharbia': {'ar': 'الغربية', 'en': 'Gharbia'},
-      'Damietta': {'ar': 'دمياط', 'en': 'Damietta'},
-      'Port Said': {'ar': 'بورسعيد', 'en': 'Port Said'},
-      'Ismailia': {'ar': 'الإسماعيلية', 'en': 'Ismailia'},
-      'Suez': {'ar': 'السويس', 'en': 'Suez'},
-      'Faiyum': {'ar': 'الفيوم', 'en': 'Fayoum'},
-      'Beni Suef': {'ar': 'بني سويف', 'en': 'Beni Suef'},
-      'Minya': {'ar': 'المنيا', 'en': 'Minya'},
-      'Assiut': {'ar': 'أسيوط', 'en': 'Assiut'},
-      'Sohag': {'ar': 'سوهاج', 'en': 'Sohag'},
-      'Qena': {'ar': 'قنا', 'en': 'Qena'},
-      'Luxor': {'ar': 'الأقصر', 'en': 'Luxor'},
-      'Aswan': {'ar': 'أسوان', 'en': 'Aswan'},
-      'Red Sea': {'ar': 'البحر الأحمر', 'en': 'Red Sea'},
-      'New Valley': {'ar': 'الوادي الجديد', 'en': 'New Valley'},
-      'Matruh': {'ar': 'مطروح', 'en': 'Matrouh'},
-      'North Sinai': {'ar': 'شمال سيناء', 'en': 'North Sinai'},
-      'South Sinai': {'ar': 'جنوب سيناء', 'en': 'South Sinai'},
-    };
-    final names = governorateNames[governorate];
-    if (names == null) return governorate;
-    return AppLanguage.isArabic ? names['ar']! : names['en']!;
-  }
-
   // Helper method to build governorate dropdown with localized names
   Widget _buildGovernorateDropdown(String? selectedKey, Function(String?) onChanged, {bool enabled = true}) {
     return Container(
@@ -12470,56 +12408,59 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey[50],
-      child: Column(
-        children: [
-          // Modern Filter Tabs
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
+    return ValueListenableBuilder<String>(
+      valueListenable: AppLanguage.languageNotifier,
+      builder: (context, language, child) {
+        return Container(
+          color: Colors.grey[50],
+          child: Column(
+            children: [
+              // Modern Filter Tabs
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildFilterTab(
-                    index: 0,
-                    icon: Icons.pending_actions,
-                    label: 'Pending',
-                    color: Colors.orange,
-                    isSelected: _selectedTab == 0,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildFilterTab(
+                        index: 0,
+                        icon: Icons.pending_actions,
+                        label: AppLanguage.translate('Pending'),
+                        color: Colors.orange,
+                        isSelected: _selectedTab == 0,
+                    ),
+                  ),
+                  Expanded(
+                      child: _buildFilterTab(
+                        index: 1,
+                        icon: Icons.check_circle,
+                        label: AppLanguage.translate('Approved'),
+                        color: Colors.green,
+                        isSelected: _selectedTab == 1,
+                    ),
+                  ),
+                  Expanded(
+                      child: _buildFilterTab(
+                        index: 2,
+                        icon: Icons.cancel,
+                        label: AppLanguage.translate('Rejected'),
+                        color: Colors.red,
+                        isSelected: _selectedTab == 2,
+                    ),
+                  ),
+                ],
                 ),
               ),
-              Expanded(
-                  child: _buildFilterTab(
-                    index: 1,
-                    icon: Icons.check_circle,
-                    label: 'Approved',
-                    color: Colors.green,
-                    isSelected: _selectedTab == 1,
-                ),
-              ),
-              Expanded(
-                  child: _buildFilterTab(
-                    index: 2,
-                    icon: Icons.cancel,
-                    label: 'Rejected',
-                    color: Colors.red,
-                    isSelected: _selectedTab == 2,
-                ),
-              ),
-            ],
-            ),
-          ),
           // Requests list
           Expanded(
             child: StreamBuilder<List<Admin>>(
@@ -12531,7 +12472,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
           
           if (snapshot.hasError) {
             return Center(
-              child: Text('Error loading admin requests: ${snapshot.error}'),
+              child: Text('${AppLanguage.translate('Error loading admin requests:')} ${snapshot.error}'),
             );
           }
           
@@ -12562,6 +12503,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
       ),
         ],
       ),
+        );
+      },
     );
   }
 
@@ -12613,17 +12556,17 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
     switch (selectedTab) {
       case 0:
         icon = Icons.pending_actions;
-        message = 'No pending requests';
+        message = AppLanguage.translate('No pending requests');
         color = Colors.orange;
         break;
       case 1:
         icon = Icons.check_circle;
-        message = 'No approved requests';
+        message = AppLanguage.translate('No approved requests');
         color = Colors.green;
         break;
       default:
         icon = Icons.cancel;
-        message = 'No rejected requests';
+        message = AppLanguage.translate('No rejected requests');
         color = Colors.red;
     }
 
@@ -12654,7 +12597,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'All requests have been processed',
+            AppLanguage.translate('All requests have been processed'),
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -12762,7 +12705,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                     borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                request.status.toUpperCase(),
+                                AppLanguage.translate(request.status == 'pending' ? 'Pending' : (request.status == 'approved' || request.status == 'active' ? 'Approved' : 'Rejected')).toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
@@ -12782,14 +12725,14 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
               children: [
                 _buildInfoRow(Icons.location_on, '${request.country} > ${request.governorate} > ${request.city}'),
                 const SizedBox(height: 8),
-                _buildInfoRow(Icons.place, 'Distribution Point: ${request.distributionPoint}'),
+                _buildInfoRow(Icons.place, '${AppLanguage.translate('Distribution Point')}: ${request.distributionPoint}'),
                 if (request.distributionPointDescription != null) ...[
                   const SizedBox(height: 8),
-                  _buildInfoRow(Icons.description, 'Description: ${request.distributionPointDescription}'),
+                  _buildInfoRow(Icons.description, '${AppLanguage.translate('Description:')} ${request.distributionPointDescription}'),
                 ],
                 if (request.reference != null) ...[
                   const SizedBox(height: 8),
-                  _buildInfoRow(Icons.link, 'Reference: ${request.reference}'),
+                  _buildInfoRow(Icons.link, '${AppLanguage.translate('Reference:')} ${request.reference}'),
                 ],
                 const SizedBox(height: 12),
                 Container(
@@ -12840,8 +12783,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                 showDialog(
                                   context: context,
                                     builder: (dialogContext) => AlertDialog(
-                                    title: const Text('Reject Request'),
-                                    content: const Text('Are you sure you want to reject this admin request?'),
+                                    title: Text(AppLanguage.translate('Reject Request')),
+                                    content: Text(AppLanguage.translate('Are you sure you want to reject this admin request?')),
                                     actions: [
                                       TextButton(
                                           onPressed: () => Navigator.pop(dialogContext),
@@ -12878,8 +12821,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                               // Show success message
                                               if (parentContext.mounted) {
                                                 ScaffoldMessenger.of(parentContext).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Request rejected'),
+                                                SnackBar(
+                                                  content: Text(AppLanguage.translate('Request rejected')),
                                                   backgroundColor: Colors.green,
                                                 ),
                                               );
@@ -12894,21 +12837,21 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                               if (parentContext.mounted) {
                                                 ScaffoldMessenger.of(parentContext).showSnackBar(
                                                 SnackBar(
-                                                  content: Text('Error rejecting request: $e'),
+                                                  content: Text('${AppLanguage.translate('Error rejecting request:')} $e'),
                                                   backgroundColor: Colors.red,
                                                 ),
                                               );
                                             }
                                           }
                                         },
-                                        child: const Text('Reject', style: TextStyle(color: Colors.red)),
+                                        child: Text(AppLanguage.translate('Reject'), style: const TextStyle(color: Colors.red)),
                                       ),
                                     ],
                                   ),
                                 );
                               },
                               icon: const Icon(Icons.close, size: 18),
-                              label: const Text('Reject'),
+                              label: Text(AppLanguage.translate('Reject')),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.red,
                                 side: const BorderSide(color: Colors.red),
@@ -12951,8 +12894,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                   
                                   if (parentContext.mounted) {
                                     ScaffoldMessenger.of(parentContext).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Admin request approved'),
+                                      SnackBar(
+                                        content: Text(AppLanguage.translate('Admin request approved')),
                                         backgroundColor: Colors.green,
                                       ),
                                     );
@@ -12969,7 +12912,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                   if (parentContext.mounted) {
                                     ScaffoldMessenger.of(parentContext).showSnackBar(
                                       SnackBar(
-                                        content: Text('Error approving request: $e'),
+                                        content: Text('${AppLanguage.translate('Error approving request:')} $e'),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -12977,7 +12920,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                                 }
                               },
                               icon: const Icon(Icons.check, size: 18),
-                              label: const Text('Approve'),
+                              label: Text(AppLanguage.translate('Approve')),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: tealGreen,
                                 foregroundColor: Colors.white,
@@ -13043,55 +12986,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
-  }
-
-  void _showLanguageDialog() {
-    final currentLanguage = AppLanguage.currentLanguage;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLanguage.translate('Select Language')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(AppLanguage.translate('English')),
-              leading: Radio<String>(
-                value: 'English',
-                groupValue: currentLanguage,
-                onChanged: (value) {
-                  if (value != null) {
-                    AppLanguage.setLanguage(value);
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-              onTap: () {
-                AppLanguage.setLanguage('English');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text(AppLanguage.translate('Arabic')),
-              leading: Radio<String>(
-                value: 'Arabic',
-                groupValue: currentLanguage,
-                onChanged: (value) {
-                  if (value != null) {
-                    AppLanguage.setLanguage(value);
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-              onTap: () {
-                AppLanguage.setLanguage('Arabic');
-                Navigator.pop(context);
-              },
-          ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _showChangePasswordDialog() async {
@@ -13283,23 +13177,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const darkBlue = Color(0xFF1A237E);
-    const tealGreen = Color(0xFF81CF01);
+    return ValueListenableBuilder<String>(
+      valueListenable: AppLanguage.languageNotifier,
+      builder: (context, language, child) {
+        const darkBlue = Color(0xFF1A237E);
+        const tealGreen = Color(0xFF81CF01);
 
-    final currentAdmin = AdminService.currentAdmin;
-    final userName = currentAdmin?.fullName ?? 'Admin User';
-    final userRole = currentAdmin?.role ?? 'Admin';
-    final userMobile = currentAdmin?.mobile ?? 'N/A';
+        final currentAdmin = AdminService.currentAdmin;
+        final userName = currentAdmin?.fullName ?? 'Admin User';
+        final userRole = currentAdmin?.role ?? 'Admin';
+        final userMobile = currentAdmin?.mobile ?? 'N/A';
 
-    // Format role for display
-    String roleDisplay = userRole;
-    if (userRole == 'Super_Admin') {
-      roleDisplay = 'Super Admin';
-    } else if (userRole == 'Q_Admin') {
-      roleDisplay = 'Q Admin';
-    }
+        // Format role for display
+        String roleDisplay = userRole;
+        if (userRole == 'Super_Admin') {
+          roleDisplay = 'Super Admin';
+        } else if (userRole == 'Q_Admin') {
+          roleDisplay = 'Q Admin';
+        }
 
-    return Scaffold(
+        return Scaffold(
       appBar: AppBar(
         title: Text(AppLanguage.translate('Profile')),
         backgroundColor: tealGreen,
@@ -13365,22 +13262,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _buildProfileItem(Icons.phone, 'Mobile', userMobile),
+                    _buildProfileItem(Icons.phone, AppLanguage.translate('Mobile'), userMobile),
                   ],
                 ),
               ),
               const SizedBox(height: 32),
               const Divider(),
               const SizedBox(height: 16),
-              _buildSettingItem(Icons.lock, 'Change Password', _showChangePasswordDialog),
-              _buildSettingItem(Icons.language, 'Language', _showLanguageDialog),
-              _buildSettingItem(Icons.help, 'Help & Support', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const HelpSupportScreen(),
-                  ),
-                );
-              }),
+              _buildSettingItem(Icons.lock, AppLanguage.translate('Change Password'), _showChangePasswordDialog),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () {
@@ -13413,12 +13302,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 ),
-                child: const Text('Logout'),
+                child: Text(AppLanguage.translate('Logout')),
               ),
             ],
           ),
         ),
       ),
+        );
+      },
     );
   }
 
@@ -13549,8 +13440,8 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
 
   final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
-  final List<String> _genderOptions = ['Male', 'Female'];
-  final List<String> _statusOptions = ['Active', 'Banned'];
+  // final List<String> _genderOptions = ['Male', 'Female']; // UNUSED
+  // final List<String> _statusOptions = ['Active', 'Banned']; // UNUSED
   final List<String> _unitsOptions = ['1', '2'];
 
   List<Queue> get _filteredQueues {
@@ -14774,7 +14665,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateNFCMessage = 'This NFC card is already registered to: ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
+          _duplicateNFCMessage = '${AppLanguage.translate('This NFC card is already registered to:')} ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
         });
       } else {
         // Also check local list as fallback
@@ -14783,7 +14674,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             (b) => b.nfcPreprintedCode != null && b.nfcPreprintedCode == nfcCode,
           );
           setState(() {
-            _duplicateNFCMessage = 'This NFC card is already registered to: ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
+            _duplicateNFCMessage = '${AppLanguage.translate('This NFC card is already registered to:')} ${localBeneficiary.name} (ID: ${localBeneficiary.idNumber})';
           });
         } catch (e) {
           // NFC code not found - no duplicate
@@ -14899,7 +14790,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         if (existingBeneficiary != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('This ID number is already registered in the system.'),
+              content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
               backgroundColor: Colors.red,
             ),
           );
@@ -14930,10 +14821,10 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           // In this case, we should ask user to scan the card again
           if (textFieldValue.contains('*')) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.'),
+              SnackBar(
+                content: Text(AppLanguage.translate('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.')),
                 backgroundColor: Colors.orange,
-                duration: Duration(seconds: 3),
+                duration: const Duration(seconds: 3),
               ),
             );
             return;
@@ -14947,7 +14838,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         if (existingNfcBeneficiary != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('This NFC card is already registered to: ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
+              content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -15056,7 +14947,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error registering beneficiary: $e'),
+              content: Text('${AppLanguage.translate('Error registering beneficiary:')} $e'),
               backgroundColor: Colors.red,
             ),
           );
@@ -15734,13 +15625,13 @@ class BeneficiariesListScreen extends StatefulWidget {
 class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   String? _selectedDistributionArea;
   final TextEditingController _searchController = TextEditingController();
+  String _activeSearchQuery = ''; // Only updates when "Done" is pressed
   bool _isExpanded = true; // Make dropdown visible by default
   List<String> _adminDistributionAreaIds = [];
   final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
   
   // Performance optimizations
   Timer? _searchDebounce;
-  VoidCallback? _searchListener; // Store listener reference for proper cleanup
   static const int _initialLoadLimit = 100; // Load first 100 beneficiaries
   static const int _loadMoreLimit = 50; // Load 50 more when scrolling
   final ScrollController _scrollController = ScrollController();
@@ -15754,9 +15645,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     super.initState();
     // Setup scroll listener for pagination
     _scrollController.addListener(_onScroll);
-    // Setup search debouncing
-    _searchListener = _onSearchChanged;
-    _searchController.addListener(_searchListener!);
+    // Search will only trigger when "Done" is pressed, not while typing
     // Get admin's distribution areas
     final currentAdmin = AdminService.currentAdmin;
     if (currentAdmin != null && currentAdmin.distributionPoint.isNotEmpty) {
@@ -15790,10 +15679,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     // Cancel search debounce timer
     _searchDebounce?.cancel();
     
-    // Remove listener before disposing controller
-    if (_searchListener != null) {
-      _searchController.removeListener(_searchListener!);
-    }
+    // Dispose controller (no listener to remove since we removed it)
     _searchController.dispose();
     
     // Dispose progress notifier
@@ -15806,13 +15692,15 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     super.dispose();
   }
   
-  void _onSearchChanged() {
+  void _performSearch() {
+    // Cancel any pending debounce timer
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    // Update active search query only when "Done" is pressed
+    if (mounted) {
+      setState(() {
+        _activeSearchQuery = _searchController.text.trim();
+      });
+    }
   }
   
   void _onScroll() {
@@ -15822,7 +15710,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   }
   
   Future<void> _loadMoreBeneficiaries() async {
-    if (_isLoadingMore || !_hasMoreData || _searchController.text.isNotEmpty) {
+    if (_isLoadingMore || !_hasMoreData || _activeSearchQuery.isNotEmpty) {
       return; // Don't load more if searching or already loading
     }
     
@@ -15883,31 +15771,80 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     // When a specific area is selected, we trust the Firestore query and don't filter further
 
     // Filter by search query (name, ID, or mobile number)
-    if (_searchController.text.isNotEmpty) {
-      final query = _searchController.text.trim();
-      // For Arabic text, we need to search without case conversion as toLowerCase() may not work correctly
-      // We'll do case-insensitive search for English and direct search for Arabic
-      filtered = filtered.where((b) {
-        final name = b.name;
-        final idNumber = b.idNumber;
-        final mobileNumber = b.mobileNumber ?? '';
-        
-        // Check if query contains Arabic characters
-        final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(query);
-        
-        if (hasArabic) {
-          // For Arabic text, search directly (Arabic is case-insensitive by nature)
-          return name.contains(query) ||
-                 idNumber.contains(query) ||
-                 mobileNumber.contains(query);
-        } else {
-          // For non-Arabic (English/numbers), do case-insensitive search
-          final queryLower = query.toLowerCase();
-          return name.toLowerCase().contains(queryLower) ||
-                 idNumber.toLowerCase().contains(queryLower) ||
-                 mobileNumber.toLowerCase().contains(queryLower);
+    // Optimized search for fast results (target: < 1 second)
+    // Only use active search query (updated when "Done" is pressed)
+    if (_activeSearchQuery.isNotEmpty) {
+      final query = _activeSearchQuery.trim();
+      if (query.isEmpty) {
+        return filtered;
+      }
+      
+      // Pre-compute values once for better performance
+      final queryLower = query.toLowerCase();
+      final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(query);
+      final queryLength = query.length;
+      
+      // Use a list builder for better performance
+      final searchResults = <Beneficiary>[];
+      final startTime = DateTime.now();
+      const maxSearchDuration = Duration(milliseconds: 1500); // Maximum 1.5 seconds
+      
+      // Optimize: Check if query is numeric (likely ID or mobile)
+      final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
+      
+      for (final b in filtered) {
+        // Check timeout every 50 items for faster response
+        if (searchResults.length % 50 == 0) {
+          final elapsed = DateTime.now().difference(startTime);
+          if (elapsed > maxSearchDuration) {
+            // If timeout, return what we have so far
+            break;
+          }
         }
-      }).toList();
+        
+        bool matches = false;
+        
+        if (isNumeric) {
+          // For numeric queries, only check ID and mobile (faster)
+          final idNumber = b.idNumber;
+          final mobileNumber = b.mobileNumber ?? '';
+          
+          if (hasArabic) {
+            matches = idNumber.contains(query) || mobileNumber.contains(query);
+          } else {
+            matches = idNumber.toLowerCase().contains(queryLower) ||
+                     mobileNumber.toLowerCase().contains(queryLower);
+          }
+        } else {
+          // For text queries, check name, ID, and mobile
+          final name = b.name;
+          final idNumber = b.idNumber;
+          final mobileNumber = b.mobileNumber ?? '';
+          
+          if (hasArabic) {
+            // For Arabic text, search directly
+            matches = name.contains(query) ||
+                     idNumber.contains(query) ||
+                     mobileNumber.contains(query);
+          } else {
+            // For non-Arabic, do case-insensitive search
+            // Pre-compute lowercase values for faster comparison
+            final nameLower = name.toLowerCase();
+            final idLower = idNumber.toLowerCase();
+            final mobileLower = mobileNumber.toLowerCase();
+            
+            matches = nameLower.contains(queryLower) ||
+                     idLower.contains(queryLower) ||
+                     mobileLower.contains(queryLower);
+          }
+        }
+        
+        if (matches) {
+          searchResults.add(b);
+        }
+      }
+      
+      filtered = searchResults;
     }
 
     return filtered;
@@ -16286,6 +16223,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
               controller: _searchController,
               textDirection: TextDirection.ltr, // Allow both LTR and RTL
               keyboardType: TextInputType.text, // Use text input to support all characters including Arabic
+              textInputAction: TextInputAction.done, // Show "Done" button on keyboard
               decoration: InputDecoration(
                 hintText: AppLanguage.translate('Search by name or ID'),
                 prefixIcon: const Icon(Icons.search),
@@ -16295,6 +16233,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                         onPressed: () {
                           setState(() {
                             _searchController.clear();
+                            _activeSearchQuery = ''; // Clear active search when clearing text
                           });
                         },
                       )
@@ -16308,22 +16247,29 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               onChanged: (value) {
+                // Only update UI to show/hide clear button, don't search
                 setState(() {});
+              },
+              onSubmitted: (value) {
+                // Immediate search when "Done" is pressed
+                _performSearch();
+                // Dismiss keyboard
+                FocusScope.of(context).unfocus();
               },
             ),
           ),
           // Beneficiaries List - Load from Firebase filtered by selected area with pagination
           Expanded(
             child: StreamBuilder<List<Beneficiary>>(
-              key: ValueKey<String?>('${_selectedDistributionArea}_${_searchController.text}'), // Force rebuild when area or search changes
+              key: ValueKey<String?>('${_selectedDistributionArea}_${_activeSearchQuery}'), // Force rebuild when area or active search changes
               stream: _selectedDistributionArea != null
                   ? BeneficiaryService.getBeneficiariesByArea(
                       _selectedDistributionArea!, 
-                      limit: _searchController.text.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
+                      limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
                       activeOnly: true,
                     )
                   : BeneficiaryService.getAllBeneficiaries(
-                      limit: _searchController.text.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
+                      limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
                       activeOnly: true,
                     ),
               builder: (context, snapshot) {
@@ -16774,7 +16720,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
       if (existingNfcBeneficiary != null && existingNfcBeneficiary.id != widget.beneficiary.id) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('This NFC card is already registered to: ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
+            content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -16889,7 +16835,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
         // Only show error if it's a different beneficiary (not the one being edited)
         if (existingBeneficiary.id != widget.beneficiary.id) {
           setState(() {
-            _duplicateNFCMessage = 'This NFC card is already registered to: ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
+            _duplicateNFCMessage = '${AppLanguage.translate('This NFC card is already registered to:')} ${existingBeneficiary.name} (ID: ${existingBeneficiary.idNumber})';
           });
         } else {
           // Same beneficiary - no duplicate
@@ -20631,6 +20577,35 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                       final isSelected = _selectedBeneficiary?.id == beneficiary.id;
                       final isServing = _servingInProgress.contains(beneficiary.id);
                       
+                      // Check if beneficiary is within grace range for grace5/grace10 modes
+                      bool isWithinGraceRange = true;
+                      String? graceRangeMessage;
+                      if ((_servingOption == 'grace5' || _servingOption == 'grace10') && beneficiary.queueNumber != null) {
+                        // Calculate highest served queue number from fully served beneficiaries
+                        int highestServedQueueNumber = 0;
+                        for (var b in sortedBeneficiaries) {
+                          if (b.queueNumber != null && servedBeneficiaryIds.contains(b.id)) {
+                            // Verify they are fully served
+                            final bEligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+                            final bDayUnitsTaken = widget.queue.isMultiDay 
+                                ? (daySpecificUnitsTaken[b.id] ?? 0)
+                                : b.unitsTaken;
+                            if (bDayUnitsTaken >= bEligibleUnits && b.queueNumber! > highestServedQueueNumber) {
+                              highestServedQueueNumber = b.queueNumber!;
+                            }
+                          }
+                        }
+                        
+                        final graceCount = _servingOption == 'grace5' ? 5 : 10;
+                        final graceStart = highestServedQueueNumber + 1;
+                        final graceEnd = highestServedQueueNumber + graceCount;
+                        
+                        isWithinGraceRange = beneficiary.queueNumber! >= graceStart && beneficiary.queueNumber! <= graceEnd;
+                        if (!isWithinGraceRange && highestServedQueueNumber > 0) {
+                          graceRangeMessage = 'Next ${graceCount} only (${graceStart}-${graceEnd})';
+                        }
+                      }
+                      
                       return RepaintBoundary(
                         key: ValueKey('beneficiary_${beneficiary.id}'),
                         child: Card(
@@ -20773,14 +20748,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                     ),
                                     const SizedBox(width: 16),
                                     ElevatedButton(
-                                      onPressed: isServing ? null : () {
+                                      onPressed: (isServing || !isWithinGraceRange) ? null : () {
                                         final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
                                         if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
                                           _serveBeneficiary(beneficiary, units);
                                         }
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: isServing ? Colors.grey : Colors.blue,
+                                        backgroundColor: (isServing || !isWithinGraceRange) ? Colors.grey : Colors.blue,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                         minimumSize: const Size(80, 40),
@@ -20794,7 +20769,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                               ),
                                             )
-                                          : Text(AppLanguage.translate('Serve'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                          : Text(
+                                              graceRangeMessage ?? AppLanguage.translate('Serve'),
+                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                            ),
                                     ),
                                   ],
                                 ),
@@ -20950,6 +20928,43 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         );
       }
       return;
+    }
+    
+    // Check grace range for grace5/grace10 modes (serving mode, not filter)
+    if ((_servingOption == 'grace5' || _servingOption == 'grace10') && beneficiary.queueNumber != null) {
+      // Calculate highest served queue number from local beneficiaries
+      int highestServedQueueNumber = 0;
+      for (var b in _localBeneficiaries) {
+        final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+        if (b.queueNumber != null && b.isServed && b.unitsTaken >= eligibleUnits) {
+          if (b.queueNumber! > highestServedQueueNumber) {
+            highestServedQueueNumber = b.queueNumber!;
+          }
+        }
+      }
+      
+      final graceCount = _servingOption == 'grace5' ? 5 : 10;
+      final graceStart = highestServedQueueNumber + 1;
+      final graceEnd = highestServedQueueNumber + graceCount;
+      
+      // Only enforce if someone has been served (highestServedQueueNumber > 0)
+      if (highestServedQueueNumber > 0 && 
+          (beneficiary.queueNumber! < graceStart || beneficiary.queueNumber! > graceEnd)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Grace ${graceCount} mode: Can only serve the next ${graceCount} beneficiaries (queue numbers ${graceStart}-${graceEnd}). Current: ${beneficiary.queueNumber}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        // Remove from serving in progress
+        setState(() {
+          _servingInProgress.remove(beneficiary.id);
+        });
+        return;
+      }
     }
     
     // Prevent duplicate serving calls
@@ -21506,47 +21521,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     }
                   }
 
-                  // Apply Grace 5 or Grace 10 filter if selected (after calculating served IDs)
+                  // Grace 5 and Grace 10 are serving modes, not filters - show all beneficiaries
+                  // The serving restriction will be enforced in _serveBeneficiary method
                   List<Beneficiary> filteredBeneficiaries = sortedBeneficiaries;
-                  if (_servingOption == 'grace5') {
-                    // Get the highest served queue number
-                    int highestServedQueueNumber = 0;
-                    for (var beneficiary in sortedBeneficiaries) {
-                      if (beneficiary.queueNumber != null && 
-                          fullyServedBeneficiaryIds.contains(beneficiary.id)) {
-                        if (beneficiary.queueNumber! > highestServedQueueNumber) {
-                          highestServedQueueNumber = beneficiary.queueNumber!;
-                        }
-                      }
-                    }
-                    
-                    // Filter to show only beneficiaries within the next 5 positions
-                    final graceStart = highestServedQueueNumber + 1;
-                    final graceEnd = highestServedQueueNumber + 5;
-                    filteredBeneficiaries = sortedBeneficiaries.where((b) {
-                      if (b.queueNumber == null) return false;
-                      return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
-                    }).toList();
-                  } else if (_servingOption == 'grace10') {
-                    // Get the highest served queue number
-                    int highestServedQueueNumber = 0;
-                    for (var beneficiary in sortedBeneficiaries) {
-                      if (beneficiary.queueNumber != null && 
-                          fullyServedBeneficiaryIds.contains(beneficiary.id)) {
-                        if (beneficiary.queueNumber! > highestServedQueueNumber) {
-                          highestServedQueueNumber = beneficiary.queueNumber!;
-                        }
-                      }
-                    }
-                    
-                    // Filter to show only beneficiaries within the next 10 positions
-                    final graceStart = highestServedQueueNumber + 1;
-                    final graceEnd = highestServedQueueNumber + 10;
-                    filteredBeneficiaries = sortedBeneficiaries.where((b) {
-                      if (b.queueNumber == null) return false;
-                      return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
-                    }).toList();
-                  }
 
                   return Scaffold(
                     appBar: AppBar(
@@ -21753,47 +21730,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             }
           }
 
-          // Apply Grace 5 or Grace 10 filter if selected
+          // Grace 5 and Grace 10 are serving modes, not filters - show all beneficiaries
+          // The serving restriction will be enforced in _serveBeneficiary method
           List<Beneficiary> filteredBeneficiaries = sortedBeneficiaries;
-          if (_servingOption == 'grace5') {
-            // Get the highest served queue number
-            int highestServedQueueNumber = 0;
-            for (var beneficiary in sortedBeneficiaries) {
-              if (beneficiary.queueNumber != null && 
-                  servedBeneficiaryIds.contains(beneficiary.id)) {
-                if (beneficiary.queueNumber! > highestServedQueueNumber) {
-                  highestServedQueueNumber = beneficiary.queueNumber!;
-                }
-              }
-            }
-            
-            // Filter to show only beneficiaries within the next 5 positions
-            final graceStart = highestServedQueueNumber + 1;
-            final graceEnd = highestServedQueueNumber + 5;
-            filteredBeneficiaries = sortedBeneficiaries.where((b) {
-              if (b.queueNumber == null) return false;
-              return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
-            }).toList();
-          } else if (_servingOption == 'grace10') {
-            // Get the highest served queue number
-            int highestServedQueueNumber = 0;
-            for (var beneficiary in sortedBeneficiaries) {
-              if (beneficiary.queueNumber != null && 
-                  servedBeneficiaryIds.contains(beneficiary.id)) {
-                if (beneficiary.queueNumber! > highestServedQueueNumber) {
-                  highestServedQueueNumber = beneficiary.queueNumber!;
-                }
-              }
-            }
-            
-            // Filter to show only beneficiaries within the next 10 positions
-            final graceStart = highestServedQueueNumber + 1;
-            final graceEnd = highestServedQueueNumber + 10;
-            filteredBeneficiaries = sortedBeneficiaries.where((b) {
-              if (b.queueNumber == null) return false;
-              return b.queueNumber! >= graceStart && b.queueNumber! <= graceEnd;
-            }).toList();
-          }
 
           final title = widget.queue.isMultiDay
               ? 'Serving: ${widget.queue.name} (${widget.queue.fromDate.day}/${widget.queue.fromDate.month}/${widget.queue.fromDate.year})'
@@ -24828,13 +24767,10 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
-
   @override
   void initState() {
     super.initState();
-    // Sync with current language
+    // Listen to language changes to rebuild the screen
     AppLanguage.languageNotifier.addListener(_onLanguageChanged);
   }
 
@@ -24848,6 +24784,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _showLanguageDialog() {
+    final currentLanguage = AppLanguage.currentLanguage;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLanguage.translate('Select Language')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(AppLanguage.translate('English')),
+              leading: Radio<String>(
+                value: 'English',
+                groupValue: currentLanguage,
+                onChanged: (value) {
+                  if (value != null) {
+                    AppLanguage.setLanguage(value);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              onTap: () {
+                AppLanguage.setLanguage('English');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text(AppLanguage.translate('Arabic')),
+              leading: Radio<String>(
+                value: 'Arabic',
+                groupValue: currentLanguage,
+                onChanged: (value) {
+                  if (value != null) {
+                    AppLanguage.setLanguage(value);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              onTap: () {
+                AppLanguage.setLanguage('Arabic');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -24873,43 +24858,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(
-              AppLanguage.translate('Preferences'),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D3748),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: SwitchListTile(
-                title: Text(AppLanguage.translate('Enable Notifications')),
-                subtitle: Text(AppLanguage.translate('Receive push notifications')),
-                value: _notificationsEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _notificationsEnabled = value;
-                  });
-                },
-                activeColor: tealGreen,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: SwitchListTile(
-                title: Text(AppLanguage.translate('Dark Mode')),
-                subtitle: Text(AppLanguage.translate('Switch to dark theme')),
-                value: _darkModeEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _darkModeEnabled = value;
-                  });
-                },
-                activeColor: tealGreen,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
               AppLanguage.translate('Language'),
               style: const TextStyle(
                 fontSize: 20,
@@ -24926,53 +24874,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   AppLanguage.isArabic ? Icons.arrow_back_ios : Icons.arrow_forward_ios,
                   size: 16,
                 ),
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(AppLanguage.translate('Select Language')),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            title: Text(AppLanguage.translate('English')),
-                            leading: Radio<String>(
-                              value: 'English',
-                              groupValue: currentLanguage,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  AppLanguage.setLanguage(value);
-                                  Navigator.pop(context);
-                                }
-                              },
-                            ),
-                            onTap: () {
-                              AppLanguage.setLanguage('English');
-                              Navigator.pop(context);
-                            },
-                          ),
-                          ListTile(
-                            title: Text(AppLanguage.translate('Arabic')),
-                            leading: Radio<String>(
-                              value: 'Arabic',
-                              groupValue: currentLanguage,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  AppLanguage.setLanguage(value);
-                                  Navigator.pop(context);
-                                }
-                              },
-                            ),
-                            onTap: () {
-                              AppLanguage.setLanguage('Arabic');
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                onTap: _showLanguageDialog,
               ),
             ),
             const SizedBox(height: 24),
@@ -24991,520 +24893,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: const Text('1.0.0'),
               ),
             ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                title: Text(AppLanguage.translate('Terms & Conditions')),
-                trailing: Icon(
-                  AppLanguage.isArabic ? Icons.arrow_back_ios : Icons.arrow_forward_ios,
-                  size: 16,
-                ),
-                onTap: () {},
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                title: Text(AppLanguage.translate('Privacy Policy')),
-                trailing: Icon(
-                  AppLanguage.isArabic ? Icons.arrow_back_ios : Icons.arrow_forward_ios,
-                  size: 16,
-                ),
-                onTap: () {},
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// Help & Support Screen
-class HelpSupportScreen extends StatefulWidget {
-  const HelpSupportScreen({super.key});
-
-  @override
-  State<HelpSupportScreen> createState() => _HelpSupportScreenState();
-}
-
-class _HelpSupportScreenState extends State<HelpSupportScreen> {
-  final Map<String, bool> _expandedSections = {};
-
-  @override
-  Widget build(BuildContext context) {
-    const tealGreen = Color(0xFF81CF01);
-    const darkBlue = Color(0xFF1A237E);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLanguage.translate('Help & Support')),
-        backgroundColor: tealGreen,
-        foregroundColor: Colors.white,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE8F5E9), Colors.white],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Welcome Section
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    colors: [tealGreen.withOpacity(0.1), Colors.white],
-                  ),
-                ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: tealGreen, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            AppLanguage.translate('Welcome to EQMS'),
-                            style: const TextStyle(
-                              fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                              color: darkBlue,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      AppLanguage.translate('This guide will help you understand and use all features of the Electronic Queue Management System.'),
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              ),
-                ),
-                const SizedBox(height: 24),
-            
-            // Table of Contents
-            _buildSectionHeader('Table of Contents', Icons.list),
-            const SizedBox(height: 12),
-            _buildTOCItem('1. Dashboard Overview', 'dashboard'),
-            _buildTOCItem('2. Creating Queues', 'create_queue'),
-            _buildTOCItem('3. Adding Beneficiaries', 'add_beneficiary'),
-            _buildTOCItem('4. Serving Units', 'serving'),
-            _buildTOCItem('5. Admin Management', 'admin_management'),
-            _buildTOCItem('6. Profile & Settings', 'profile'),
-            _buildTOCItem('7. Language Settings', 'language'),
-            _buildTOCItem('8. Guest Mode', 'guest_mode'),
-            
-            const SizedBox(height: 24),
-            
-            // Feature Guides
-            _buildFeatureSection(
-              'dashboard',
-              'Dashboard Overview',
-              Icons.dashboard,
-              [
-                AppLanguage.translate('The Dashboard is your main control center.'),
-                AppLanguage.translate('Step 1: View statistics cards showing Total Queues, Active Queues, Total Beneficiaries, and Served Beneficiaries.'),
-                AppLanguage.translate('Step 2: Use the Distribution Area dropdown to filter queues by location.'),
-                AppLanguage.translate('Step 3: Browse all your queues in the list below.'),
-                AppLanguage.translate('Step 4: Tap on any queue card to view details or manage it.'),
-                AppLanguage.translate('Step 5: Use the action buttons (Edit, Start, Suspend, Complete, Delete) to manage queues.'),
-                AppLanguage.translate('Navigation: Use the bottom navigation bar to switch between Dashboard, Add Queue, Add Beneficiary, Beneficiaries, and Distribution Areas.'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'create_queue',
-              'Creating Queues',
-              Icons.add_circle,
-              [
-                AppLanguage.translate('Queues help you organize and manage service distribution.'),
-                AppLanguage.translate('Step 1: Navigate to "Add Queue" from the bottom navigation bar.'),
-                AppLanguage.translate('Step 2: Enter a Queue Name (required).'),
-                AppLanguage.translate('Step 3: Select a Distribution Area from the dropdown (required).'),
-                AppLanguage.translate('Step 4: Choose Queue Type: Single Day or Multi Day.'),
-                AppLanguage.translate('Step 5: Set the date range using "From Date & Time" and "To Date & Time" buttons.'),
-                AppLanguage.translate('Step 6: Select Unit Name (Meals, Bags, Blankets, or Others). If "Others", enter a custom unit name.'),
-                AppLanguage.translate('Step 7: Enter Number of Available Units (required).'),
-                AppLanguage.translate('Step 8: Enter Estimated Queue Size (required).'),
-                AppLanguage.translate('Step 9: Optionally enable "Direct Serve Option" to allow serving without tickets.'),
-                AppLanguage.translate('Step 10: Select Priority groups if needed (Female, Elderly, Disability).'),
-                AppLanguage.translate('Step 11: Tap "Create Queue" to save.'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'add_beneficiary',
-              'Adding Beneficiaries',
-              Icons.person_add,
-              [
-                AppLanguage.translate('Beneficiaries are the people who will receive services from your queues.'),
-                AppLanguage.translate('Step 1: Navigate to "Add Beneficiary" from the bottom navigation bar.'),
-                AppLanguage.translate('Step 2: Select Distribution Area (required).'),
-                AppLanguage.translate('Step 3: Scan or upload ID Copy using the "Scan ID" button (required).'),
-                AppLanguage.translate('Step 4: Select Beneficiary Type: Normal, Child, Widowed, Divorced, Sick, Disability, or Elderly.'),
-                AppLanguage.translate('Step 5: Select Gender: Male or Female (required).'),
-                AppLanguage.translate('Step 6: Enter Name (required). You can extract name from ID if ID is scanned.'),
-                AppLanguage.translate('Step 7: Enter ID Number (required). The system will check for duplicates.'),
-                AppLanguage.translate('Step 8: Enter Mobile Number (required).'),
-                AppLanguage.translate('Step 9: If beneficiary is an Entity, toggle the switch and enter Entity Name.'),
-                AppLanguage.translate('Step 10: Enter Number of Units (required).'),
-                AppLanguage.translate('Step 11: Optionally enter NFC Preprinted Code if available.'),
-                AppLanguage.translate('Step 12: Optionally add a Photo by tapping "Take Photo" or "Select Photo".'),
-                AppLanguage.translate('Step 13: Tap "Register Beneficiary" to save.'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'serving',
-              'Serving Units',
-              Icons.restaurant,
-              [
-                AppLanguage.translate('The Serving screen allows you to serve units to beneficiaries in a queue.'),
-                AppLanguage.translate('Step 1: From Dashboard, tap on a queue card to open Queue Details.'),
-                AppLanguage.translate('Step 2: Tap the "Start" button to activate the queue for serving.'),
-                AppLanguage.translate('Step 3: Tap "Serve" or navigate to the Serving screen.'),
-                AppLanguage.translate('Step 4: Search for a beneficiary by:'),
-                AppLanguage.translate('  - Scanning NFC card'),
-                AppLanguage.translate('  - Entering Mobile Number'),
-                AppLanguage.translate('  - Entering National ID'),
-                AppLanguage.translate('Step 5: The system will automatically find and select the beneficiary.'),
-                AppLanguage.translate('Step 6: Tap the "Serve" button on the beneficiary card.'),
-                AppLanguage.translate('Step 7: In the popup, the maximum units are selected by default. Use the minus button to decrease if needed.'),
-                AppLanguage.translate('Step 8: Tap "Serve" to confirm and mark the beneficiary as served.'),
-                AppLanguage.translate('Step 9: View statistics: Served count, Attendees, Available units, and Estimated Queue Size.'),
-                AppLanguage.translate('Serving Options: Access via Settings icon to enable Grace periods, No Order mode, or Without Tickets mode.'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'admin_management',
-              'Admin Management',
-              Icons.admin_panel_settings,
-              [
-                AppLanguage.translate('Admin Management is available only for Super Admins.'),
-                AppLanguage.translate('Step 1: Access Admin Management from the Dashboard menu (gear icon) or AppBar.'),
-                AppLanguage.translate('Step 2: View three tabs: Create Admin, Admin Requests, and Admins List.'),
-                AppLanguage.translate('Creating Admin:'),
-                AppLanguage.translate('  - Fill in admin details (Country, Governorate, City, Distribution Point)'),
-                AppLanguage.translate('  - Enter Full Name, Mobile Number, Password'),
-                AppLanguage.translate('  - Select Role: Super Admin, Q Admin, or Admin'),
-                AppLanguage.translate('  - Tap "Create Admin"'),
-                AppLanguage.translate('Admin Requests:'),
-                AppLanguage.translate('  - View pending admin account requests from guests'),
-                AppLanguage.translate('  - Review request details'),
-                AppLanguage.translate('  - Approve or Reject requests'),
-                AppLanguage.translate('Admins List:'),
-                AppLanguage.translate('  - View all created admins'),
-                AppLanguage.translate('  - Edit or manage admin accounts'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'profile',
-              'Profile & Settings',
-              Icons.person,
-              [
-                AppLanguage.translate('Access your profile and app settings.'),
-                AppLanguage.translate('Step 1: Tap the Profile icon in the AppBar or open the drawer menu.'),
-                AppLanguage.translate('Step 2: View your profile information: Name, Role, and Mobile Number.'),
-                AppLanguage.translate('Change Password:'),
-                AppLanguage.translate('  - Tap "Change Password"'),
-                AppLanguage.translate('  - Enter Current Password'),
-                AppLanguage.translate('  - Enter New Password'),
-                AppLanguage.translate('  - Confirm New Password'),
-                AppLanguage.translate('  - Tap "Change Password" button'),
-                AppLanguage.translate('Language Settings:'),
-                AppLanguage.translate('  - Tap "Language"'),
-                AppLanguage.translate('  - Select English or Arabic'),
-                AppLanguage.translate('  - The app will switch language and layout immediately'),
-                AppLanguage.translate('Help & Support:'),
-                AppLanguage.translate('  - Tap "Help & Support" to view this guide'),
-                AppLanguage.translate('Logout:'),
-                AppLanguage.translate('  - Tap the red "Logout" button at the bottom'),
-                AppLanguage.translate('  - Confirm to log out and return to login screen'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'language',
-              'Language Settings',
-              Icons.language,
-              [
-                AppLanguage.translate('The app supports both English and Arabic languages.'),
-                AppLanguage.translate('Step 1: Go to Profile screen.'),
-                AppLanguage.translate('Step 2: Tap on "Language" option.'),
-                AppLanguage.translate('Step 3: Select your preferred language: English or Arabic.'),
-                AppLanguage.translate('Step 4: The app will immediately switch to the selected language.'),
-                AppLanguage.translate('Features:'),
-                AppLanguage.translate('  - All text, labels, and messages are translated'),
-                AppLanguage.translate('  - Layout automatically switches to RTL (Right-to-Left) for Arabic'),
-                AppLanguage.translate('  - Icons and arrows flip direction for Arabic'),
-                AppLanguage.translate('  - All functionality remains the same in both languages'),
-              ],
-            ),
-            
-            _buildFeatureSection(
-              'guest_mode',
-              'Guest Mode',
-              Icons.person_outline,
-              [
-                AppLanguage.translate('Guest Mode allows visitors to register as beneficiaries without logging in.'),
-                AppLanguage.translate('Step 1: From the Login screen, tap "Continue as Guest".'),
-                AppLanguage.translate('Step 2: You will see the Guest Dashboard.'),
-                AppLanguage.translate('Step 3: Options available:'),
-                AppLanguage.translate('  - Register as Beneficiary: Fill in your information to register'),
-                AppLanguage.translate('  - Request Admin Account: Submit a request to become an admin'),
-                AppLanguage.translate('Registering as Beneficiary:'),
-                AppLanguage.translate('  - Follow the same steps as "Adding Beneficiaries"'),
-                AppLanguage.translate('  - After registration, you can view your queue number'),
-                AppLanguage.translate('Requesting Admin Account:'),
-                AppLanguage.translate('  - Fill in your information'),
-                AppLanguage.translate('  - Select Distribution Area'),
-                AppLanguage.translate('  - Submit the request'),
-                AppLanguage.translate('  - Wait for Super Admin approval'),
-                AppLanguage.translate('Note: Guests have limited access and cannot manage queues or serve units.'),
-              ],
-            ),
-            
-                const SizedBox(height: 24),
-            
-            // Tips Section
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.blue.withOpacity(0.1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.lightbulb_outline, color: Colors.blue, size: 28),
-                        const SizedBox(width: 12),
-                        Text(
-                          AppLanguage.translate('Tips & Best Practices'),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: darkBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTipItem(AppLanguage.translate('Always scan beneficiary ID to ensure accurate data entry')),
-                    _buildTipItem(AppLanguage.translate('Use NFC cards for faster beneficiary lookup during serving')),
-                    _buildTipItem(AppLanguage.translate('Set appropriate queue sizes to avoid overbooking')),
-                    _buildTipItem(AppLanguage.translate('Regularly check queue status and update as needed')),
-                    _buildTipItem(AppLanguage.translate('Use priority settings to serve vulnerable groups first')),
-                    _buildTipItem(AppLanguage.translate('Keep beneficiary information up to date')),
-                    _buildTipItem(AppLanguage.translate('Use the search feature to quickly find beneficiaries')),
-                    _buildTipItem(AppLanguage.translate('Review statistics regularly to track service delivery')),
-                  ],
-                ),
-              ),
-            ),
-            
-                const SizedBox(height: 24),
-            
-            // Contact Support
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.orange.withOpacity(0.1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.support_agent, color: Colors.orange, size: 28),
-                        const SizedBox(width: 12),
-                        Text(
-                          AppLanguage.translate('Need More Help?'),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: darkBlue,
-                          ),
-                ),
-              ],
-            ),
-                    const SizedBox(height: 12),
-                    Text(
-                      AppLanguage.translate('If you need additional assistance or encounter any issues, please contact your system administrator or support team.'),
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    const tealGreen = Color(0xFF81CF01);
-    return Row(
-      children: [
-        Icon(icon, color: tealGreen, size: 24),
-        const SizedBox(width: 12),
-        Text(
-          AppLanguage.translate(title),
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTOCItem(String title, String sectionId) {
-    return InkWell(
-      onTap: () {
-        // Scroll to section
-        setState(() {
-          _expandedSections[sectionId] = true;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        child: Row(
-          children: [
-            Icon(
-              AppLanguage.isArabic ? Icons.arrow_back_ios : Icons.arrow_forward_ios,
-              size: 14,
-              color: Colors.grey,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                AppLanguage.translate(title),
-                style: const TextStyle(fontSize: 16, color: Color(0xFF1A237E)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureSection(String id, String title, IconData icon, List<String> steps) {
-    final isExpanded = _expandedSections[id] ?? false;
-    const tealGreen = Color(0xFF81CF01);
-    
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ExpansionTile(
-        key: ValueKey(id),
-        initiallyExpanded: isExpanded,
-        onExpansionChanged: (expanded) {
-          setState(() {
-            _expandedSections[id] = expanded;
-          });
-        },
-        leading: Icon(icon, color: tealGreen),
-        title: Text(
-          AppLanguage.translate(title),
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
-          ),
-        ),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: steps.asMap().entries.map((entry) {
-                final step = entry.value;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (step.startsWith('Step ') || step.startsWith('  -'))
-                        Container(
-                          width: 6,
-                          height: 6,
-                          margin: EdgeInsets.only(
-                            top: 8,
-                            right: AppLanguage.isArabic ? 0 : 12,
-                            left: AppLanguage.isArabic ? 12 : 0,
-                          ),
-                          decoration: const BoxDecoration(
-                            color: tealGreen,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                      else
-                        SizedBox(width: AppLanguage.isArabic ? 0 : 18),
-                      Expanded(
-                        child: Text(
-                          step,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[800],
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTipItem(String tip) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              tip,
-              style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.5),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -25814,7 +25204,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
     
     // Don't load beneficiaries here - load them on-demand when user clicks View
     return Container(
-      margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: index > 0 ? 12 : 0),
+      margin: EdgeInsets.only(bottom: 4, left: 16, right: 16, top: index > 0 ? 4 : 0),
       padding: const EdgeInsets.all(16),
       decoration: _queueRowDecoration,
       child: Column(
@@ -25837,16 +25227,16 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                     const SizedBox(height: 4),
                     Text(
                       dateTimeText,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: Colors.black,
                       ),
                     ),
                     Text(
                       unitsText,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: Colors.black,
                       ),
                     ),
                   ],
@@ -25910,7 +25300,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
     
     // Don't load beneficiaries here - load them on-demand when user clicks View
     return Container(
-          margin: EdgeInsets.only(bottom: 12, left: 16, right: 16, top: displayIndex > 0 ? 12 : 0),
+          margin: EdgeInsets.only(bottom: 4, left: 16, right: 16, top: displayIndex > 0 ? 4 : 0),
           decoration: _multiDayDecoration,
           child: ExpansionTile(
             key: ValueKey('multiDay_$queueKey'), // Stable key for better performance
@@ -25972,16 +25362,16 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                       const SizedBox(height: 4),
                       Text(
                         dateTimeText,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: Colors.black,
                         ),
                       ),
                       Text(
                         daysUnitsText,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: Colors.black,
                         ),
                       ),
                     ],
