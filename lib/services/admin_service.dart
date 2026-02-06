@@ -280,7 +280,13 @@ class AdminService {
 
   /// Update admin
   static Future<void> updateAdmin(String id, Admin admin) async {
-    await _collection.doc(id).update({
+    // Get role ID from roles collection if role name is provided
+    String? roleId;
+    if (admin.role != null && admin.role!.isNotEmpty) {
+      roleId = await _getRoleIdByName(admin.role!);
+    }
+
+    final updateData = <String, dynamic>{
       'country': admin.country,
       'governorate': admin.governorate,
       'city': admin.city,
@@ -292,7 +298,20 @@ class AdminService {
       'reference': admin.reference,
       'status': admin.status,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+
+    // Update role if provided
+    if (admin.role != null) {
+      updateData['role'] = admin.role;
+      if (roleId != null) {
+        updateData['roleId'] = roleId;
+      } else {
+        // Remove roleId if role is null or empty
+        updateData['roleId'] = null;
+      }
+    }
+
+    await _collection.doc(id).update(updateData);
   }
 
   /// Update admin password

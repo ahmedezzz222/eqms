@@ -32,6 +32,7 @@ import 'services/queue_service.dart';
 import 'services/unit_service.dart';
 import 'services/beneficiary_service.dart';
 import 'services/serving_transaction_service.dart';
+import 'services/app_settings_service.dart';
 import 'live_text_detection_screen.dart';
 import 'google_lens_result_helper.dart';
 
@@ -197,6 +198,7 @@ class AppLanguage {
       'Photo': 'Photo',
       'Photo (Optional)': 'Photo (Optional)',
       'Take Photo': 'Take Photo',
+      'Retake Photo': 'Retake Photo',
       'Select Photo': 'Select Photo',
       'Take ID Copy': 'Take ID Copy',
       'Retake ID Copy': 'Retake ID Copy',
@@ -258,6 +260,13 @@ class AppLanguage {
       'City Wise Report (Summary)': 'City Wise Report (Summary)',
       'Point Queue Report (Detailed)': 'Point Queue Report (Detailed)',
       'Point Queue Report (Summary)': 'Point Queue Report (Summary)',
+      'Export Reports': 'Export Reports',
+      'Served Beneficiaries': 'Served Beneficiaries',
+      'City Wise (Detailed)': 'City Wise (Detailed)',
+      'City Wise (Summary)': 'City Wise (Summary)',
+      'Point Queue (Detailed)': 'Point Queue (Detailed)',
+      'Point Queue (Summary)': 'Point Queue (Summary)',
+      'No data available for the selected queue point': 'No data available for the selected queue point',
       'This report is only available for Super Admin': 'This report is only available for Super Admin',
       'Available Units': 'Available Units',
       'Estimated Size': 'Estimated Size',
@@ -423,6 +432,81 @@ class AppLanguage {
       'This report is only available for Super Admin': 'This report is only available for Super Admin',
       'Select distribution area': 'Select distribution area',
       'EQMS App': 'EQMS App',
+      // User Management
+      'Manage Users': 'Manage Users',
+      'Search users...': 'Search users...',
+      'All': 'All',
+      'Super Admin': 'Super Admin',
+      'Admin': 'Admin',
+      'Q Admin': 'Q Admin',
+      'No users found': 'No users found',
+      'View Details': 'View Details',
+      'Permissions': 'Permissions',
+      'User ID': 'User ID',
+      'Role Name': 'Role Name',
+      'Not Assigned': 'Not Assigned',
+      'Personal Information': 'Personal Information',
+      'Location Information': 'Location Information',
+      'Additional Information': 'Additional Information',
+      'Account Information': 'Account Information',
+      'Created At': 'Created At',
+      'Requested by Guest': 'Requested by Guest',
+      'Permissions for': 'Permissions for',
+      'All Permissions': 'All Permissions',
+      'Manage Queues': 'Manage Queues',
+      'Manage Beneficiaries': 'Manage Beneficiaries',
+      'View Reports': 'View Reports',
+      'Manage Assigned Queues': 'Manage Assigned Queues',
+      'View Assigned Beneficiaries': 'View Assigned Beneficiaries',
+      'Manage Admins': 'Manage Admins',
+      'Manage Roles': 'Manage Roles',
+      'Delete User': 'Delete User',
+      'Are you sure you want to delete': 'Are you sure you want to delete',
+      'User deleted successfully': 'User deleted successfully',
+      'Error deleting user:': 'Error deleting user:',
+      'User updated successfully': 'User updated successfully',
+      'Error updating user:': 'Error updating user:',
+      'Permissions updated successfully': 'Permissions updated successfully',
+      'Error updating permissions:': 'Error updating permissions:',
+      'User has no role assigned. Please assign a role first.': 'User has no role assigned. Please assign a role first.',
+      'Edit User': 'Edit User',
+      'Close': 'Close',
+      'No Role': 'No Role',
+      'Banned': 'Banned',
+      'Distribution Point Description': 'Distribution Point Description',
+      'Error loading users:': 'Error loading users:',
+      'Are you sure you want to delete this user?': 'Are you sure you want to delete this user?',
+      'This action cannot be undone.': 'This action cannot be undone.',
+      'Welcome': 'Welcome',
+      'Role:': 'Role:',
+      'Permissions:': 'Permissions:',
+      'Display Settings': 'Display Settings',
+      'Show Beneficiary Images': 'Show Beneficiary Images',
+      'Display saved beneficiary photos in serving and edit screens': 'Display saved beneficiary photos in serving and edit screens',
+      'Beneficiary images enabled': 'Beneficiary images enabled',
+      'Beneficiary images disabled': 'Beneficiary images disabled',
+      'Error updating setting:': 'Error updating setting:',
+      'Country *': 'Country *',
+      'Governorate *': 'Governorate *',
+      'City *': 'City *',
+      'Distribution Point *': 'Distribution Point *',
+      'Distribution Point Name *': 'Distribution Point Name *',
+      'Full Name *': 'Full Name *',
+      'Mobile *': 'Mobile *',
+      'Password *': 'Password *',
+      'Role *': 'Role *',
+      'Notes *': 'Notes *',
+      'Status *': 'Status *',
+      'Please select or create a distribution point': 'Please select or create a distribution point',
+      'Please enter distribution point name': 'Please enter distribution point name',
+      'Please enter password': 'Please enter password',
+      'Please select role': 'Please select role',
+      'Select governorate': 'Select governorate',
+      'Super_Admin': 'Super Admin',
+      'Q_Admin': 'Q Admin',
+      'pending': 'Pending',
+      'active': 'Active',
+      'banned': 'Banned',
       'Welcome to EQMS': 'Welcome to EQMS',
       'This guide will help you understand and use all features of the Electronic Queue Management System.': 'This guide will help you understand and use all features of the Electronic Queue Management System.',
       'Table of Contents': 'Table of Contents',
@@ -694,6 +778,7 @@ class AppLanguage {
       'Photo': 'الصورة',
       'Photo (Optional)': 'الصورة (اختياري)',
       'Take Photo': 'التقاط صورة',
+      'Retake Photo': 'إعادة التقاط صورة',
       'Select Photo': 'اختر صورة',
       'Take ID Copy': 'التقاط نسخة الهوية',
       'Retake ID Copy': 'إعادة التقاط نسخة الهوية',
@@ -755,6 +840,13 @@ class AppLanguage {
       'City Wise Report (Summary)': 'تقرير حسب المدينة (ملخص)',
       'Point Queue Report (Detailed)': 'تقرير نقطة الطابور (مفصل)',
       'Point Queue Report (Summary)': 'تقرير نقطة الطابور (ملخص)',
+      'Export Reports': 'تصدير التقارير',
+      'Served Beneficiaries': 'المستفيدين المخدومين',
+      'City Wise (Detailed)': 'حسب المدينة (مفصل)',
+      'City Wise (Summary)': 'حسب المدينة (ملخص)',
+      'Point Queue (Detailed)': 'نقطة الطابور (مفصل)',
+      'Point Queue (Summary)': 'نقطة الطابور (ملخص)',
+      'No data available for the selected queue point': 'لا توجد بيانات متاحة لنقطة الطابور المحددة',
       'This report is only available for Super Admin': 'هذا التقرير متاح فقط للمدير العام',
       'Available Units': 'الوحدات المتاحة',
       'Estimated Size': 'الحجم المقدر',
@@ -930,6 +1022,81 @@ class AppLanguage {
       'Enter NFC reference': 'أدخل مرجع NFC',
       'Select distribution area': 'اختر منطقة التوزيع',
       'EQMS App': 'تطبيق EQMS',
+      // User Management
+      'Manage Users': 'إدارة المستخدمين',
+      'Search users...': 'البحث عن المستخدمين...',
+      'All': 'الكل',
+      'Super Admin': 'مدير عام',
+      'Admin': 'مسؤول',
+      'Q Admin': 'مسؤول الطابور',
+      'No users found': 'لم يتم العثور على مستخدمين',
+      'View Details': 'عرض التفاصيل',
+      'Permissions': 'الصلاحيات',
+      'User ID': 'معرف المستخدم',
+      'Role Name': 'اسم الدور',
+      'Not Assigned': 'غير معين',
+      'Personal Information': 'المعلومات الشخصية',
+      'Location Information': 'معلومات الموقع',
+      'Additional Information': 'معلومات إضافية',
+      'Account Information': 'معلومات الحساب',
+      'Created At': 'تاريخ الإنشاء',
+      'Requested by Guest': 'طلب من ضيف',
+      'Permissions for': 'الصلاحيات لـ',
+      'All Permissions': 'جميع الصلاحيات',
+      'Manage Queues': 'إدارة الطوابير',
+      'Manage Beneficiaries': 'إدارة المستفيدين',
+      'View Reports': 'عرض التقارير',
+      'Manage Assigned Queues': 'إدارة الطوابير المخصصة',
+      'View Assigned Beneficiaries': 'عرض المستفيدين المخصصين',
+      'Manage Admins': 'إدارة المسؤولين',
+      'Manage Roles': 'إدارة الأدوار',
+      'Delete User': 'حذف المستخدم',
+      'Are you sure you want to delete': 'هل أنت متأكد من حذف',
+      'User deleted successfully': 'تم حذف المستخدم بنجاح',
+      'Error deleting user:': 'خطأ في حذف المستخدم:',
+      'User updated successfully': 'تم تحديث المستخدم بنجاح',
+      'Error updating user:': 'خطأ في تحديث المستخدم:',
+      'Permissions updated successfully': 'تم تحديث الصلاحيات بنجاح',
+      'Error updating permissions:': 'خطأ في تحديث الصلاحيات:',
+      'User has no role assigned. Please assign a role first.': 'المستخدم ليس لديه دور معين. يرجى تعيين دور أولاً.',
+      'Edit User': 'تعديل المستخدم',
+      'Close': 'إغلاق',
+      'No Role': 'لا يوجد دور',
+      'Banned': 'محظور',
+      'Distribution Point Description': 'وصف نقطة التوزيع',
+      'Error loading users:': 'خطأ في تحميل المستخدمين:',
+      'Are you sure you want to delete this user?': 'هل أنت متأكد من حذف هذا المستخدم؟',
+      'This action cannot be undone.': 'لا يمكن التراجع عن هذا الإجراء.',
+      'Welcome': 'مرحباً',
+      'Role:': 'الدور:',
+      'Permissions:': 'الصلاحيات:',
+      'Display Settings': 'إعدادات العرض',
+      'Show Beneficiary Images': 'عرض صور المستفيدين',
+      'Display saved beneficiary photos in serving and edit screens': 'عرض صور المستفيدين المحفوظة في شاشات الخدمة والتعديل',
+      'Beneficiary images enabled': 'تم تفعيل صور المستفيدين',
+      'Beneficiary images disabled': 'تم تعطيل صور المستفيدين',
+      'Error updating setting:': 'خطأ في تحديث الإعداد:',
+      'Country *': 'الدولة *',
+      'Governorate *': 'المحافظة *',
+      'City *': 'المدينة *',
+      'Distribution Point *': 'نقطة التوزيع *',
+      'Distribution Point Name *': 'اسم نقطة التوزيع *',
+      'Full Name *': 'الاسم الكامل *',
+      'Mobile *': 'الجوال *',
+      'Password *': 'كلمة المرور *',
+      'Role *': 'الدور *',
+      'Notes *': 'الملاحظات *',
+      'Status *': 'الحالة *',
+      'Please select or create a distribution point': 'يرجى اختيار أو إنشاء نقطة توزيع',
+      'Please enter distribution point name': 'يرجى إدخال اسم نقطة التوزيع',
+      'Please enter password': 'يرجى إدخال كلمة المرور',
+      'Please select role': 'يرجى اختيار الدور',
+      'Select governorate': 'اختر المحافظة',
+      'Super_Admin': 'مدير عام',
+      'Q_Admin': 'مسؤول الطابور',
+      'pending': 'قيد الانتظار',
+      'active': 'نشط',
+      'banned': 'محظور',
     },
   };
   
@@ -7144,7 +7311,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                       child: ElevatedButton.icon(
                         onPressed: _takePhoto,
                         icon: const Icon(Icons.camera_alt),
-                        label: Text(_photoPath != null ? 'Retake Photo' : 'Take Photo'),
+                        label: Text(_photoPath != null ? AppLanguage.translate('Retake Photo') : AppLanguage.translate('Take Photo')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: tealGreen,
                           foregroundColor: Colors.white,
@@ -8564,8 +8731,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         ],
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Icon(Icons.visibility, color: tealGreen),
                   ],
                 ),
               ],
@@ -8573,10 +8738,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           ),
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!queue.isCompleted) ...[
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       onPressed: () {
@@ -8658,7 +8825,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       icon: const Icon(Icons.play_arrow, color: Colors.green),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.green.withOpacity(0.1),
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(8),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -8668,8 +8835,46 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     ),
                   ],
                 ),
+                const SizedBox(width: 8),
               ],
               Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => QueueViewScreen(
+                            queue: queue,
+                            beneficiaries: beneficiariesForQueue,
+                            onQueueUpdated: (updatedQueue) {
+                              QueueService.getQueueIdByName(queue.name).then((queueId) {
+                                if (queueId != null) {
+                                  QueueService.updateQueue(queueId, updatedQueue);
+                                }
+                              });
+                            },
+                            onBeneficiaryUpdated: (beneficiary) {},
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.visibility, color: tealGreen),
+                    style: IconButton.styleFrom(
+                      backgroundColor: tealGreen.withOpacity(0.1),
+                      padding: const EdgeInsets.all(8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppLanguage.translate('View'),
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     onPressed: () {
@@ -8703,7 +8908,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     icon: const Icon(Icons.edit, color: tealGreen),
                     style: IconButton.styleFrom(
                       backgroundColor: tealGreen.withOpacity(0.1),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(8),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -8713,7 +8918,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   ),
                 ],
               ),
+              const SizedBox(width: 8),
               Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     onPressed: () {
@@ -8769,7 +8976,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     icon: const Icon(Icons.delete, color: Colors.red),
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.red.withOpacity(0.1),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(8),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -9378,7 +9585,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   const SizedBox(height: 8),
                   // Welcome message
                   Text(
-                    'Welcome',
+                    AppLanguage.translate('Welcome'),
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 12,
@@ -9414,9 +9621,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
             ListTile(
               leading: const Icon(Icons.person, color: Colors.white),
-              title: const Text(
-                'Profile',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              title: Text(
+                AppLanguage.translate('Profile'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -11757,7 +11964,7 @@ class AdminManagementScreen extends StatefulWidget {
 }
 
 class _AdminManagementScreenState extends State<AdminManagementScreen> {
-  int _selectedTab = 0; // 0: Create Admin, 1: Requests
+  int _selectedTab = 0; // 0: Create Admin, 1: Requests, 2: Manage Users
 
   @override
   Widget build(BuildContext context) {
@@ -11862,20 +12069,32 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                     badgeCount: widget.adminRequests.isNotEmpty ? widget.adminRequests.length : null,
                   ),
                 ),
-              ],
+                Expanded(
+                  child: _buildTabButton(
+                    index: 2,
+                    icon: Icons.people,
+                    label: AppLanguage.translate('Manage Users'),
+                    isSelected: _selectedTab == 2,
+                  ),
                 ),
-              ),
-              Expanded(
+              ],
+            ),
+          ),
+          Expanded(
             child: _selectedTab == 0
                 ? CreateAdminScreen(
                     distributionAreas: widget.distributionAreas,
                     onAdminCreated: widget.onAdminCreated,
                   )
-                : AdminRequestsScreen(
-                    distributionAreas: widget.distributionAreas,
-                    onRequestApproved: widget.onAdminRequestApproved,
-                    onRequestRejected: widget.onAdminRequestRejected,
-                  ),
+                : _selectedTab == 1
+                    ? AdminRequestsScreen(
+                        distributionAreas: widget.distributionAreas,
+                        onRequestApproved: widget.onAdminRequestApproved,
+                        onRequestRejected: widget.onAdminRequestRejected,
+                      )
+                    : UserManagementScreen(
+                        distributionAreas: widget.distributionAreas,
+                      ),
           ),
         ],
       ),
@@ -12083,31 +12302,31 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
     
     if (_selectedGovernorate == null || _selectedCity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select governorate and city')),
+        SnackBar(content: Text(AppLanguage.translate('Please select governorate and city'))),
       );
       return;
     }
     if (_selectedDistributionPoint == null && !_useNewDistributionPoint) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select or create a distribution point')),
+        SnackBar(content: Text(AppLanguage.translate('Please select or create a distribution point'))),
       );
       return;
     }
     if (_useNewDistributionPoint && _newDistributionPointController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter distribution point name')),
+        SnackBar(content: Text(AppLanguage.translate('Please enter distribution point name'))),
       );
       return;
     }
     if (_passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter password')),
+        SnackBar(content: Text(AppLanguage.translate('Please enter password'))),
       );
       return;
     }
     if (_selectedRole == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select role')),
+        SnackBar(content: Text(AppLanguage.translate('Please select role'))),
       );
       return;
     }
@@ -12185,8 +12404,8 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
         Navigator.pop(context); // Close loading dialog
         widget.onAdminCreated(createdAdmin);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Admin created successfully'),
+          SnackBar(
+            content: Text(AppLanguage.translate('Admin created successfully')),
             backgroundColor: Colors.green,
           ),
         );
@@ -12337,7 +12556,7 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
                 TextFormField(
                   controller: _newDistributionPointController,
                   decoration: _buildInputDecoration('Distribution Point Name *'),
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Required') : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -12352,7 +12571,7 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
               TextFormField(
                 controller: _fullNameController,
                 decoration: _buildInputDecoration('Enter full name'),
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Required') : null,
               ),
               const SizedBox(height: 24),
               _buildLabel('Mobile *'),
@@ -12363,11 +12582,11 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
                 decoration: _buildInputDecoration('Enter mobile number'),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Required';
+                    return AppLanguage.translate('Required');
                   }
                   final regex = RegExp(r'^01[0-2,5]{1}[0-9]{8}$');
                   if (!regex.hasMatch(value)) {
-                    return 'Invalid Egyptian mobile number';
+                    return AppLanguage.translate('Invalid Egyptian mobile number');
                   }
                   return null;
                 },
@@ -12379,7 +12598,7 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
                 controller: _passwordController,
                 obscureText: true,
                 decoration: _buildInputDecoration('Enter password'),
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Required') : null,
               ),
               const SizedBox(height: 24),
               _buildLabel('Role *'),
@@ -12396,7 +12615,7 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
                 controller: _notesController,
                 maxLines: 3,
                 decoration: _buildInputDecoration('Enter notes'),
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Required') : null,
               ),
               const SizedBox(height: 24),
               _buildLabel('Reference (Optional)'),
@@ -12483,7 +12702,7 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
         child: DropdownButton<String>(
           value: value.isEmpty ? null : value,
           isExpanded: true,
-          hint: Text(enabled ? 'Select' : 'Select previous field first'),
+          hint: Text(enabled ? AppLanguage.translate('Select') : AppLanguage.translate('Select previous field first')),
           items: items.map((item) => DropdownMenuItem(value: item, child: Text(AppLanguage.translate(item)))).toList(),
           onChanged: enabled ? onChanged : null,
         ),
@@ -13066,6 +13285,1407 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
         ),
       ],
     );
+  }
+}
+
+// User Management Screen
+class UserManagementScreen extends StatefulWidget {
+  final List<DistributionArea> distributionAreas;
+
+  const UserManagementScreen({
+    super.key,
+    required this.distributionAreas,
+  });
+
+  @override
+  State<UserManagementScreen> createState() => _UserManagementScreenState();
+}
+
+class _UserManagementScreenState extends State<UserManagementScreen> {
+  String? _selectedRoleFilter; // null = All, 'Super_Admin', 'Admin', 'Q_Admin'
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const tealGreen = Color(0xFF81CF01);
+    
+    return Container(
+      color: Colors.grey[50],
+      child: Column(
+        children: [
+          // Search and Filter Bar
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Search Field
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: AppLanguage.translate('Search users...'),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Role Filter Tabs
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildRoleFilterTab(
+                        role: null,
+                        label: AppLanguage.translate('All'),
+                        icon: Icons.people,
+                        isSelected: _selectedRoleFilter == null,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildRoleFilterTab(
+                        role: 'Super_Admin',
+                        label: AppLanguage.translate('Super Admin'),
+                        icon: Icons.admin_panel_settings,
+                        isSelected: _selectedRoleFilter == 'Super_Admin',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildRoleFilterTab(
+                        role: 'Admin',
+                        label: AppLanguage.translate('Admin'),
+                        icon: Icons.person,
+                        isSelected: _selectedRoleFilter == 'Admin',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildRoleFilterTab(
+                        role: 'Q_Admin',
+                        label: AppLanguage.translate('Q Admin'),
+                        icon: Icons.queue,
+                        isSelected: _selectedRoleFilter == 'Q_Admin',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Users List
+          Expanded(
+            child: StreamBuilder<List<Admin>>(
+              stream: AdminService.getAllAdmins(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('${AppLanguage.translate('Error loading users:')} ${snapshot.error}'),
+                  );
+                }
+                
+                final allUsers = snapshot.data ?? <Admin>[];
+                
+                // Filter users by role
+                var filteredUsers = allUsers.where((user) {
+                  if (_selectedRoleFilter != null && user.role != _selectedRoleFilter) {
+                    return false;
+                  }
+                  // Filter by search query
+                  if (_searchQuery.isNotEmpty) {
+                    final query = _searchQuery.toLowerCase();
+                    return user.fullName.toLowerCase().contains(query) ||
+                           user.mobile.contains(query) ||
+                           (user.distributionPoint.toLowerCase().contains(query));
+                  }
+                  return true;
+                }).toList();
+                
+                if (filteredUsers.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          AppLanguage.translate('No users found'),
+                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final user = filteredUsers[index];
+                    return _buildUserCard(user);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleFilterTab({
+    required String? role,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+  }) {
+    const tealGreen = Color(0xFF81CF01);
+    
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedRoleFilter = role;
+        });
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? tealGreen.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? tealGreen : Colors.grey[600],
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? tealGreen : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserCard(Admin user) {
+    const tealGreen = Color(0xFF81CF01);
+    
+    Color roleColor;
+    IconData roleIcon;
+    String roleLabel;
+    
+    if (user.isSuperAdmin) {
+      roleColor = Colors.purple;
+      roleIcon = Icons.admin_panel_settings;
+      roleLabel = AppLanguage.translate('Super Admin');
+    } else if (user.isAdmin) {
+      roleColor = Colors.blue;
+      roleIcon = Icons.person;
+      roleLabel = AppLanguage.translate('Admin');
+    } else if (user.isQAdmin) {
+      roleColor = Colors.orange;
+      roleIcon = Icons.queue;
+      roleLabel = AppLanguage.translate('Q Admin');
+    } else {
+      roleColor = Colors.grey;
+      roleIcon = Icons.person_outline;
+      roleLabel = AppLanguage.translate('No Role');
+    }
+    
+    return InkWell(
+      onTap: () => _viewUserDetails(user),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: roleColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(roleIcon, color: roleColor, size: 24),
+          ),
+          title: Text(
+            user.fullName,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.phone, size: 14, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    user.mobile,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(roleIcon, size: 14, color: roleColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    roleLabel,
+                    style: TextStyle(fontSize: 12, color: roleColor, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              if (user.distributionPoint.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        user.distributionPoint,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: user.status == 'active' 
+                      ? Colors.green.withOpacity(0.1) 
+                      : user.status == 'banned'
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  user.status.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: user.status == 'active' 
+                        ? Colors.green 
+                        : user.status == 'banned'
+                            ? Colors.red
+                            : Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          trailing: PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'view') {
+                _viewUserDetails(user);
+              } else if (value == 'edit') {
+                _editUser(user);
+              } else if (value == 'permissions') {
+                _managePermissions(user);
+              } else if (value == 'delete') {
+                _deleteUser(user);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'view',
+                child: Row(
+                  children: [
+                    const Icon(Icons.visibility, size: 20),
+                    const SizedBox(width: 8),
+                    Text(AppLanguage.translate('View Details')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit, size: 20),
+                    const SizedBox(width: 8),
+                    Text(AppLanguage.translate('Edit')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'permissions',
+                child: Row(
+                  children: [
+                    const Icon(Icons.security, size: 20),
+                    const SizedBox(width: 8),
+                    Text(AppLanguage.translate('Permissions')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    const Icon(Icons.delete, size: 20, color: Colors.red),
+                    const SizedBox(width: 8),
+                    Text(
+                      AppLanguage.translate('Delete'),
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewUserDetails(Admin user) {
+    showDialog(
+      context: context,
+      builder: (context) => _UserDetailsDialog(
+        user: user,
+        distributionAreas: widget.distributionAreas,
+      ),
+    );
+  }
+
+  void _editUser(Admin user) {
+    showDialog(
+      context: context,
+      builder: (context) => _EditUserDialog(
+        user: user,
+        distributionAreas: widget.distributionAreas,
+      ),
+    );
+  }
+
+  void _managePermissions(Admin user) {
+    if (user.role == null || user.role!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLanguage.translate('User has no role assigned. Please assign a role first.')),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => _PermissionsDialog(user: user),
+    );
+  }
+
+  Future<void> _deleteUser(Admin user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLanguage.translate('Delete User')),
+        content: Text(AppLanguage.translate('Are you sure you want to delete ${user.fullName}? This action cannot be undone.')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLanguage.translate('Cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(AppLanguage.translate('Delete')),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      try {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+        
+        await AdminService.deleteAdmin(user.id);
+        
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLanguage.translate('User deleted successfully')),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppLanguage.translate('Error deleting user:')} $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
+// User Details Dialog
+class _UserDetailsDialog extends StatelessWidget {
+  final Admin user;
+  final List<DistributionArea> distributionAreas;
+
+  const _UserDetailsDialog({
+    required this.user,
+    this.distributionAreas = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const tealGreen = Color(0xFF81CF01);
+    
+    Color roleColor;
+    IconData roleIcon;
+    String roleLabel;
+    
+    if (user.isSuperAdmin) {
+      roleColor = Colors.purple;
+      roleIcon = Icons.admin_panel_settings;
+      roleLabel = AppLanguage.translate('Super Admin');
+    } else if (user.isAdmin) {
+      roleColor = Colors.blue;
+      roleIcon = Icons.person;
+      roleLabel = AppLanguage.translate('Admin');
+    } else if (user.isQAdmin) {
+      roleColor = Colors.orange;
+      roleIcon = Icons.queue;
+      roleLabel = AppLanguage.translate('Q Admin');
+    } else {
+      roleColor = Colors.grey;
+      roleIcon = Icons.person_outline;
+      roleLabel = AppLanguage.translate('No Role');
+    }
+
+    Color statusColor;
+    if (user.status == 'active') {
+      statusColor = Colors.green;
+    } else if (user.status == 'banned') {
+      statusColor = Colors.red;
+    } else {
+      statusColor = Colors.orange;
+    }
+
+    String formatDate(DateTime date) {
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: tealGreen,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(roleIcon, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.fullName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          roleLabel,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status Badge
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: statusColor, width: 2),
+                        ),
+                        child: Text(
+                          user.status.toUpperCase(),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Personal Information Section
+                    _buildSectionTitle(AppLanguage.translate('Personal Information')),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      icon: Icons.person,
+                      label: AppLanguage.translate('Full Name'),
+                      value: user.fullName,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.phone,
+                      label: AppLanguage.translate('Mobile'),
+                      value: user.mobile,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.badge,
+                      label: AppLanguage.translate('User ID'),
+                      value: user.id,
+                      isMonospace: true,
+                    ),
+                    const SizedBox(height: 20),
+                    // Role Information Section
+                    _buildSectionTitle(AppLanguage.translate('Role Information')),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      icon: roleIcon,
+                      label: AppLanguage.translate('Role'),
+                      value: roleLabel,
+                      valueColor: roleColor,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.info_outline,
+                      label: AppLanguage.translate('Role Name'),
+                      value: user.role ?? AppLanguage.translate('Not Assigned'),
+                    ),
+                    const SizedBox(height: 20),
+                    // Location Information Section
+                    _buildSectionTitle(AppLanguage.translate('Location Information')),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      icon: Icons.flag,
+                      label: AppLanguage.translate('Country'),
+                      value: user.country,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.map,
+                      label: AppLanguage.translate('Governorate'),
+                      value: user.governorate,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.location_city,
+                      label: AppLanguage.translate('City'),
+                      value: user.city,
+                    ),
+                    _buildDetailRow(
+                      icon: Icons.location_on,
+                      label: AppLanguage.translate('Distribution Point'),
+                      value: user.distributionPoint,
+                    ),
+                    if (user.distributionPointDescription != null && user.distributionPointDescription!.isNotEmpty)
+                      _buildDetailRow(
+                        icon: Icons.description,
+                        label: AppLanguage.translate('Distribution Point Description'),
+                        value: user.distributionPointDescription!,
+                      ),
+                    const SizedBox(height: 20),
+                    // Additional Information Section
+                    _buildSectionTitle(AppLanguage.translate('Additional Information')),
+                    const SizedBox(height: 12),
+                    if (user.notes.isNotEmpty)
+                      _buildDetailRow(
+                        icon: Icons.note,
+                        label: AppLanguage.translate('Notes'),
+                        value: user.notes,
+                        isMultiline: true,
+                      ),
+                    if (user.reference != null && user.reference!.isNotEmpty)
+                      _buildDetailRow(
+                        icon: Icons.link,
+                        label: AppLanguage.translate('Reference'),
+                        value: user.reference!,
+                      ),
+                    _buildDetailRow(
+                      icon: Icons.person_add,
+                      label: AppLanguage.translate('Requested by Guest'),
+                      value: user.isRequestedByGuest 
+                          ? AppLanguage.translate('Yes')
+                          : AppLanguage.translate('No'),
+                    ),
+                    const SizedBox(height: 20),
+                    // Account Information Section
+                    _buildSectionTitle(AppLanguage.translate('Account Information')),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      icon: Icons.calendar_today,
+                      label: AppLanguage.translate('Created At'),
+                      value: formatDate(user.createdAt),
+                    ),
+                    const SizedBox(height: 24),
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                            label: Text(AppLanguage.translate('Close')),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              // Navigate to edit dialog
+                              showDialog(
+                                context: context,
+                                builder: (context) => _EditUserDialog(
+                                  user: user,
+                                  distributionAreas: distributionAreas,
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: tealGreen,
+                              foregroundColor: Colors.white,
+                            ),
+                            icon: const Icon(Icons.edit),
+                            label: Text(AppLanguage.translate('Edit')),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF81CF01),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+    bool isMonospace = false,
+    bool isMultiline = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: isMultiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20, color: Colors.grey[700]),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: valueColor ?? Colors.grey[900],
+                    fontWeight: FontWeight.w500,
+                    fontFamily: isMonospace ? 'monospace' : null,
+                  ),
+                  maxLines: isMultiline ? null : 2,
+                  overflow: isMultiline ? null : TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Edit User Dialog
+class _EditUserDialog extends StatefulWidget {
+  final Admin user;
+  final List<DistributionArea> distributionAreas;
+
+  const _EditUserDialog({
+    required this.user,
+    required this.distributionAreas,
+  });
+
+  @override
+  State<_EditUserDialog> createState() => _EditUserDialogState();
+}
+
+class _EditUserDialogState extends State<_EditUserDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _fullNameController;
+  late TextEditingController _mobileController;
+  late TextEditingController _notesController;
+  late TextEditingController _referenceController;
+  
+  String? _selectedRole;
+  String _status = 'active';
+  String? _selectedCountry;
+  String? _selectedGovernorate;
+  String? _selectedCity;
+  String? _selectedDistributionPoint;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullNameController = TextEditingController(text: widget.user.fullName);
+    _mobileController = TextEditingController(text: widget.user.mobile);
+    _notesController = TextEditingController(text: widget.user.notes);
+    _referenceController = TextEditingController(text: widget.user.reference ?? '');
+    _selectedRole = widget.user.role;
+    _status = widget.user.status;
+    _selectedCountry = widget.user.country;
+    _selectedGovernorate = widget.user.governorate;
+    _selectedCity = widget.user.city;
+    _selectedDistributionPoint = widget.user.distributionPoint;
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _mobileController.dispose();
+    _notesController.dispose();
+    _referenceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF81CF01),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      AppLanguage.translate('Edit User'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Form
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        controller: _fullNameController,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Full Name'),
+                          prefixIcon: const Icon(Icons.person),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return AppLanguage.translate('Please enter full name');
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _mobileController,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Mobile'),
+                          prefixIcon: const Icon(Icons.phone),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return AppLanguage.translate('Please enter mobile number');
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _selectedRole,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Role'),
+                          prefixIcon: const Icon(Icons.admin_panel_settings),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(AppLanguage.translate('No Role')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Super_Admin',
+                            child: Text(AppLanguage.translate('Super Admin')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Admin',
+                            child: Text(AppLanguage.translate('Admin')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Q_Admin',
+                            child: Text(AppLanguage.translate('Q Admin')),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedRole = value;
+                            if (_selectedRole == 'Super_Admin') {
+                              _selectedDistributionPoint = 'All';
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _status,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Status'),
+                          prefixIcon: const Icon(Icons.info),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'active',
+                            child: Text(AppLanguage.translate('Active')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'pending',
+                            child: Text(AppLanguage.translate('Pending')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'banned',
+                            child: Text(AppLanguage.translate('Banned')),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _status = value!;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _notesController,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Notes'),
+                          prefixIcon: const Icon(Icons.note),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _referenceController,
+                        decoration: InputDecoration(
+                          labelText: AppLanguage.translate('Reference'),
+                          prefixIcon: const Icon(Icons.link),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: Text(AppLanguage.translate('Cancel')),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _saveUser,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF81CF01),
+                                foregroundColor: Colors.white,
+                              ),
+                              child: Text(AppLanguage.translate('Save')),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveUser() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final updatedUser = widget.user.copyWith(
+        fullName: _fullNameController.text,
+        mobile: _mobileController.text,
+        role: _selectedRole,
+        status: _status,
+        notes: _notesController.text,
+        reference: _referenceController.text.isNotEmpty ? _referenceController.text : null,
+        distributionPoint: _selectedRole == 'Super_Admin' ? 'All' : _selectedDistributionPoint ?? widget.user.distributionPoint,
+      );
+
+      await AdminService.updateAdmin(widget.user.id, updatedUser);
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        Navigator.pop(context); // Close dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('User updated successfully')),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLanguage.translate('Error updating user:')} $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+}
+
+// Permissions Dialog
+class _PermissionsDialog extends StatefulWidget {
+  final Admin user;
+
+  const _PermissionsDialog({required this.user});
+
+  @override
+  State<_PermissionsDialog> createState() => _PermissionsDialogState();
+}
+
+class _PermissionsDialogState extends State<_PermissionsDialog> {
+  Role? _role;
+  List<String> _availablePermissions = [];
+  Map<String, bool> _selectedPermissions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    if (widget.user.role == null || widget.user.role!.isEmpty) {
+      return;
+    }
+
+    try {
+      final role = await RoleService.getRoleByName(widget.user.role!);
+      if (role != null) {
+        setState(() {
+          _role = role;
+          _availablePermissions = _getAllPermissions();
+          for (var perm in role.permissions) {
+            _selectedPermissions[perm] = true;
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading role: $e');
+    }
+  }
+
+  List<String> _getAllPermissions() {
+    return [
+      'all',
+      'manage_queues',
+      'manage_beneficiaries',
+      'view_reports',
+      'manage_assigned_queues',
+      'view_assigned_beneficiaries',
+      'manage_admins',
+      'manage_roles',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF81CF01),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.security, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${AppLanguage.translate('Permissions for')} ${widget.user.fullName}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Permissions List
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: _role == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${AppLanguage.translate('Role:')} ${_role!.name}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _role!.description,
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          Text(
+                            AppLanguage.translate('Permissions:'),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ..._availablePermissions.map((perm) => CheckboxListTile(
+                                title: Text(_getPermissionLabel(perm)),
+                                value: _selectedPermissions[perm] ?? false,
+                                onChanged: (value) {
+                                  setState(() {
+                                    if (perm == 'all') {
+                                      // If 'all' is selected, select all permissions
+                                      if (value == true) {
+                                        for (var p in _availablePermissions) {
+                                          _selectedPermissions[p] = true;
+                                        }
+                                      } else {
+                                        _selectedPermissions['all'] = false;
+                                      }
+                                    } else {
+                                      _selectedPermissions[perm] = value ?? false;
+                                      // If any permission is unchecked, uncheck 'all'
+                                      if (value == false) {
+                                        _selectedPermissions['all'] = false;
+                                      }
+                                    }
+                                  });
+                                },
+                              )),
+                          const SizedBox(height: 24),
+                          // Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text(AppLanguage.translate('Cancel')),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _savePermissions,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF81CF01),
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: Text(AppLanguage.translate('Save')),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getPermissionLabel(String permission) {
+    final labels = {
+      'all': AppLanguage.translate('All Permissions'),
+      'manage_queues': AppLanguage.translate('Manage Queues'),
+      'manage_beneficiaries': AppLanguage.translate('Manage Beneficiaries'),
+      'view_reports': AppLanguage.translate('View Reports'),
+      'manage_assigned_queues': AppLanguage.translate('Manage Assigned Queues'),
+      'view_assigned_beneficiaries': AppLanguage.translate('View Assigned Beneficiaries'),
+      'manage_admins': AppLanguage.translate('Manage Admins'),
+      'manage_roles': AppLanguage.translate('Manage Roles'),
+    };
+    return labels[permission] ?? permission;
+  }
+
+  Future<void> _savePermissions() async {
+    if (_role == null) return;
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final selectedPerms = _selectedPermissions.entries
+          .where((e) => e.value == true)
+          .map((e) => e.key)
+          .toList();
+
+      final updatedRole = Role(
+        id: _role!.id,
+        name: _role!.name,
+        description: _role!.description,
+        permissions: selectedPerms,
+        createdAt: _role!.createdAt,
+      );
+
+      await RoleService.updateRole(_role!.id, updatedRole);
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        Navigator.pop(context); // Close dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('Permissions updated successfully')),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLanguage.translate('Error updating permissions:')} $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -15511,7 +17131,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                       child: ElevatedButton.icon(
                         onPressed: _takePhoto,
                         icon: const Icon(Icons.camera_alt),
-                        label: Text(_photoPath != null ? 'Retake Photo' : 'Take Photo'),
+                        label: Text(_photoPath != null ? AppLanguage.translate('Retake Photo') : AppLanguage.translate('Take Photo')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: tealGreen,
                           foregroundColor: Colors.white,
@@ -15841,13 +17461,13 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
           areaId: _selectedDistributionArea!,
           limit: _loadMoreLimit,
           startAfter: _lastDocument,
-          activeOnly: true, // Only load Active beneficiaries
+          activeOnly: false, // Load all beneficiaries including banned
         );
       } else {
         moreBeneficiaries = await BeneficiaryService.getBeneficiariesPaginated(
           limit: _loadMoreLimit,
           startAfter: _lastDocument,
-          activeOnly: true, // Only load Active beneficiaries
+          activeOnly: false, // Load all beneficiaries including banned
         );
       }
       
@@ -16397,11 +18017,11 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                   ? BeneficiaryService.getBeneficiariesByArea(
                       _selectedDistributionArea!, 
                       limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
-                      activeOnly: true,
+                      activeOnly: false, // Show all beneficiaries including banned
                     )
                   : BeneficiaryService.getAllBeneficiaries(
                       limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
-                      activeOnly: true,
+                      activeOnly: false, // Show all beneficiaries including banned
                     ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
@@ -18089,115 +19709,124 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                 const SizedBox(height: 24),
                 _buildLabel('Photo (Optional)'),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (_photoPath != null)
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                          color: Colors.grey[200],
-                        ),
-                        child: Stack(
-                          children: [
-                            ClipRRect(
+                StreamBuilder<bool>(
+                  stream: AppSettingsService.getSettingStream(
+                    AppSettingsService.showBeneficiaryImages,
+                    defaultValue: true,
+                  ),
+                  builder: (context, snapshot) {
+                    final showImages = snapshot.data ?? true;
+                    return Row(
+                      children: [
+                        if (showImages && _photoPath != null)
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
-                              child: _photoPath!.startsWith('http://') || _photoPath!.startsWith('https://')
-                                ? Image.network(
-                                    _photoPath!,
-                                    width: 80,
-                                    height: 80,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 160, // 2x for retina, reduces memory usage
-                                    cacheHeight: 160,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Icon(
-                                        Icons.person,
-                                        size: 40,
-                                        color: Colors.grey[600],
-                                      );
-                                    },
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                              : null,
+                              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                              color: Colors.grey[200],
+                            ),
+                            child: Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: _photoPath!.startsWith('http://') || _photoPath!.startsWith('https://')
+                                    ? Image.network(
+                                        _photoPath!,
+                                        width: 80,
+                                        height: 80,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 160, // 2x for retina, reduces memory usage
+                                        cacheHeight: 160,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.person,
+                                            size: 40,
+                                            color: Colors.grey[600],
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return Center(
+                                            child: CircularProgressIndicator(
+                                              value: loadingProgress.expectedTotalBytes != null
+                                                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                  : null,
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : _photoPath!.startsWith('assets/')
+                                      ? Image.asset(
+                                          _photoPath!,
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Icon(
+                                              Icons.person,
+                                              size: 40,
+                                              color: Colors.grey[600],
+                                            );
+                                          },
+                                        )
+                                      : Image.file(
+                                          File(_photoPath!),
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Icon(
+                                              Icons.person,
+                                              size: 40,
+                                              color: Colors.grey[600],
+                                            );
+                                          },
                                         ),
-                                      );
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, size: 20, color: Colors.red),
+                                    onPressed: () {
+                                      setState(() {
+                                        _photoPath = null;
+                                      });
                                     },
-                                  )
-                                : _photoPath!.startsWith('assets/')
-                                  ? Image.asset(
-                                      _photoPath!,
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(
-                                          Icons.person,
-                                          size: 40,
-                                          color: Colors.grey[600],
-                                        );
-                                      },
-                                    )
-                                  : Image.file(
-                                      File(_photoPath!),
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(
-                                          Icons.person,
-                                          size: 40,
-                                          color: Colors.grey[600],
-                                        );
-                                      },
-                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: IconButton(
-                                icon: const Icon(Icons.close, size: 20, color: Colors.red),
-                                onPressed: () {
-                                  setState(() {
-                                    _photoPath = null;
-                                  });
-                                },
-                              ),
+                          )
+                        else
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.withOpacity(0.3)),
                             ),
-                          ],
+                            child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                          ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _takePhoto,
+                            icon: const Icon(Icons.camera_alt),
+                            label: Text(_photoPath != null ? AppLanguage.translate('Retake Photo') : AppLanguage.translate('Take Photo')),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: tealGreen,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
                         ),
-                      )
-                    else
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                        ),
-                        child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                      ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _takePhoto,
-                        icon: const Icon(Icons.camera_alt),
-                        label: Text(_photoPath != null ? 'Retake Photo' : 'Take Photo'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: tealGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -20837,24 +22466,40 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                               child: ListTile(
                                 leading: Stack(
                                   children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        _showBeneficiaryImage(beneficiary);
+                                    StreamBuilder<bool>(
+                                      stream: AppSettingsService.getSettingStream(
+                                        AppSettingsService.showBeneficiaryImages,
+                                        defaultValue: true,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        final showImages = snapshot.data ?? true;
+                                        final photoWidget = showImages && beneficiary.photoPath != null && beneficiary.photoPath!.isNotEmpty
+                                            ? RepaintBoundary(
+                                                child: CircleAvatar(
+                                                  backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
+                                                      ? NetworkImage(beneficiary.photoPath!, scale: 1.0) // Use scale for better performance
+                                                      : beneficiary.photoPath!.startsWith('assets/')
+                                                          ? AssetImage(beneficiary.photoPath!)
+                                                          : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
+                                                  onBackgroundImageError: (exception, stackTrace) {
+                                                    // Handle image loading errors gracefully
+                                                  },
+                                                ),
+                                              )
+                                            : const CircleAvatar(child: Icon(Icons.person));
+                                        
+                                        // Only make photo clickable if display setting is true
+                                        if (showImages && beneficiary.photoPath != null && beneficiary.photoPath!.isNotEmpty) {
+                                          return GestureDetector(
+                                            onTap: () {
+                                              _showBeneficiaryImage(beneficiary);
+                                            },
+                                            child: photoWidget,
+                                          );
+                                        } else {
+                                          return photoWidget;
+                                        }
                                       },
-                                      child: beneficiary.photoPath != null
-                                          ? RepaintBoundary(
-                                              child: CircleAvatar(
-                                                backgroundImage: beneficiary.photoPath!.startsWith('http://') || beneficiary.photoPath!.startsWith('https://')
-                                                    ? NetworkImage(beneficiary.photoPath!, scale: 1.0) // Use scale for better performance
-                                                    : beneficiary.photoPath!.startsWith('assets/')
-                                                        ? AssetImage(beneficiary.photoPath!)
-                                                        : FileImage(File(beneficiary.photoPath!)) as ImageProvider,
-                                                onBackgroundImageError: (exception, stackTrace) {
-                                                  // Handle image loading errors gracefully
-                                                },
-                                              ),
-                                            )
-                                          : const CircleAvatar(child: Icon(Icons.person)),
                                     ),
                                   ],
                                 ),
@@ -24168,7 +25813,7 @@ class _RequestAdminAccountScreenState extends State<RequestAdminAccountScreen> {
         child: DropdownButton<String>(
           value: value.isEmpty ? null : value,
           isExpanded: true,
-          hint: Text(enabled ? 'Select' : 'Select previous field first'),
+          hint: Text(enabled ? AppLanguage.translate('Select') : AppLanguage.translate('Select previous field first')),
           items: items.map((item) => DropdownMenuItem(value: item, child: Text(AppLanguage.translate(item)))).toList(),
           onChanged: enabled ? onChanged : null,
         ),
@@ -24364,9 +26009,48 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
+  // Check if selected queue point has data
+  bool _hasDataForSelectedQueuePoint() {
+    if (_selectedDistributionArea == null) {
+      // If no queue point selected, check if there's any data
+      return _servedReports.isNotEmpty;
+    }
+    
+    // Filter reports by selected queue point
+    final filteredByQueuePoint = _servedReports.where((report) {
+      final beneficiary = report['beneficiary'] as Beneficiary;
+      return beneficiary.distributionArea == _selectedDistributionArea;
+    }).toList();
+    
+    return filteredByQueuePoint.isNotEmpty;
+  }
+
+  // Get reports filtered by selected queue point
+  List<Map<String, dynamic>> _getReportsForSelectedQueuePoint() {
+    if (_selectedDistributionArea == null) {
+      return _servedReports;
+    }
+    
+    return _servedReports.where((report) {
+      final beneficiary = report['beneficiary'] as Beneficiary;
+      return beneficiary.distributionArea == _selectedDistributionArea;
+    }).toList();
+  }
+
   Future<void> _exportToExcel() async {
     // Export directly for the selected queue point (no dialog)
     try {
+      // Validate that selected queue point has data
+      if (_selectedDistributionArea != null && !_hasDataForSelectedQueuePoint()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('No data available for the selected queue point')),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       // Show loading
       final rootNavigator = Navigator.of(context, rootNavigator: true);
       var loadingShown = false;
@@ -24388,15 +26072,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
       List<Map<String, dynamic>> reportsToExport;
       String areaName;
 
-      // Filter reports by date range for export
-      final filteredReports = _filterReportsByDateRange(_servedReports);
+      // Filter reports by selected queue point first, then by date range
+      final queuePointFiltered = _getReportsForSelectedQueuePoint();
+      final filteredReports = _filterReportsByDateRange(queuePointFiltered);
       
       if (filteredReports.isEmpty) {
         if (context.mounted) {
           closeLoading();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No data to export for selected date range'),
+            SnackBar(
+              content: Text(_selectedDistributionArea != null 
+                ? AppLanguage.translate('No data to export for selected queue point and date range')
+                : AppLanguage.translate('No data to export for selected date range')),
               backgroundColor: Colors.orange,
             ),
           );
@@ -24438,15 +26125,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
       // Create Excel file
       final excel = excel_package.Excel.createExcel();
       
-      // Delete default sheet - try multiple approaches
+      // Delete all default sheets before creating our sheet
       try {
-        // First, try to get and delete the default sheet
-        final defaultSheetName = excel.getDefaultSheet();
-        if (defaultSheetName != null && defaultSheetName.isNotEmpty && defaultSheetName != 'Point Q Report') {
-          excel.delete(defaultSheetName);
+        // Get all existing sheet names
+        final allSheetNames = excel.sheets.keys.toList();
+        // Delete all sheets (we'll create our own)
+        for (final sheetName in allSheetNames) {
+          excel.delete(sheetName);
         }
       } catch (e) {
-        // If getDefaultSheet doesn't work, try deleting common default names
+        // If deletion fails, try common default names
+        try {
+          final defaultSheetName = excel.getDefaultSheet();
+          if (defaultSheetName != null && defaultSheetName.isNotEmpty) {
+            excel.delete(defaultSheetName);
+          }
+        } catch (_) {}
         try {
           if (excel.sheets.containsKey('Sheet1')) {
             excel.delete('Sheet1');
@@ -24454,22 +26148,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
         } catch (_) {}
       }
       
-      // Create new sheet with our data (this will create it if it doesn't exist)
+      // Create new sheet with our data
       final sheet = excel['Point Q Report'];
-      
-      // Final cleanup: ensure no other sheets exist
-      try {
-        // Get all sheet names and delete any that aren't our target sheet
-        final allSheetNames = excel.sheets.keys.toList();
-        for (final sheetName in allSheetNames) {
-          if (sheetName != 'Point Q Report') {
-            excel.delete(sheetName);
-          }
-        }
-      } catch (e) {
-        // If sheets property doesn't exist or isn't accessible, continue
-        print('Note: Could not access sheets list for cleanup: $e');
-      }
 
       // Add headers
       final headers = [
@@ -24705,6 +26385,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _exportCityWiseReport({required bool detailed}) async {
     try {
+      // Validate that selected queue point has data (if a queue point is selected)
+      if (_selectedDistributionArea != null && !_hasDataForSelectedQueuePoint()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('No data available for the selected queue point')),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       final rootNavigator = Navigator.of(context, rootNavigator: true);
       var loadingShown = false;
       showDialog(
@@ -24721,9 +26412,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         loadingShown = false;
       }
 
-      // Get all served reports
-      final allReports = await BeneficiaryService.getServedBeneficiariesReport(null);
-      final filteredReports = _filterReportsByDateRange(allReports);
+      // Get reports filtered by selected queue point (if any)
+      final queuePointFiltered = _getReportsForSelectedQueuePoint();
+      final filteredReports = _filterReportsByDateRange(queuePointFiltered);
 
       if (filteredReports.isEmpty) {
         if (context.mounted) {
@@ -24762,6 +26453,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       // Create Excel file
       final excel = excel_package.Excel.createExcel();
+      
+      // Delete all default sheets before creating our sheet
+      try {
+        // Get all existing sheet names
+        final allSheetNames = excel.sheets.keys.toList();
+        // Delete all sheets (we'll create our own)
+        for (final sheetName in allSheetNames) {
+          excel.delete(sheetName);
+        }
+      } catch (e) {
+        // If deletion fails, try common default names
+        try {
+          final defaultSheetName = excel.getDefaultSheet();
+          if (defaultSheetName != null && defaultSheetName.isNotEmpty) {
+            excel.delete(defaultSheetName);
+          }
+        } catch (_) {}
+        try {
+          if (excel.sheets.containsKey('Sheet1')) {
+            excel.delete('Sheet1');
+          }
+        } catch (_) {}
+      }
+      
       final sheetName = detailed ? 'City Wise Detailed' : 'City Wise Summary';
       final sheet = excel[sheetName];
 
@@ -24923,6 +26638,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     try {
+      // Validate that selected queue point has data (if a queue point is selected)
+      if (_selectedDistributionArea != null && !_hasDataForSelectedQueuePoint()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('No data available for the selected queue point')),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       final rootNavigator = Navigator.of(context, rootNavigator: true);
       var loadingShown = false;
       showDialog(
@@ -24939,9 +26665,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         loadingShown = false;
       }
 
-      // Get all served reports
-      final allReports = await BeneficiaryService.getServedBeneficiariesReport(null);
-      final filteredReports = _filterReportsByDateRange(allReports);
+      // Get reports filtered by selected queue point (if any)
+      final queuePointFiltered = _getReportsForSelectedQueuePoint();
+      final filteredReports = _filterReportsByDateRange(queuePointFiltered);
 
       if (filteredReports.isEmpty) {
         if (context.mounted) {
@@ -24970,6 +26696,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       // Create Excel file
       final excel = excel_package.Excel.createExcel();
+      
+      // Delete all default sheets before creating our sheet
+      try {
+        // Get all existing sheet names
+        final allSheetNames = excel.sheets.keys.toList();
+        // Delete all sheets (we'll create our own)
+        for (final sheetName in allSheetNames) {
+          excel.delete(sheetName);
+        }
+      } catch (e) {
+        // If deletion fails, try common default names
+        try {
+          final defaultSheetName = excel.getDefaultSheet();
+          if (defaultSheetName != null && defaultSheetName.isNotEmpty) {
+            excel.delete(defaultSheetName);
+          }
+        } catch (_) {}
+        try {
+          if (excel.sheets.containsKey('Sheet1')) {
+            excel.delete('Sheet1');
+          }
+        } catch (_) {}
+      }
+      
       final sheetName = detailed ? 'Point Queue Detailed' : 'Point Queue Summary';
       final sheet = excel[sheetName];
 
@@ -25218,50 +26968,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         title: Text(AppLanguage.translate('Reports')),
         backgroundColor: tealGreen,
         foregroundColor: Colors.white,
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'served_beneficiaries') {
-                _exportToExcel();
-              } else if (value == 'city_wise_detailed') {
-                _exportCityWiseReport(detailed: true);
-              } else if (value == 'city_wise_summary') {
-                _exportCityWiseReport(detailed: false);
-              } else if (value == 'point_queue_detailed') {
-                _exportPointQueueReport(detailed: true);
-              } else if (value == 'point_queue_summary') {
-                _exportPointQueueReport(detailed: false);
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'served_beneficiaries',
-                child: Text(AppLanguage.translate('Served Beneficiaries Report')),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'city_wise_detailed',
-                child: Text(AppLanguage.translate('City Wise Report (Detailed)')),
-              ),
-              PopupMenuItem(
-                value: 'city_wise_summary',
-                child: Text(AppLanguage.translate('City Wise Report (Summary)')),
-              ),
-              if (AdminService.currentAdmin?.isSuperAdmin == true) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'point_queue_detailed',
-                  child: Text(AppLanguage.translate('Point Queue Report (Detailed)')),
-                ),
-                PopupMenuItem(
-                  value: 'point_queue_summary',
-                  child: Text(AppLanguage.translate('Point Queue Report (Summary)')),
-                ),
-              ],
-            ],
-          ),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -25273,15 +26979,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
         child: Column(
           children: [
-            // Queue Point Filter
+            // Controls Area - Queue Point Filter and Report Options
             Padding(
               padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Queue Point Filter
+                  Text(
                     AppLanguage.translate('Queue Point'),
-                style: const TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1A237E),
@@ -25518,6 +27225,121 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ],
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  // Report Export Options
+                  Text(
+                    AppLanguage.translate('Export Reports'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A237E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Report buttons in a 2x2 grid
+                  Column(
+                    children: [
+                      // First row
+                      Row(
+                        children: [
+                          // City Wise Detailed
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _hasDataForSelectedQueuePoint() || _selectedDistributionArea == null
+                                  ? () => _exportCityWiseReport(detailed: true)
+                                  : null,
+                              icon: const Icon(Icons.location_city, size: 18),
+                              label: Text(AppLanguage.translate('City Wise (Detailed)')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: tealGreen,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // City Wise Summary
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _hasDataForSelectedQueuePoint() || _selectedDistributionArea == null
+                                  ? () => _exportCityWiseReport(detailed: false)
+                                  : null,
+                              icon: const Icon(Icons.summarize, size: 18),
+                              label: Text(AppLanguage.translate('City Wise (Summary)')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: tealGreen,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Second row
+                      Row(
+                        children: [
+                          // Point Queue Detailed (Super Admin only)
+                          if (AdminService.currentAdmin?.isSuperAdmin == true)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _hasDataForSelectedQueuePoint() || _selectedDistributionArea == null
+                                    ? () => _exportPointQueueReport(detailed: true)
+                                    : null,
+                                icon: const Icon(Icons.queue, size: 18),
+                                label: Text(AppLanguage.translate('Point Queue (Detailed)')),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: tealGreen,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                              ),
+                            ),
+                          if (AdminService.currentAdmin?.isSuperAdmin == true) const SizedBox(width: 12),
+                          // Point Queue Summary (Super Admin only)
+                          if (AdminService.currentAdmin?.isSuperAdmin == true)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _hasDataForSelectedQueuePoint() || _selectedDistributionArea == null
+                                    ? () => _exportPointQueueReport(detailed: false)
+                                    : null,
+                                icon: const Icon(Icons.queue_outlined, size: 18),
+                                label: Text(AppLanguage.translate('Point Queue (Summary)')),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: tealGreen,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  // Show validation message if queue point selected but no data
+                  if (_selectedDistributionArea != null && !_hasDataForSelectedQueuePoint()) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              AppLanguage.translate('No data available for the selected queue point'),
+                              style: const TextStyle(color: Colors.orange, fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -25831,6 +27653,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _showLanguageDialog,
               ),
             ),
+            // Super Admin Settings
+            if (AdminService.currentAdmin?.isSuperAdmin ?? false) ...[
+              const SizedBox(height: 24),
+              Text(
+                AppLanguage.translate('Display Settings'),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D3748),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: StreamBuilder<bool>(
+                  stream: AppSettingsService.getSettingStream(
+                    AppSettingsService.showBeneficiaryImages,
+                    defaultValue: true,
+                  ),
+                  builder: (context, snapshot) {
+                    final showImages = snapshot.data ?? true;
+                    return SwitchListTile(
+                      title: Text(AppLanguage.translate('Show Beneficiary Images')),
+                      subtitle: Text(AppLanguage.translate('Display saved beneficiary photos in serving and edit screens')),
+                      value: showImages,
+                      onChanged: (value) async {
+                        try {
+                          await AppSettingsService.setSetting(
+                            AppSettingsService.showBeneficiaryImages,
+                            value,
+                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(value
+                                    ? AppLanguage.translate('Beneficiary images enabled')
+                                    : AppLanguage.translate('Beneficiary images disabled')),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${AppLanguage.translate('Error updating setting:')} $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Text(
               AppLanguage.translate('About'),
