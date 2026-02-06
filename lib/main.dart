@@ -74,6 +74,7 @@ class AppLanguage {
       'Beneficiaries': 'Beneficiaries',
       'No beneficiaries found': 'No beneficiaries found',
       'Search by name or ID': 'Search by name or ID',
+      'Search by Name, ID, Mobile, or NFC reference': 'Search by Name, ID, Mobile, or NFC reference',
       'NFC': 'NFC',
       'National ID': 'National ID',
       'Mobile': 'Mobile',
@@ -393,7 +394,7 @@ class AppLanguage {
       'Connection timeout. Please check your internet connection and try again.': 'Connection timeout. Please check your internet connection and try again.',
       'Invalid mobile number or password': 'Invalid mobile number or password',
       'Login failed:': 'Login failed:',
-      'This ID number is already registered in the system.': 'This ID number is already registered in the system.',
+      'This ID number is already registered in the system.': 'The national ID is already registered with another beneficiary',
       'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.': 'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.',
       'This NFC card is already registered to:': 'This NFC card is already registered to:',
       'Error registering beneficiary:': 'Error registering beneficiary:',
@@ -561,6 +562,7 @@ class AppLanguage {
       'Beneficiaries': 'المستفيدون',
       'No beneficiaries found': 'لم يتم العثور على مستفيدين',
       'Search by name or ID': 'البحث بالاسم أو رقم الهوية',
+      'Search by Name, ID, Mobile, or NFC reference': 'البحث بالاسم أو رقم البطاقة أو رقم الموبايل أو مرجع NFC',
       'NFC': 'NFC',
       'National ID': 'الهوية الوطنية',
       'Mobile': 'الجوال',
@@ -892,7 +894,7 @@ class AppLanguage {
       'Connection timeout. Please check your internet connection and try again.': 'انتهت مهلة الاتصال. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.',
       'Invalid mobile number or password': 'رقم الجوال أو كلمة المرور غير صحيحة',
       'Login failed:': 'فشل تسجيل الدخول:',
-      'This ID number is already registered in the system.': 'رقم الهوية هذا مسجل بالفعل في النظام.',
+      'This ID number is already registered in the system.': 'رقم الهوية الوطنية مسجل بالفعل مع مستفيد آخر',
       'Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.': 'يرجى مسح بطاقة NFC مرة أخرى. الإدخال اليدوي لرموز NFC المقنعة غير مسموح.',
       'This NFC card is already registered to:': 'بطاقة NFC هذه مسجلة بالفعل لـ:',
       'Error registering beneficiary:': 'خطأ في تسجيل المستفيد:',
@@ -6166,7 +6168,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${existingBeneficiary.name}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same National ID.';
+          _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
         });
       } else {
         // Also check local list as fallback
@@ -6175,7 +6177,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             (b) => b.idNumber == idNumber,
           );
           setState(() {
-            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same National ID.';
+            _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
           });
         } catch (e) {
           // ID not found - no duplicate
@@ -6192,7 +6194,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           (b) => b.idNumber == idNumber,
         );
         setState(() {
-          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
+          _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
         });
       } catch (e2) {
         setState(() {
@@ -14562,7 +14564,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
       
       if (existingBeneficiary != null) {
         setState(() {
-          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${existingBeneficiary.name}, Distribution Area: ${existingBeneficiary.distributionArea}). Cannot register this beneficiary with the same National ID.';
+          _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
         });
       } else {
         // Also check local list as fallback
@@ -14571,7 +14573,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             (b) => b.idNumber == idNumber,
           );
           setState(() {
-            _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}${localBeneficiary.initialAssignedQueuePoint != null && localBeneficiary.initialAssignedQueuePoint!.isNotEmpty ? ', Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}' : ''}). Cannot register this beneficiary with the same National ID.';
+            _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
           });
         } catch (e) {
           // ID not found - no duplicate
@@ -14588,7 +14590,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           (b) => b.idNumber == idNumber,
         );
         setState(() {
-          _duplicateIDMessage = 'This National ID is already registered with another beneficiary (Name: ${localBeneficiary.name}, Initial assigned queue: ${localBeneficiary.initialAssignedQueuePoint}). Cannot register this beneficiary with the same National ID.';
+          _duplicateIDMessage = AppLanguage.translate('This ID number is already registered in the system.');
         });
       } catch (e2) {
         setState(() {
@@ -15805,37 +15807,52 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
         bool matches = false;
         
         if (isNumeric) {
-          // For numeric queries, only check ID and mobile (faster)
+          // For numeric queries, check ID, mobile, and NFC reference
           final idNumber = b.idNumber;
           final mobileNumber = b.mobileNumber ?? '';
+          final nfcReference = b.nfcReference ?? '';
+          final nfcPreprintedCode = b.nfcPreprintedCode ?? '';
           
           if (hasArabic) {
-            matches = idNumber.contains(query) || mobileNumber.contains(query);
+            matches = idNumber.contains(query) || 
+                     mobileNumber.contains(query) ||
+                     nfcReference.contains(query) ||
+                     nfcPreprintedCode.contains(query);
           } else {
             matches = idNumber.toLowerCase().contains(queryLower) ||
-                     mobileNumber.toLowerCase().contains(queryLower);
+                     mobileNumber.toLowerCase().contains(queryLower) ||
+                     nfcReference.toLowerCase().contains(queryLower) ||
+                     nfcPreprintedCode.toLowerCase().contains(queryLower);
           }
         } else {
-          // For text queries, check name, ID, and mobile
+          // For text queries, check name, ID, mobile, and NFC reference
           final name = b.name;
           final idNumber = b.idNumber;
           final mobileNumber = b.mobileNumber ?? '';
+          final nfcReference = b.nfcReference ?? '';
+          final nfcPreprintedCode = b.nfcPreprintedCode ?? '';
           
           if (hasArabic) {
             // For Arabic text, search directly
             matches = name.contains(query) ||
                      idNumber.contains(query) ||
-                     mobileNumber.contains(query);
+                     mobileNumber.contains(query) ||
+                     nfcReference.contains(query) ||
+                     nfcPreprintedCode.contains(query);
           } else {
             // For non-Arabic, do case-insensitive search
             // Pre-compute lowercase values for faster comparison
             final nameLower = name.toLowerCase();
             final idLower = idNumber.toLowerCase();
             final mobileLower = mobileNumber.toLowerCase();
+            final nfcRefLower = nfcReference.toLowerCase();
+            final nfcCodeLower = nfcPreprintedCode.toLowerCase();
             
             matches = nameLower.contains(queryLower) ||
                      idLower.contains(queryLower) ||
-                     mobileLower.contains(queryLower);
+                     mobileLower.contains(queryLower) ||
+                     nfcRefLower.contains(queryLower) ||
+                     nfcCodeLower.contains(queryLower);
           }
         }
         
@@ -16225,7 +16242,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
               keyboardType: TextInputType.text, // Use text input to support all characters including Arabic
               textInputAction: TextInputAction.done, // Show "Done" button on keyboard
               decoration: InputDecoration(
-                hintText: AppLanguage.translate('Search by name or ID'),
+                hintText: AppLanguage.translate('Search by Name, ID, Mobile, or NFC reference'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -16644,9 +16661,18 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     _type = _typeOptions.contains(widget.beneficiary.type) ? widget.beneficiary.type : 'Normal';
     _gender = _genderOptions.contains(widget.beneficiary.gender) ? widget.beneficiary.gender : 'Male';
     _status = _statusOptions.contains(widget.beneficiary.status) ? widget.beneficiary.status : 'Active';
-    // Ensure numberOfUnits is valid - if not in options, use '1' as default
+    // Ensure numberOfUnits is valid - if not in options, use custom
     final beneficiaryUnits = widget.beneficiary.numberOfUnits;
-    _numberOfUnits = (beneficiaryUnits.isNotEmpty && _unitsOptions.contains(beneficiaryUnits)) ? beneficiaryUnits : '1';
+    if (beneficiaryUnits.isNotEmpty && _unitsOptions.contains(beneficiaryUnits)) {
+      _numberOfUnits = beneficiaryUnits;
+      _useCustomUnits = false;
+      _customUnitsController.clear();
+    } else {
+      // If units are not in the dropdown options, it's a custom value
+      _numberOfUnits = '1'; // Default dropdown value
+      _useCustomUnits = true;
+      _customUnitsController.text = beneficiaryUnits.isNotEmpty ? beneficiaryUnits : '1';
+    }
     _isEntity = widget.beneficiary.isEntity;
     _selectedEntity = widget.beneficiary.entityName;
     _idCopyPath = widget.beneficiary.idCopyPath;
