@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform, File;
+import 'dart:io' show Platform, File, Directory;
 import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:excel/excel.dart' as excel_package;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:open_file/open_file.dart';
 import 'package:image_picker/image_picker.dart' as image_picker;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_native_ocr/flutter_native_ocr.dart';
@@ -251,6 +252,13 @@ class AppLanguage {
       'Queue Point': 'Queue Point',
       'Date Range': 'Date Range',
       'Time Range': 'Time Range',
+      'Clear date filter': 'Clear date filter',
+      'Served Beneficiaries Report': 'Served Beneficiaries Report',
+      'City Wise Report (Detailed)': 'City Wise Report (Detailed)',
+      'City Wise Report (Summary)': 'City Wise Report (Summary)',
+      'Point Queue Report (Detailed)': 'Point Queue Report (Detailed)',
+      'Point Queue Report (Summary)': 'Point Queue Report (Summary)',
+      'This report is only available for Super Admin': 'This report is only available for Super Admin',
       'Available Units': 'Available Units',
       'Estimated Size': 'Estimated Size',
       'Serving Options': 'Serving Options',
@@ -406,6 +414,13 @@ class AppLanguage {
       'Custom': 'Custom',
       'Select entity': 'Select entity',
       'Enter NFC reference': 'Enter NFC reference',
+      'This NFC reference is already registered with another beneficiary': 'This NFC reference is already registered with another beneficiary',
+      'Served Beneficiaries Report': 'Served Beneficiaries Report',
+      'City Wise Report (Detailed)': 'City Wise Report (Detailed)',
+      'City Wise Report (Summary)': 'City Wise Report (Summary)',
+      'Point Queue Report (Detailed)': 'Point Queue Report (Detailed)',
+      'Point Queue Report (Summary)': 'Point Queue Report (Summary)',
+      'This report is only available for Super Admin': 'This report is only available for Super Admin',
       'Select distribution area': 'Select distribution area',
       'EQMS App': 'EQMS App',
       'Welcome to EQMS': 'Welcome to EQMS',
@@ -734,6 +749,13 @@ class AppLanguage {
       'Queue Point': 'نقطة الطابور',
       'Date Range': 'نطاق التاريخ',
       'Time Range': 'نطاق الوقت',
+      'Clear date filter': 'مسح فلتر التاريخ',
+      'Served Beneficiaries Report': 'تقرير المستفيدين المخدومين',
+      'City Wise Report (Detailed)': 'تقرير حسب المدينة (مفصل)',
+      'City Wise Report (Summary)': 'تقرير حسب المدينة (ملخص)',
+      'Point Queue Report (Detailed)': 'تقرير نقطة الطابور (مفصل)',
+      'Point Queue Report (Summary)': 'تقرير نقطة الطابور (ملخص)',
+      'This report is only available for Super Admin': 'هذا التقرير متاح فقط للمدير العام',
       'Available Units': 'الوحدات المتاحة',
       'Estimated Size': 'الحجم المقدر',
       'Serving Options': 'خيارات الخدمة',
@@ -4694,6 +4716,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   String? _idCopyPath;
   String? _photoPath;
   bool _waitingForGoogleLens = false;
+  String? _duplicateNFCReferenceMessage; // Track duplicate NFC reference message
   // bool _isGoogleLensAvailable = true; // Default to true, will be checked on init - UNUSED
   static const MethodChannel _googleLensChannel = MethodChannel('com.et3amapp.eqmsapp/google_lens');
   
@@ -5163,6 +5186,65 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
     }
   }
 
+  Future<void> _checkDuplicateNFCReference(String nfcReference) async {
+    if (nfcReference.isEmpty) {
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+      return;
+    }
+
+    // Trim the NFC reference
+    final trimmedRef = nfcReference.trim();
+    if (trimmedRef.isEmpty) {
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+      return;
+    }
+
+    // Check if NFC reference already exists in Firestore
+    try {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(trimmedRef);
+      
+      if (existingBeneficiary != null) {
+        setState(() {
+          _duplicateNFCReferenceMessage = AppLanguage.translate('This NFC reference is already registered with another beneficiary');
+        });
+      } else {
+        // Also check local list as fallback
+        try {
+          final localBeneficiary = widget.beneficiaries.firstWhere(
+            (b) => b.nfcReference != null && b.nfcReference!.trim() == trimmedRef,
+          );
+          setState(() {
+            _duplicateNFCReferenceMessage = AppLanguage.translate('This NFC reference is already registered with another beneficiary');
+          });
+        } catch (e) {
+          // NFC reference not found - no duplicate
+          setState(() {
+            _duplicateNFCReferenceMessage = null;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error checking duplicate NFC reference: $e');
+      // On error, also check local list
+      try {
+        final localBeneficiary = widget.beneficiaries.firstWhere(
+          (b) => b.nfcReference != null && b.nfcReference!.trim() == trimmedRef,
+        );
+        setState(() {
+          _duplicateNFCReferenceMessage = AppLanguage.translate('This NFC reference is already registered with another beneficiary');
+        });
+      } catch (e2) {
+        setState(() {
+          _duplicateNFCReferenceMessage = null;
+        });
+      }
+    }
+  }
+
   Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedDistributionArea == null) {
@@ -5177,6 +5259,18 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_duplicateNFCMessage!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Prevent saving if there's a duplicate NFC reference message
+      if (_duplicateNFCReferenceMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_duplicateNFCReferenceMessage!),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -7135,8 +7229,18 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                         controller: _nfcReferenceController,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            _checkDuplicateNFCReference(value);
+                          } else {
+                            setState(() {
+                              _duplicateNFCReferenceMessage = null;
+                            });
+                          }
+                        },
                         decoration: InputDecoration(
-                          hintText: 'Enter NFC reference',
+                          hintText: AppLanguage.translate('Enter NFC reference'),
+                          errorText: _duplicateNFCReferenceMessage,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           filled: true,
                           fillColor: Colors.white,
@@ -15492,8 +15596,18 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                         controller: _nfcReferenceController,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            _checkDuplicateNFCReference(value);
+                          } else {
+                            setState(() {
+                              _duplicateNFCReferenceMessage = null;
+                            });
+                          }
+                        },
                         decoration: InputDecoration(
-                          hintText: 'Enter NFC reference',
+                          hintText: AppLanguage.translate('Enter NFC reference'),
+                          errorText: _duplicateNFCReferenceMessage,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           filled: true,
                           fillColor: Colors.white,
@@ -16602,6 +16716,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
+  String? _duplicateNFCReferenceMessage; // Track duplicate NFC reference message
 
   final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
   final List<String> _genderOptions = ['Male', 'Female'];
@@ -16694,6 +16809,44 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     super.dispose();
   }
 
+  Future<void> _checkDuplicateNFCReference(String nfcReference) async {
+    if (nfcReference.isEmpty) {
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+      return;
+    }
+
+    // Trim the NFC reference
+    final trimmedRef = nfcReference.trim();
+    if (trimmedRef.isEmpty) {
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+      return;
+    }
+
+    // Check if NFC reference already exists in Firestore (exclude current beneficiary)
+    try {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(trimmedRef);
+      
+      if (existingBeneficiary != null && existingBeneficiary.id != widget.beneficiary.id) {
+        setState(() {
+          _duplicateNFCReferenceMessage = AppLanguage.translate('This NFC reference is already registered with another beneficiary');
+        });
+      } else {
+        setState(() {
+          _duplicateNFCReferenceMessage = null;
+        });
+      }
+    } catch (e) {
+      print('Error checking duplicate NFC reference: $e');
+      setState(() {
+        _duplicateNFCReferenceMessage = null;
+      });
+    }
+  }
+
   Future<void> _handleUpdate() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -16716,6 +16869,33 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
         ),
       );
       return;
+    }
+
+    // Prevent saving if there's a duplicate NFC reference message
+    if (_duplicateNFCReferenceMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_duplicateNFCReferenceMessage!),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // Check for duplicate NFC reference (exclude current beneficiary)
+    if (_nfcReferenceController.text.trim().isNotEmpty) {
+      final existingBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(_nfcReferenceController.text.trim());
+      if (existingBeneficiary != null && existingBeneficiary.id != widget.beneficiary.id) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('This NFC reference is already registered with another beneficiary')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
     }
 
     // Check for duplicate NFC tag ID before proceeding (exclude current beneficiary)
@@ -18100,8 +18280,18 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                         controller: _nfcReferenceController,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            _checkDuplicateNFCReference(value);
+                          } else {
+                            setState(() {
+                              _duplicateNFCReferenceMessage = null;
+                            });
+                          }
+                        },
                         decoration: InputDecoration(
-                          hintText: 'Enter NFC reference',
+                          hintText: AppLanguage.translate('Enter NFC reference'),
+                          errorText: _duplicateNFCReferenceMessage,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           filled: true,
                           fillColor: Colors.white,
@@ -24011,6 +24201,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<Map<String, dynamic>> _allServedReports = []; // Store all reports for filtering
   bool _isLoadingReports = false;
   List<Queue> _allQueues = [];
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -24048,7 +24240,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final reports = await BeneficiaryService.getServedBeneficiariesReport(_selectedDistributionArea);
       setState(() {
         _allServedReports = reports; // Store all reports
-        _servedReports = reports;
+        _servedReports = _filterReportsByDateRange(reports);
         _isLoadingReports = false;
       });
     } catch (e) {
@@ -24057,6 +24249,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _isLoadingReports = false;
       });
     }
+  }
+
+  List<Map<String, dynamic>> _filterReportsByDateRange(List<Map<String, dynamic>> reports) {
+    if (_fromDate == null && _toDate == null) {
+      return reports; // No date filter, return all
+    }
+
+    return reports.where((report) {
+      final servedAt = report['servedAt'] as DateTime?;
+      if (servedAt == null) return false;
+
+      // Normalize dates to compare only the date part (ignore time)
+      final servedDate = DateTime(servedAt.year, servedAt.month, servedAt.day);
+      
+      bool matchesFrom = true;
+      bool matchesTo = true;
+
+      if (_fromDate != null) {
+        final fromDateNormalized = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day);
+        matchesFrom = servedDate.isAtSameMomentAs(fromDateNormalized) || servedDate.isAfter(fromDateNormalized);
+      }
+
+      if (_toDate != null) {
+        final toDateNormalized = DateTime(_toDate!.year, _toDate!.month, _toDate!.day);
+        matchesTo = servedDate.isAtSameMomentAs(toDateNormalized) || servedDate.isBefore(toDateNormalized);
+      }
+
+      return matchesFrom && matchesTo;
+    }).toList();
   }
 
   List<DistributionArea> _getAvailableDistributionAreas() {
@@ -24163,23 +24384,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
         loadingShown = false;
       }
 
-      // Get data to export - use selected area only
+      // Get data to export - use selected area and date range filter
       List<Map<String, dynamic>> reportsToExport;
       String areaName;
 
-      if (_servedReports.isEmpty) {
+      // Filter reports by date range for export
+      final filteredReports = _filterReportsByDateRange(_servedReports);
+      
+      if (filteredReports.isEmpty) {
         if (context.mounted) {
           closeLoading();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No data to export'),
+              content: Text('No data to export for selected date range'),
               backgroundColor: Colors.orange,
             ),
           );
         }
         return;
       }
-      reportsToExport = _servedReports;
+      reportsToExport = filteredReports;
       
       // Get selected area name for filename
       if (_selectedDistributionArea != null) {
@@ -24350,43 +24574,112 @@ class _ReportsScreenState extends State<ReportsScreen> {
           }
         }
       } else {
-        // For mobile/desktop, save to device
-        final directory = await getApplicationDocumentsDirectory();
+        // For mobile/desktop, save directly to Downloads folder (mobile) or Documents (desktop)
+        Directory directory;
+        String saveLocation;
+        
+        final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+        final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+        
+        if (isAndroid) {
+          // For Android, save to Downloads folder
+          try {
+            // Request storage permission first (for Android 10+)
+            if (await Permission.storage.isDenied) {
+              await Permission.storage.request();
+            }
+            
+            // Try to get external storage directory (usually /storage/emulated/0)
+            final externalDir = await getExternalStorageDirectory();
+            if (externalDir != null) {
+              // Navigate to Downloads folder
+              // Remove /Android/data/package_name/files and go to root, then to Download
+              final basePath = externalDir.path.split('/Android')[0];
+              final downloadsPath = '$basePath/Download';
+              directory = Directory(downloadsPath);
+              // Create directory if it doesn't exist
+              if (!await directory.exists()) {
+                await directory.create(recursive: true);
+              }
+              saveLocation = 'Downloads folder';
+            } else {
+              // Fallback to application documents directory
+              directory = await getApplicationDocumentsDirectory();
+              saveLocation = 'Documents folder';
+            }
+          } catch (e) {
+            print('Error accessing Downloads folder: $e');
+            // Fallback to application documents directory if Downloads access fails
+            directory = await getApplicationDocumentsDirectory();
+            saveLocation = 'Documents folder';
+          }
+        } else if (isIOS) {
+          // For iOS, save to Documents folder (accessible via Files app)
+          directory = await getApplicationDocumentsDirectory();
+          saveLocation = 'Files app';
+        } else {
+          // For desktop, save to Documents
+          directory = await getApplicationDocumentsDirectory();
+          saveLocation = 'Documents folder';
+        }
+        
         final filePath = '${directory.path}/$filename';
         final file = File(filePath);
         await file.writeAsBytes(uint8Bytes);
 
-        // Close loading BEFORE share to avoid stuck loader if share sheet blocks/doesn't return.
+        // Close loading dialog
         if (context.mounted) {
           closeLoading();
         }
 
-        // Share the file on mobile platforms; on desktop just show the saved path.
-        final isMobile = defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.iOS;
-        if (isMobile) {
-          try {
-            final xFile = XFile(filePath);
-            await Share.shareXFiles([xFile], text: 'Point Q Report');
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Saved to: $filePath (sharing failed: $e)'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            }
-          }
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Report saved to: $filePath'),
-                backgroundColor: Colors.green,
+        // Show success message with file location
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Excel file saved to $saveLocation: $filename'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () async {
+                  // Open the file with Excel viewer
+                  try {
+                    final result = await OpenFile.open(filePath);
+                    if (result.type != ResultType.done) {
+                      // If opening failed, try sharing as fallback
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Could not open file. Error: ${result.message}'),
+                            backgroundColor: Colors.orange,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                  } catch (e) {
+                    print('Error opening file: $e');
+                    // Fallback to sharing if open fails
+                    try {
+                      final xFile = XFile(filePath);
+                      await Share.shareXFiles([xFile], text: 'Point Q Report');
+                    } catch (shareError) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error opening file: $e'),
+                            backgroundColor: Colors.red,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
               ),
-            );
-          }
+            ),
+          );
         }
       }
 
@@ -24410,6 +24703,509 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
+  Future<void> _exportCityWiseReport({required bool detailed}) async {
+    try {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      var loadingShown = false;
+      showDialog(
+        context: rootNavigator.context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      loadingShown = true;
+
+      void closeLoading() {
+        if (loadingShown && rootNavigator.canPop()) {
+          rootNavigator.pop();
+        }
+        loadingShown = false;
+      }
+
+      // Get all served reports
+      final allReports = await BeneficiaryService.getServedBeneficiariesReport(null);
+      final filteredReports = _filterReportsByDateRange(allReports);
+
+      if (filteredReports.isEmpty) {
+        if (context.mounted) {
+          closeLoading();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No data to export for selected date range'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Group by city
+      final Map<String, List<Map<String, dynamic>>> cityGroups = {};
+      for (final report in filteredReports) {
+        final beneficiary = report['beneficiary'] as Beneficiary;
+        final areaId = beneficiary.distributionArea;
+        final area = _distributionAreas.firstWhere(
+          (a) => a.id == areaId,
+          orElse: () => DistributionArea(
+            id: areaId,
+            country: '',
+            governorate: '',
+            city: areaId.isNotEmpty ? areaId : 'Unknown',
+            areaName: areaId,
+          ),
+        );
+        final city = area.city.isNotEmpty ? area.city : 'Unknown';
+        if (!cityGroups.containsKey(city)) {
+          cityGroups[city] = [];
+        }
+        cityGroups[city]!.add(report);
+      }
+
+      // Create Excel file
+      final excel = excel_package.Excel.createExcel();
+      final sheetName = detailed ? 'City Wise Detailed' : 'City Wise Summary';
+      final sheet = excel[sheetName];
+
+      if (detailed) {
+        // Detailed report
+        final headers = [
+          'City',
+          'Governorate',
+          'Serving Date',
+          'Serving Time',
+          'Beneficiary Name',
+          'Distribution Area',
+          'No. of Units',
+          'Unit Name',
+        ];
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+          cell.value = excel_package.TextCellValue(headers[i]);
+          cell.cellStyle = excel_package.CellStyle(bold: true);
+        }
+
+        int rowIndex = 1;
+        for (final city in cityGroups.keys.toList()..sort()) {
+          for (final report in cityGroups[city]!) {
+            final beneficiary = report['beneficiary'] as Beneficiary;
+            final servedAt = report['servedAt'] as DateTime?;
+            final areaId = beneficiary.distributionArea;
+            final area = _distributionAreas.firstWhere(
+              (a) => a.id == areaId,
+              orElse: () => DistributionArea(
+                id: areaId,
+                country: '',
+                governorate: '',
+                city: city,
+                areaName: areaId,
+              ),
+            );
+            final unitName = _getUnitNameForBeneficiary(beneficiary);
+
+            final rowData = [
+              city,
+              area.governorate.isNotEmpty ? area.governorate : 'N/A',
+              servedAt != null ? '${servedAt.day}/${servedAt.month}/${servedAt.year}' : 'N/A',
+              servedAt != null ? '${servedAt.hour.toString().padLeft(2, '0')}:${servedAt.minute.toString().padLeft(2, '0')}' : 'N/A',
+              beneficiary.name,
+              area.areaName.isNotEmpty ? area.areaName : 'N/A',
+              beneficiary.unitsTaken,
+              unitName ?? 'N/A',
+            ];
+
+            for (int col = 0; col < rowData.length; col++) {
+              final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIndex));
+              if (col == 6) {
+                cell.value = excel_package.IntCellValue(rowData[col] as int);
+              } else {
+                cell.value = excel_package.TextCellValue(rowData[col].toString());
+              }
+            }
+            rowIndex++;
+          }
+        }
+      } else {
+        // Summary report
+        final headers = [
+          'City',
+          'Governorate',
+          'Total Beneficiaries',
+          'Total Units Served',
+        ];
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+          cell.value = excel_package.TextCellValue(headers[i]);
+          cell.cellStyle = excel_package.CellStyle(bold: true);
+        }
+
+        int rowIndex = 1;
+        for (final city in cityGroups.keys.toList()..sort()) {
+          final reports = cityGroups[city]!;
+          final totalBeneficiaries = reports.length;
+          final totalUnits = reports.fold<int>(0, (sum, r) => sum + ((r['beneficiary'] as Beneficiary).unitsTaken));
+          
+          final areaId = reports.first['beneficiary'].distributionArea;
+          final area = _distributionAreas.firstWhere(
+            (a) => a.id == areaId,
+            orElse: () => DistributionArea(
+              id: areaId,
+              country: '',
+              governorate: '',
+              city: city,
+              areaName: areaId,
+            ),
+          );
+
+          final rowData = [
+            city,
+            area.governorate.isNotEmpty ? area.governorate : 'N/A',
+            totalBeneficiaries,
+            totalUnits,
+          ];
+
+          for (int col = 0; col < rowData.length; col++) {
+            final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIndex));
+            if (col >= 2) {
+              cell.value = excel_package.IntCellValue(rowData[col] as int);
+            } else {
+              cell.value = excel_package.TextCellValue(rowData[col].toString());
+            }
+          }
+          rowIndex++;
+        }
+      }
+
+      // Save file
+      final timestamp = DateTime.now().toString().replaceAll(':', '-').split('.')[0];
+      final filename = 'City_Wise_Report_${detailed ? 'Detailed' : 'Summary'}_$timestamp.xlsx';
+      final bytes = excel.save();
+      if (bytes == null) {
+        if (context.mounted) {
+          closeLoading();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: Could not generate Excel file'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final uint8Bytes = Uint8List.fromList(bytes!);
+      await _saveAndOpenFile(uint8Bytes, filename, closeLoading);
+    } catch (e) {
+      if (context.mounted) {
+        final rootNavigator = Navigator.of(context, rootNavigator: true);
+        if (rootNavigator.canPop()) {
+          rootNavigator.pop();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting city-wise report: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      print('Error exporting city-wise report: $e');
+    }
+  }
+
+  Future<void> _exportPointQueueReport({required bool detailed}) async {
+    final currentAdmin = AdminService.currentAdmin;
+    if (currentAdmin == null || !currentAdmin.isSuperAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLanguage.translate('This report is only available for Super Admin')),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      var loadingShown = false;
+      showDialog(
+        context: rootNavigator.context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      loadingShown = true;
+
+      void closeLoading() {
+        if (loadingShown && rootNavigator.canPop()) {
+          rootNavigator.pop();
+        }
+        loadingShown = false;
+      }
+
+      // Get all served reports
+      final allReports = await BeneficiaryService.getServedBeneficiariesReport(null);
+      final filteredReports = _filterReportsByDateRange(allReports);
+
+      if (filteredReports.isEmpty) {
+        if (context.mounted) {
+          closeLoading();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No data to export for selected date range'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Group by queue point (distribution area)
+      final Map<String, List<Map<String, dynamic>>> queuePointGroups = {};
+      for (final report in filteredReports) {
+        final beneficiary = report['beneficiary'] as Beneficiary;
+        final areaId = beneficiary.distributionArea;
+        final areaName = _getDistributionAreaName(areaId);
+        if (!queuePointGroups.containsKey(areaName)) {
+          queuePointGroups[areaName] = [];
+        }
+        queuePointGroups[areaName]!.add(report);
+      }
+
+      // Create Excel file
+      final excel = excel_package.Excel.createExcel();
+      final sheetName = detailed ? 'Point Queue Detailed' : 'Point Queue Summary';
+      final sheet = excel[sheetName];
+
+      if (detailed) {
+        // Detailed report
+        final headers = [
+          'Queue Point',
+          'City',
+          'Governorate',
+          'Serving Date',
+          'Serving Time',
+          'Beneficiary Name',
+          'No. of Units',
+          'Unit Name',
+        ];
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+          cell.value = excel_package.TextCellValue(headers[i]);
+          cell.cellStyle = excel_package.CellStyle(bold: true);
+        }
+
+        int rowIndex = 1;
+        for (final queuePoint in queuePointGroups.keys.toList()..sort()) {
+          for (final report in queuePointGroups[queuePoint]!) {
+            final beneficiary = report['beneficiary'] as Beneficiary;
+            final servedAt = report['servedAt'] as DateTime?;
+            final areaId = beneficiary.distributionArea;
+            final area = _distributionAreas.firstWhere(
+              (a) => a.id == areaId,
+              orElse: () => DistributionArea(
+                id: areaId,
+                country: '',
+                governorate: '',
+                city: '',
+                areaName: queuePoint,
+              ),
+            );
+            final unitName = _getUnitNameForBeneficiary(beneficiary);
+
+            final rowData = [
+              queuePoint,
+              area.city.isNotEmpty ? area.city : 'N/A',
+              area.governorate.isNotEmpty ? area.governorate : 'N/A',
+              servedAt != null ? '${servedAt.day}/${servedAt.month}/${servedAt.year}' : 'N/A',
+              servedAt != null ? '${servedAt.hour.toString().padLeft(2, '0')}:${servedAt.minute.toString().padLeft(2, '0')}' : 'N/A',
+              beneficiary.name,
+              beneficiary.unitsTaken,
+              unitName ?? 'N/A',
+            ];
+
+            for (int col = 0; col < rowData.length; col++) {
+              final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIndex));
+              if (col == 6) {
+                cell.value = excel_package.IntCellValue(rowData[col] as int);
+              } else {
+                cell.value = excel_package.TextCellValue(rowData[col].toString());
+              }
+            }
+            rowIndex++;
+          }
+        }
+      } else {
+        // Summary report
+        final headers = [
+          'Queue Point',
+          'City',
+          'Governorate',
+          'Total Beneficiaries',
+          'Total Units Served',
+        ];
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+          cell.value = excel_package.TextCellValue(headers[i]);
+          cell.cellStyle = excel_package.CellStyle(bold: true);
+        }
+
+        int rowIndex = 1;
+        for (final queuePoint in queuePointGroups.keys.toList()..sort()) {
+          final reports = queuePointGroups[queuePoint]!;
+          final totalBeneficiaries = reports.length;
+          final totalUnits = reports.fold<int>(0, (sum, r) => sum + ((r['beneficiary'] as Beneficiary).unitsTaken));
+          
+          final areaId = reports.first['beneficiary'].distributionArea;
+          final area = _distributionAreas.firstWhere(
+            (a) => a.id == areaId,
+            orElse: () => DistributionArea(
+              id: areaId,
+              country: '',
+              governorate: '',
+              city: '',
+              areaName: queuePoint,
+            ),
+          );
+
+          final rowData = [
+            queuePoint,
+            area.city.isNotEmpty ? area.city : 'N/A',
+            area.governorate.isNotEmpty ? area.governorate : 'N/A',
+            totalBeneficiaries,
+            totalUnits,
+          ];
+
+          for (int col = 0; col < rowData.length; col++) {
+            final cell = sheet.cell(excel_package.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIndex));
+            if (col >= 3) {
+              cell.value = excel_package.IntCellValue(rowData[col] as int);
+            } else {
+              cell.value = excel_package.TextCellValue(rowData[col].toString());
+            }
+          }
+          rowIndex++;
+        }
+      }
+
+      // Save file
+      final timestamp = DateTime.now().toString().replaceAll(':', '-').split('.')[0];
+      final filename = 'Point_Queue_Report_${detailed ? 'Detailed' : 'Summary'}_$timestamp.xlsx';
+      final bytes = excel.save();
+      if (bytes == null) {
+        if (context.mounted) {
+          closeLoading();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: Could not generate Excel file'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final uint8Bytes = Uint8List.fromList(bytes!);
+      await _saveAndOpenFile(uint8Bytes, filename, closeLoading);
+    } catch (e) {
+      if (context.mounted) {
+        final rootNavigator = Navigator.of(context, rootNavigator: true);
+        if (rootNavigator.canPop()) {
+          rootNavigator.pop();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting point queue report: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      print('Error exporting point queue report: $e');
+    }
+  }
+
+  Future<void> _saveAndOpenFile(Uint8List bytes, String filename, VoidCallback closeLoading) async {
+    Directory directory;
+    String saveLocation;
+    
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    
+    if (isAndroid) {
+      try {
+        if (await Permission.storage.isDenied) {
+          await Permission.storage.request();
+        }
+        final externalDir = await getExternalStorageDirectory();
+        if (externalDir != null) {
+          final basePath = externalDir.path.split('/Android')[0];
+          final downloadsPath = '$basePath/Download';
+          directory = Directory(downloadsPath);
+          if (!await directory.exists()) {
+            await directory.create(recursive: true);
+          }
+          saveLocation = 'Downloads folder';
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+          saveLocation = 'Documents folder';
+        }
+      } catch (e) {
+        directory = await getApplicationDocumentsDirectory();
+        saveLocation = 'Documents folder';
+      }
+    } else if (isIOS) {
+      directory = await getApplicationDocumentsDirectory();
+      saveLocation = 'Files app';
+    } else {
+      directory = await getApplicationDocumentsDirectory();
+      saveLocation = 'Documents folder';
+    }
+    
+    final filePath = '${directory.path}/$filename';
+    final file = File(filePath);
+    await file.writeAsBytes(bytes);
+
+    if (context.mounted) {
+      closeLoading();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Excel file saved to $saveLocation: $filename'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: Colors.white,
+            onPressed: () async {
+              try {
+                final result = await OpenFile.open(filePath);
+                if (result.type != ResultType.done && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not open file. Error: ${result.message}'),
+                      backgroundColor: Colors.orange,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              } catch (e) {
+                try {
+                  final xFile = XFile(filePath);
+                  await Share.shareXFiles([xFile], text: 'Report');
+                } catch (shareError) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error opening file: $e'),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const tealGreen = Color(0xFF81CF01);
@@ -24423,10 +25219,47 @@ class _ReportsScreenState extends State<ReportsScreen> {
         backgroundColor: tealGreen,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: 'Export to Excel',
-            onPressed: _exportToExcel,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'served_beneficiaries') {
+                _exportToExcel();
+              } else if (value == 'city_wise_detailed') {
+                _exportCityWiseReport(detailed: true);
+              } else if (value == 'city_wise_summary') {
+                _exportCityWiseReport(detailed: false);
+              } else if (value == 'point_queue_detailed') {
+                _exportPointQueueReport(detailed: true);
+              } else if (value == 'point_queue_summary') {
+                _exportPointQueueReport(detailed: false);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'served_beneficiaries',
+                child: Text(AppLanguage.translate('Served Beneficiaries Report')),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'city_wise_detailed',
+                child: Text(AppLanguage.translate('City Wise Report (Detailed)')),
+              ),
+              PopupMenuItem(
+                value: 'city_wise_summary',
+                child: Text(AppLanguage.translate('City Wise Report (Summary)')),
+              ),
+              if (AdminService.currentAdmin?.isSuperAdmin == true) ...[
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'point_queue_detailed',
+                  child: Text(AppLanguage.translate('Point Queue Report (Detailed)')),
+                ),
+                PopupMenuItem(
+                  value: 'point_queue_summary',
+                  child: Text(AppLanguage.translate('Point Queue Report (Summary)')),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -24589,6 +25422,101 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         );
                       },
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Date Range Filter
+                  Text(
+                    AppLanguage.translate('Date Range'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A237E),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: _fromDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (date != null) {
+                              setState(() {
+                                _fromDate = date;
+                                // Reload reports with date filter
+                                _servedReports = _filterReportsByDateRange(_allServedReports);
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            _fromDate == null
+                                ? AppLanguage.translate('From Date')
+                                : '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: tealGreen,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(color: tealGreen),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: _toDate ?? (_fromDate ?? DateTime.now()),
+                              firstDate: _fromDate ?? DateTime(2020),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (date != null) {
+                              setState(() {
+                                _toDate = date;
+                                // Reload reports with date filter
+                                _servedReports = _filterReportsByDateRange(_allServedReports);
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            _toDate == null
+                                ? AppLanguage.translate('To Date')
+                                : '${_toDate!.day}/${_toDate!.month}/${_toDate!.year}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: tealGreen,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(color: tealGreen),
+                          ),
+                        ),
+                      ),
+                      if (_fromDate != null || _toDate != null) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            setState(() {
+                              _fromDate = null;
+                              _toDate = null;
+                              // Reload reports without date filter
+                              _servedReports = _filterReportsByDateRange(_allServedReports);
+                            });
+                          },
+                          tooltip: AppLanguage.translate('Clear date filter'),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
