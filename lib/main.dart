@@ -7777,19 +7777,29 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   final Map<String, Set<String>> _dailyEntryExpanded = {};
   
   List<DistributionArea> _distributionAreas = [];
+  String? _lastAdminId; // Track last admin ID to detect admin changes
   
   Future<void> _loadDistributionAreas() async {
     try {
+      // Update tracked admin ID
+      final currentAdminId = AdminService.currentAdminId;
+      if (currentAdminId != _lastAdminId) {
+        _lastAdminId = currentAdminId;
+        print('🔄 Admin ID changed in _loadDistributionAreas, reloading...');
+      }
+      
       // Load all distribution areas from Firestore
       final allAreas = await DistributionAreaService.getAllAreas().first;
       
       // Get current admin's assigned distribution area - try multiple times if needed
       Admin? currentAdmin = AdminService.currentAdmin;
       
-      // If admin is not loaded yet, wait a bit and try again
-      if (currentAdmin == null) {
+      // If admin is not loaded yet, wait a bit and try again (up to 3 times)
+      int retries = 0;
+      while (currentAdmin == null && retries < 3) {
         await Future.delayed(const Duration(milliseconds: 300));
         currentAdmin = AdminService.currentAdmin;
+        retries++;
       }
       
       print('🔍 Loading distribution areas...');
@@ -7988,25 +7998,43 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     
+    // Track current admin ID
+    _lastAdminId = AdminService.currentAdminId;
+    
     // Load distribution areas filtered by admin
     // Use WidgetsBinding to ensure admin data is loaded, with a delay to ensure admin is set
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-    _loadDistributionAreas();
+          // Check if admin changed since initState
+          final currentAdminId = AdminService.currentAdminId;
+          if (currentAdminId != _lastAdminId) {
+            _lastAdminId = currentAdminId;
+            print('🔄 Admin ID changed in initState, reloading distribution areas...');
+          }
+          _loadDistributionAreas();
         }
       });
     });
   }
-
+  
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Reload distribution areas when dependencies change (e.g., admin data is loaded)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // Always reload to ensure Super Admin sees all areas
-        _loadDistributionAreas();
+        // Check if admin changed
+        final currentAdminId = AdminService.currentAdminId;
+        if (currentAdminId != _lastAdminId) {
+          _lastAdminId = currentAdminId;
+          // Admin changed - force reload distribution areas
+          print('🔄 Admin changed detected, reloading distribution areas...');
+          _loadDistributionAreas();
+        } else {
+          // Always reload to ensure Super Admin sees all areas
+          _loadDistributionAreas();
+        }
       }
     });
   }
@@ -24188,6 +24216,43 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Auto-select first queue if available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // Filter queues to show only today's queues
+        final today = DateTime.now();
+        final todayOnly = DateTime(today.year, today.month, today.day);
+        final todayQueues = widget.queues.where((q) {
+          final fromDateOnly = DateTime(q.fromDate.year, q.fromDate.month, q.fromDate.day);
+          final toDateOnly = DateTime(q.toDate.year, q.toDate.month, q.toDate.day);
+          return todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0;
+        }).toList();
+        
+        // Auto-select first queue if none selected and queues are available
+        if (_selectedQueue == null && todayQueues.isNotEmpty) {
+          setState(() {
+            _selectedQueue = todayQueues.first;
+            // For multi-day queues, set today as default if today is within the queue's date range
+            if (_selectedQueue!.isMultiDay) {
+              final fromDateOnly = DateTime(_selectedQueue!.fromDate.year, _selectedQueue!.fromDate.month, _selectedQueue!.fromDate.day);
+              final toDateOnly = DateTime(_selectedQueue!.toDate.year, _selectedQueue!.toDate.month, _selectedQueue!.toDate.day);
+              
+              // Check if today is within the queue's date range
+              if (todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0) {
+                _selectedDay = todayOnly; // Set today as default
+              } else {
+                _selectedDay = null; // Today is not in range, keep null
+              }
+            } else {
+              _selectedDay = null; // Reset day selection for single-day queues
+            }
+          });
+          _loadQueueStatistics();
+        }
+      }
+    });
+    
     // Auto-start NFC detection as default
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_selectedVerificationMethod == 0) {
@@ -24644,11 +24709,31 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         }
       }
 
-      // Process found beneficiary - verify distribution area matches
+      // Process found beneficiary - verify they are in the same city
       if (foundBeneficiary != null) {
-        // VERIFY: Check if beneficiary's distribution area matches the queue's distribution area
-        if (foundBeneficiary.distributionArea != distributionAreaId) {
-          // Beneficiary is not related to this queue's distribution area
+        // VERIFY: Check if beneficiary is in the same city as the queue's distribution area
+        // Allow issuing queue numbers to beneficiaries from areas in the same city
+        bool isSameCity = false;
+        try {
+          // Get distribution area objects for both beneficiary and queue
+          final beneficiaryArea = await DistributionAreaService.getAreaById(foundBeneficiary.distributionArea);
+          final queueArea = await DistributionAreaService.getAreaById(distributionAreaId);
+          
+          if (beneficiaryArea != null && queueArea != null) {
+            // Check if they're in the same city (case-insensitive)
+            isSameCity = beneficiaryArea.city.toLowerCase().trim() == queueArea.city.toLowerCase().trim();
+          } else {
+            // If we can't get area info, fall back to exact match
+            isSameCity = foundBeneficiary.distributionArea == distributionAreaId;
+          }
+        } catch (e) {
+          print('Error checking city match: $e');
+          // Fall back to exact match if error occurs
+          isSameCity = foundBeneficiary.distributionArea == distributionAreaId;
+        }
+        
+        if (!isSameCity) {
+          // Beneficiary is not in the same city as the queue's distribution area
             if (mounted) {
               setState(() {
                 _verifiedBeneficiary = null;
@@ -24659,8 +24744,8 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                 content: Text(
-                  'This beneficiary is not assigned to the selected queue\'s distribution area. '
-                  'Please select a queue that matches the beneficiary\'s distribution area.',
+                  'This beneficiary is not in the same city as the selected queue\'s distribution area. '
+                  'Please select a queue in the same city.',
                 ),
                   backgroundColor: Colors.red,
                 duration: const Duration(seconds: 4),
@@ -25083,7 +25168,33 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     }).toList();
 
     // Reset selected queue if it's not in today's queues
-    if (_selectedQueue != null && !todayQueues.contains(_selectedQueue)) {
+    // Auto-select first queue if none selected and queues are available
+    if (_selectedQueue == null && todayQueues.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedQueue = todayQueues.first;
+            // For multi-day queues, set today as default if today is within the queue's date range
+            if (_selectedQueue!.isMultiDay) {
+              final today = DateTime.now();
+              final todayOnly = DateTime(today.year, today.month, today.day);
+              final fromDateOnly = DateTime(_selectedQueue!.fromDate.year, _selectedQueue!.fromDate.month, _selectedQueue!.fromDate.day);
+              final toDateOnly = DateTime(_selectedQueue!.toDate.year, _selectedQueue!.toDate.month, _selectedQueue!.toDate.day);
+              
+              // Check if today is within the queue's date range
+              if (todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0) {
+                _selectedDay = todayOnly; // Set today as default
+              } else {
+                _selectedDay = null; // Today is not in range, keep null
+              }
+            } else {
+              _selectedDay = null; // Reset day selection for single-day queues
+            }
+          });
+          _loadQueueStatistics();
+        }
+      });
+    } else if (_selectedQueue != null && !todayQueues.contains(_selectedQueue)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
