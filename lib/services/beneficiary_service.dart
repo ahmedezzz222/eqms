@@ -366,26 +366,8 @@ class BeneficiaryService {
       }
     }
     
-    // Try case-insensitive search by getting all and filtering (less efficient but more flexible)
-    // This is a fallback for edge cases
-    final allQuery = await _collection.get();
-    for (var doc in allQuery.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final storedNfc = data['nfcPreprintedCode'] as String?;
-      if (storedNfc != null) {
-        final storedNormalized = storedNfc.trim().toLowerCase();
-        final searchNormalized = normalizedNfc.toLowerCase();
-        // Check if they match (with or without prefixes)
-        if (storedNormalized == searchNormalized ||
-            storedNormalized == 'nfc_$searchNormalized' ||
-            storedNormalized == searchNormalized.replaceFirst('0x', '') ||
-            storedNormalized.replaceFirst('nfc_', '') == searchNormalized ||
-            storedNormalized.replaceFirst('nfc_', '') == searchNormalized.replaceFirst('0x', '')) {
-          return documentToBeneficiary(doc);
-        }
-      }
-    }
-    
+    // Removed slow fallback that gets all documents - this was causing performance issues
+    // If exact match fails, return null (beneficiary not found)
     return null;
   }
 
