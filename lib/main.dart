@@ -17792,12 +17792,6 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                     ),
                   ),
                 ),
-                // Test Data Generation Button
-                IconButton(
-                  icon: const Icon(Icons.science, color: Colors.orange),
-                  tooltip: 'Generate 1000 Test Beneficiaries',
-                  onPressed: _generateTestBeneficiaries,
-                ),
               ],
             ),
           ),
@@ -25852,6 +25846,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize with widget data immediately for fast UI rendering
+    _distributionAreas = _filterDistributionAreas(widget.distributionAreas);
     _loadServedReports();
     // Initialize with widget queues, then update from stream
     _allQueues = widget.queues;
@@ -27004,59 +27000,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                     child: StreamBuilder<List<DistributionArea>>(
                       stream: DistributionAreaService.getAllAreas().timeout(
-                        const Duration(seconds: 10),
+                        const Duration(seconds: 5), // Reduced timeout for faster failure
                         onTimeout: (sink) {
                           sink.addError(TimeoutException('Loading queue points timed out'));
                         },
                       ),
                       builder: (context, snapshot) {
-                        List<DistributionArea> displayAreas = [];
+                        // Use widget data immediately while stream loads (fast initial render)
+                        List<DistributionArea> displayAreas = _distributionAreas.isNotEmpty 
+                            ? _distributionAreas 
+                            : _filterDistributionAreas(widget.distributionAreas);
 
+                        // Update with stream data when available
                         if (snapshot.hasData) {
-                          displayAreas = _filterDistributionAreas(snapshot.data!);
-                          // Update local list for export function
-                          if (mounted) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                setState(() {
-                                  _distributionAreas = displayAreas;
-                                });
-                              }
+                          final streamAreas = _filterDistributionAreas(snapshot.data!);
+                          // Only update if data changed to avoid unnecessary rebuilds
+                          if (mounted && _distributionAreas.length != streamAreas.length) {
+                            setState(() {
+                              _distributionAreas = streamAreas;
                             });
+                            displayAreas = streamAreas;
+                          } else if (mounted) {
+                            displayAreas = streamAreas;
                           }
                         } else if (snapshot.hasError) {
-                          // Handle error case - fallback to widget data if available
-                          displayAreas = widget.distributionAreas.isNotEmpty
-                              ? _filterDistributionAreas(widget.distributionAreas)
-                              : [];
+                          // Keep using existing _distributionAreas or widget data
                           print('Error loading distribution areas: ${snapshot.error}');
-                          if (mounted) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                setState(() {
-                                  _distributionAreas = displayAreas;
-                                });
-                              }
-                            });
-                          }
-                        } else if (snapshot.connectionState == ConnectionState.none) {
-                          // Stream not connected - fallback to widget data
-                          displayAreas = widget.distributionAreas.isNotEmpty
-                              ? _filterDistributionAreas(widget.distributionAreas)
-                              : [];
-                          if (mounted) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                setState(() {
-                                  _distributionAreas = displayAreas;
-                                });
-                              }
-                            });
-                          }
+                          // Already using fallback data, no need to update
                         }
+                        // If waiting or no data, use existing _distributionAreas (already set from widget data)
 
-                        // Determine if we're still loading
-                        final isLoading = snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+                        // Determine if we're still loading (only show loading if we have no data at all)
+                        final isLoading = snapshot.connectionState == ConnectionState.waiting && 
+                                         !snapshot.hasData && 
+                                         displayAreas.isEmpty;
 
                         // Validate selected value exists in current areas
                         String? validSelectedValue = _selectedDistributionArea;
