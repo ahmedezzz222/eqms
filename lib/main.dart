@@ -104,6 +104,7 @@ class AppLanguage {
       'Enter Mobile Number': 'Enter Mobile Number',
       'Scan NFC, Enter Mobile or National ID': 'Scan NFC, Enter Mobile or National ID',
       'Beneficiary not found': 'Beneficiary not found',
+      'Search timeout. Please check your connection and try again.': 'Search timeout. Please check your connection and try again.',
       'Serve Units': 'Serve Units',
       'Units to serve (max:': 'Units to serve (max:',
       'Add Area': 'Add Area',
@@ -711,6 +712,7 @@ class AppLanguage {
       'Camera permission is required to scan National ID. Please enable it in app settings.': 'إذن الكاميرا مطلوب لمسح الهوية الوطنية. يرجى تفعيله في إعدادات التطبيق.',
       'Could not extract National ID from image. Please try again or enter manually.': 'تعذر استخراج الهوية الوطنية من الصورة. يرجى المحاولة مرة أخرى أو الإدخال يدوياً.',
       'Beneficiary not found': 'المستفيد غير موجود',
+      'Search timeout. Please check your connection and try again.': 'انتهت مهلة البحث. يرجى التحقق من الاتصال والمحاولة مرة أخرى.',
       'Serve Units': 'تقديم الوحدات',
       'Units to serve (max:': 'الوحدات المقدمة (الحد الأقصى:',
       'Add Area': 'إضافة منطقة',
@@ -4312,6 +4314,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // Store current admin for use in creating queues, etc.
       AdminService.setCurrentAdmin(admin.id, admin);
       
+      // Small delay to ensure admin data is fully set before navigation
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Verify admin is set before proceeding
+      if (AdminService.currentAdmin == null) {
+        print('⚠️ Warning: Admin not set after setCurrentAdmin call, retrying...');
+        AdminService.setCurrentAdmin(admin.id, admin);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
       // If Super Admin, ensure distributionPoint is set to "All"
       // Also check by mobile number for test user
       final isTestSuperAdmin = admin.mobile == '01010646279';
@@ -7780,27 +7792,51 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   String? _lastAdminId; // Track last admin ID to detect admin changes
   
   Future<void> _loadDistributionAreas() async {
+    print('🚀 _loadDistributionAreas() called');
     try {
       // Update tracked admin ID
       final currentAdminId = AdminService.currentAdminId;
+      print('🚀 Current admin ID: $currentAdminId');
       if (currentAdminId != _lastAdminId) {
         _lastAdminId = currentAdminId;
         print('🔄 Admin ID changed in _loadDistributionAreas, reloading...');
       }
       
-      // Load all distribution areas from Firestore
-      final allAreas = await DistributionAreaService.getAllAreas().first;
-      
       // Get current admin's assigned distribution area - try multiple times if needed
+      // IMPORTANT: Wait for admin to be available BEFORE loading areas
       Admin? currentAdmin = AdminService.currentAdmin;
       
-      // If admin is not loaded yet, wait a bit and try again (up to 3 times)
+      // If admin is not loaded yet, wait a bit and try again (up to 10 times)
       int retries = 0;
-      while (currentAdmin == null && retries < 3) {
+      while (currentAdmin == null && retries < 10) {
         await Future.delayed(const Duration(milliseconds: 300));
         currentAdmin = AdminService.currentAdmin;
         retries++;
+        if (retries % 3 == 0) {
+          print('⏳ Waiting for admin data to load... (attempt $retries/10)');
+        }
       }
+      
+      if (currentAdmin == null) {
+        print('❌ Admin data not available after login, cannot load distribution areas');
+        if (mounted) {
+          setState(() {
+            _distributionAreas = [];
+          });
+        }
+        return;
+      }
+      
+      print('✅ Admin data loaded: ${currentAdmin.fullName}');
+      
+      // Load all distribution areas from Firestore (now that admin is available)
+      final allAreas = await DistributionAreaService.getAllAreas().first.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('⚠️ Timeout loading distribution areas');
+          return <DistributionArea>[];
+        },
+      );
       
       print('🔍 Loading distribution areas...');
       print('🔍 Current Admin: ${currentAdmin?.fullName}');
@@ -8003,18 +8039,40 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     
     // Load distribution areas filtered by admin
     // Use WidgetsBinding to ensure admin data is loaded, with a delay to ensure admin is set
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          // Check if admin changed since initState
-          final currentAdminId = AdminService.currentAdminId;
-          if (currentAdminId != _lastAdminId) {
-            _lastAdminId = currentAdminId;
-            print('🔄 Admin ID changed in initState, reloading distribution areas...');
-          }
-          _loadDistributionAreas();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      print('📋 Dashboard initState: Starting distribution areas loading process...');
+      print('📋 Current admin ID: ${AdminService.currentAdminId}');
+      print('📋 Current admin object: ${AdminService.currentAdmin != null ? "Available" : "NULL"}');
+      
+      // Wait for admin to be available (with retries)
+      int retries = 0;
+      while (AdminService.currentAdmin == null && retries < 10) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        retries++;
+        if (retries % 2 == 0) {
+          print('⏳ Dashboard: Waiting for admin data... (attempt $retries/10)');
         }
-      });
+      }
+      
+      if (mounted) {
+        // Check if admin changed since initState
+        final currentAdminId = AdminService.currentAdminId;
+        if (currentAdminId != _lastAdminId) {
+          _lastAdminId = currentAdminId;
+          print('🔄 Admin ID changed in initState, reloading distribution areas...');
+        }
+        
+        final admin = AdminService.currentAdmin;
+        if (admin != null) {
+          print('✅ Dashboard: Admin data available - ${admin.fullName}');
+          print('📋 Dashboard: Calling _loadDistributionAreas()...');
+          _loadDistributionAreas();
+        } else {
+          print('❌ Dashboard: Admin data still not available after waiting');
+        }
+      } else {
+        print('⚠️ Dashboard: Widget not mounted, skipping distribution areas load');
+      }
     });
   }
   
@@ -9322,44 +9380,43 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             SizedBox(height: spacing),
                             StreamBuilder<List<DistributionArea>>(
                               stream: DistributionAreaService.getAllAreas(),
-                              initialData: _distributionAreas, // Use local list as initial data to prevent multiple loads
                               builder: (context, snapshot) {
                               // Get current admin to filter areas
                               final currentAdmin = AdminService.currentAdmin;
                               
-                              // Always show dropdown, use local list if stream hasn't loaded yet or has error
-                              List<DistributionArea> displayAreas;
-                              
+                              // Wait for data to load
                               if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                                // Still loading and no data yet - use local list
-                                displayAreas = _distributionAreas;
-                              } else if (snapshot.hasError) {
-                                // Error occurred - use local list
-                                print('StreamBuilder error: ${snapshot.error}');
-                                displayAreas = _distributionAreas;
-                              } else {
-                                // Use Firestore data if available, otherwise fall back to local
-                                final firestoreAreas = snapshot.data ?? [];
-                                // Prefer Firestore data, but ensure no duplicates
-                                if (firestoreAreas.isNotEmpty) {
-                                  // Remove duplicates by ID
-                                  final uniqueMap = <String, DistributionArea>{};
-                                  for (final area in firestoreAreas) {
-                                    if (!uniqueMap.containsKey(area.id)) {
-                                      uniqueMap[area.id] = area;
-                                    }
-                                  }
-                                  displayAreas = uniqueMap.values.toList();
-                                } else {
-                                  displayAreas = _distributionAreas;
-                                }
+                                return const Center(child: CircularProgressIndicator());
                               }
                               
-                              // Filter based on admin role (same logic as Add New Queue screen)
-                              if (currentAdmin != null && displayAreas.isNotEmpty) {
+                              if (snapshot.hasError) {
+                                print('StreamBuilder error: ${snapshot.error}');
+                                return Text('Error: ${snapshot.error}');
+                              }
+                              
+                              // Get all areas from Firestore
+                              final allAreas = snapshot.data ?? [];
+                              if (allAreas.isEmpty) {
+                                return const Text('No distribution areas available');
+                              }
+                              
+                              // Remove duplicates by ID
+                              final uniqueMap = <String, DistributionArea>{};
+                              for (final area in allAreas) {
+                                if (!uniqueMap.containsKey(area.id)) {
+                                  uniqueMap[area.id] = area;
+                                }
+                              }
+                              final allUniqueAreas = uniqueMap.values.toList();
+                              
+                              // Filter based on admin role (same logic as Dashboard screen)
+                              List<DistributionArea> displayAreas;
+                              if (currentAdmin != null && allUniqueAreas.isNotEmpty) {
                                 final role = currentAdmin.role ?? '';
-                                final distributionPoint = currentAdmin.distributionPoint;
-                                final isSuperAdmin = currentAdmin.isSuperAdmin;
+                                final distributionPoint = currentAdmin.distributionPoint ?? '';
+                                final isSuperAdmin = currentAdmin.isSuperAdmin ?? false;
+                                
+                                // Check if this is the test Super Admin user
                                 final isTestSuperAdmin = currentAdmin.mobile == '01010646279';
                                 
                                 final roleLower = role.toLowerCase().trim();
@@ -9373,16 +9430,25 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                     isTestSuperAdmin;
                                 
                                 if (isSuperAdminRole) {
-                                  // Super Admin sees ALL areas from Firestore
-                                  displayAreas = List<DistributionArea>.from(displayAreas);
-                                } else if ((currentAdmin.isAdmin || currentAdmin.isQAdmin) && distributionPoint.isNotEmpty && distPointLower != 'all') {
+                                  // Super Admin sees ALL areas
+                                  displayAreas = allUniqueAreas;
+                                } else if ((currentAdmin.isAdmin || currentAdmin.isQAdmin) && 
+                                           distributionPoint.isNotEmpty && 
+                                           distPointLower != 'all') {
                                   // Admin/Q_Admin sees only their assigned areas
-                                  displayAreas = displayAreas.where((area) {
-                                    final adminPoint = distributionPoint.toLowerCase();
+                                  // Match by distributionPoint name with areaName (case-insensitive partial match)
+                                  displayAreas = allUniqueAreas.where((area) {
+                                    final adminPoint = currentAdmin.distributionPoint.toLowerCase();
                                     final areaName = area.areaName.toLowerCase();
                                     return areaName.contains(adminPoint) || adminPoint.contains(areaName);
                                   }).toList();
+                                } else {
+                                  // No admin logged in or no distribution point assigned, show all areas
+                                  displayAreas = allUniqueAreas;
                                 }
+                              } else {
+                                // No admin, show all areas
+                                displayAreas = allUniqueAreas;
                               }
                               
                               // Update local list only once when data changes (avoid multiple setState calls)
@@ -10562,56 +10628,75 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                 const SizedBox(height: 8),
                 StreamBuilder<List<DistributionArea>>(
                   stream: DistributionAreaService.getAllAreas(),
-                  initialData: widget.distributionAreas, // Use local list as initial data
                   builder: (context, snapshot) {
-                    // Always show dropdown, use local list if stream hasn't loaded yet or has error
-                    List<DistributionArea> displayAreas;
+                    // Get current admin to filter areas
+                    final currentAdmin = AdminService.currentAdmin;
                     
+                    // Wait for data to load
                     if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                      // Still loading and no data yet - use local list
-                      displayAreas = widget.distributionAreas;
-                    } else if (snapshot.hasError) {
-                      // Error occurred - use local list
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    
+                    if (snapshot.hasError) {
                       print('StreamBuilder error: ${snapshot.error}');
-                      displayAreas = widget.distributionAreas;
-                    } else {
-                      // Use Firestore data if available, otherwise fall back to local
-                      final firestoreAreas = snapshot.data ?? [];
-                      // Prefer Firestore data, but ensure no duplicates
-                      if (firestoreAreas.isNotEmpty) {
-                        // Remove duplicates by ID
-                        final uniqueMap = <String, DistributionArea>{};
-                        for (final area in firestoreAreas) {
-                          if (!uniqueMap.containsKey(area.id)) {
-                            uniqueMap[area.id] = area;
-                          }
-                        }
-                        final allUniqueAreas = uniqueMap.values.toList();
-                        
-                        // Filter areas based on logged-in user's distribution point
-                        final currentAdmin = AdminService.currentAdmin;
-                        if (currentAdmin != null && 
-                            (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all' || currentAdmin.mobile == '01010646279')) {
-                          // Super Admin or admin with "All" can see all areas
-                          displayAreas = allUniqueAreas;
-                        } else if (currentAdmin != null && 
-                                   (currentAdmin.isAdmin || currentAdmin.isQAdmin) && 
-                                   currentAdmin.distributionPoint.isNotEmpty && 
-                                   currentAdmin.distributionPoint.toLowerCase() != 'all') {
-                          // For Admin and Q_Admin roles: Filter to only show their assigned distribution areas
-                          // Match by distributionPoint name with areaName
-                          displayAreas = allUniqueAreas.where((area) {
-                            final adminPoint = currentAdmin.distributionPoint.toLowerCase();
-                            final areaName = area.areaName.toLowerCase();
-                            return areaName.contains(adminPoint) || adminPoint.contains(areaName);
-                          }).toList();
-                      } else {
-                          // No admin logged in or no distribution point assigned, use passed list
-                          displayAreas = widget.distributionAreas;
-                        }
-                      } else {
-                        displayAreas = widget.distributionAreas;
+                      return Text('Error: ${snapshot.error}');
+                    }
+                    
+                    // Get all areas from Firestore
+                    final allAreas = snapshot.data ?? [];
+                    if (allAreas.isEmpty) {
+                      return const Text('No distribution areas available');
+                    }
+                    
+                    // Remove duplicates by ID
+                    final uniqueMap = <String, DistributionArea>{};
+                    for (final area in allAreas) {
+                      if (!uniqueMap.containsKey(area.id)) {
+                        uniqueMap[area.id] = area;
                       }
+                    }
+                    final allUniqueAreas = uniqueMap.values.toList();
+                    
+                    // Filter based on admin role (same logic as Dashboard screen)
+                    List<DistributionArea> displayAreas;
+                    if (currentAdmin != null && allUniqueAreas.isNotEmpty) {
+                      final role = currentAdmin.role ?? '';
+                      final distributionPoint = currentAdmin.distributionPoint ?? '';
+                      final isSuperAdmin = currentAdmin.isSuperAdmin ?? false;
+                      
+                      // Check if this is the test Super Admin user
+                      final isTestSuperAdmin = currentAdmin.mobile == '01010646279';
+                      
+                      final roleLower = role.toLowerCase().trim();
+                      final distPointLower = distributionPoint.toLowerCase().trim();
+                      
+                      final isSuperAdminRole = isSuperAdmin || 
+                          roleLower == 'super_admin' ||
+                          roleLower == 'superadmin' ||
+                          (roleLower.contains('super') && roleLower.contains('admin')) ||
+                          distPointLower == 'all' ||
+                          isTestSuperAdmin;
+                      
+                      if (isSuperAdminRole) {
+                        // Super Admin sees ALL areas
+                        displayAreas = allUniqueAreas;
+                      } else if ((currentAdmin.isAdmin || currentAdmin.isQAdmin) && 
+                                 distributionPoint.isNotEmpty && 
+                                 distPointLower != 'all') {
+                        // Admin/Q_Admin sees only their assigned areas
+                        // Match by distributionPoint name with areaName (case-insensitive partial match)
+                        displayAreas = allUniqueAreas.where((area) {
+                          final adminPoint = currentAdmin.distributionPoint.toLowerCase();
+                          final areaName = area.areaName.toLowerCase();
+                          return areaName.contains(adminPoint) || adminPoint.contains(areaName);
+                        }).toList();
+                      } else {
+                        // No admin logged in or no distribution point assigned, show all areas
+                        displayAreas = allUniqueAreas;
+                      }
+                    } else {
+                      // No admin, show all areas
+                      displayAreas = allUniqueAreas;
                     }
                     
                     return DropdownButtonFormField<String>(
@@ -24321,7 +24406,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       // Start NFC session - auto-detect when card is tapped
       NFCHelper.startNFCSession(
         context: context,
-        onTagDetected: (id) {
+        onTagDetected: (id) async {
           if (mounted) {
             final now = DateTime.now();
             
@@ -24355,8 +24440,14 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             
             print('NFC: 🔍 New tag ID detected, starting search: $id');
             
+            // Add a small delay to ensure queue is ready and Firestore is initialized
+            // This prevents timeout on first search (cold start)
+            await Future.delayed(const Duration(milliseconds: 200));
+            
             // Automatically search for beneficiary by original NFC ID (not masked)
-            _handleSearchInput(id);
+            if (mounted) {
+              _handleSearchInput(id);
+            }
           }
         },
         onError: (error) {
@@ -24595,23 +24686,69 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
 
     try {
       Beneficiary? foundBeneficiary;
+      bool hasTimeoutError = false; // Track if any timeout occurred
 
-      // Search based on selected verification method - optimized with timeouts (500ms max per query)
+      // Search based on selected verification method - optimized with timeouts
+      // NFC searches get longer timeout (1000ms) to handle cold start and first query delays
       if (_selectedVerificationMethod == 0) {
         // NFC method - search by NFC code (card) first, then by NFC reference
         try {
           foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-              .timeout(const Duration(milliseconds: 500));
+              .timeout(const Duration(milliseconds: 1000)); // Increased timeout for NFC
         } catch (e) {
           print('NFC card search timeout or error: $e');
+          // Check if it's a timeout error
+          if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+            hasTimeoutError = true;
+            print('NFC: Retrying NFC card search after timeout...');
+            try {
+              await Future.delayed(const Duration(milliseconds: 300));
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+                  .timeout(const Duration(milliseconds: 1000));
+              // If retry succeeds, clear timeout flag
+              if (foundBeneficiary != null) {
+                hasTimeoutError = false;
+              }
+            } catch (e2) {
+              print('NFC card search retry also failed: $e2');
+              // If retry also times out, keep timeout flag
+              if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                hasTimeoutError = true;
+              }
+            }
+          }
         }
         // If not found by NFC card, try NFC reference
         if (foundBeneficiary == null) {
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                .timeout(const Duration(milliseconds: 500));
+                .timeout(const Duration(milliseconds: 1000)); // Increased timeout for NFC
+            // If found, clear timeout flag
+            if (foundBeneficiary != null) {
+              hasTimeoutError = false;
+            }
           } catch (e) {
             print('NFC reference search timeout or error: $e');
+            // Check if it's a timeout error
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+              print('NFC: Retrying NFC reference search after timeout...');
+              try {
+                await Future.delayed(const Duration(milliseconds: 300));
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                    .timeout(const Duration(milliseconds: 1000));
+                // If retry succeeds, clear timeout flag
+                if (foundBeneficiary != null) {
+                  hasTimeoutError = false;
+                }
+              } catch (e2) {
+                print('NFC reference search retry also failed: $e2');
+                // If retry also times out, keep timeout flag
+                if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                  hasTimeoutError = true;
+                }
+              }
+            }
           }
         }
       } else if (_selectedVerificationMethod == 1) {
@@ -24621,6 +24758,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               .timeout(const Duration(milliseconds: 500));
         } catch (e) {
           print('Mobile search timeout or error: $e');
+          if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+            hasTimeoutError = true;
+          }
         }
       } else if (_selectedVerificationMethod == 2) {
         // National ID method - search by ID number
@@ -24629,6 +24769,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               .timeout(const Duration(milliseconds: 500));
         } catch (e) {
           print('ID number search timeout or error: $e');
+          if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+            hasTimeoutError = true;
+          }
         }
       } else {
         // Fallback: Auto-detect search type based on input pattern - optimized with timeouts
@@ -24639,24 +24782,69 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 .timeout(const Duration(milliseconds: 500));
           } catch (e) {
             print('Mobile search timeout or error: $e');
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+            }
           }
         }
         // 2. Check if it's NFC code (starts with "NFC_" or alphanumeric, length >= 8) or NFC reference
         else if (value.toUpperCase().startsWith('NFC_') || (value.length >= 8 && RegExp(r'^[A-Z0-9_]+$').hasMatch(value.toUpperCase()))) {
-          // Try NFC card first
+          // Try NFC card first (increased timeout for NFC searches)
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                .timeout(const Duration(milliseconds: 500));
+                .timeout(const Duration(milliseconds: 1000));
           } catch (e) {
             print('NFC card search timeout or error: $e');
+            // Check if it's a timeout error
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+              try {
+                await Future.delayed(const Duration(milliseconds: 300));
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+                    .timeout(const Duration(milliseconds: 1000));
+                // If retry succeeds, clear timeout flag
+                if (foundBeneficiary != null) {
+                  hasTimeoutError = false;
+                }
+              } catch (e2) {
+                print('NFC card search retry also failed: $e2');
+                // If retry also times out, keep timeout flag
+                if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                  hasTimeoutError = true;
+                }
+              }
+            }
           }
           // If not found, try NFC reference
           if (foundBeneficiary == null) {
             try {
               foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                  .timeout(const Duration(milliseconds: 500));
+                  .timeout(const Duration(milliseconds: 1000));
+              // If found, clear timeout flag
+              if (foundBeneficiary != null) {
+                hasTimeoutError = false;
+              }
             } catch (e) {
               print('NFC reference search timeout or error: $e');
+              // Check if it's a timeout error
+              if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+                hasTimeoutError = true;
+                try {
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                      .timeout(const Duration(milliseconds: 1000));
+                  // If retry succeeds, clear timeout flag
+                  if (foundBeneficiary != null) {
+                    hasTimeoutError = false;
+                  }
+                } catch (e2) {
+                  print('NFC reference search retry also failed: $e2');
+                  // If retry also times out, keep timeout flag
+                  if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                    hasTimeoutError = true;
+                  }
+                }
+              }
             }
           }
         }
@@ -24665,17 +24853,59 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // Could be NFC reference (numeric, shorter)
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                .timeout(const Duration(milliseconds: 500));
+                .timeout(const Duration(milliseconds: 1000));
           } catch (e) {
             print('NFC reference search timeout or error: $e');
+            // Check if it's a timeout error
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+              try {
+                await Future.delayed(const Duration(milliseconds: 300));
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                    .timeout(const Duration(milliseconds: 1000));
+                // If retry succeeds, clear timeout flag
+                if (foundBeneficiary != null) {
+                  hasTimeoutError = false;
+                }
+              } catch (e2) {
+                print('NFC reference search retry also failed: $e2');
+                // If retry also times out, keep timeout flag
+                if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                  hasTimeoutError = true;
+                }
+              }
+            }
           }
           // If not found, try NFC card as fallback
           if (foundBeneficiary == null) {
             try {
               foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                  .timeout(const Duration(milliseconds: 500));
+                  .timeout(const Duration(milliseconds: 1000));
+              // If found, clear timeout flag
+              if (foundBeneficiary != null) {
+                hasTimeoutError = false;
+              }
             } catch (e) {
               print('NFC card search timeout or error: $e');
+              // Check if it's a timeout error
+              if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+                hasTimeoutError = true;
+                try {
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+                      .timeout(const Duration(milliseconds: 1000));
+                  // If retry succeeds, clear timeout flag
+                  if (foundBeneficiary != null) {
+                    hasTimeoutError = false;
+                  }
+                } catch (e2) {
+                  print('NFC card search retry also failed: $e2');
+                  // If retry also times out, keep timeout flag
+                  if (e2.toString().contains('timeout') || e2.toString().contains('TimeoutException')) {
+                    hasTimeoutError = true;
+                  }
+                }
+              }
             }
           }
         }
@@ -24686,6 +24916,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 .timeout(const Duration(milliseconds: 500));
           } catch (e) {
             print('ID number search timeout or error: $e');
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+            }
           }
         }
         // 4. Try all methods if pattern doesn't match (with timeouts) - limit to 2 attempts max
@@ -24696,6 +24929,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 .timeout(const Duration(milliseconds: 400));
           } catch (e) {
             print('Mobile search timeout or error: $e');
+            if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+              hasTimeoutError = true;
+            }
           }
           // Try ID number if mobile not found
           if (foundBeneficiary == null) {
@@ -24704,6 +24940,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                   .timeout(const Duration(milliseconds: 400));
             } catch (e) {
               print('ID number search timeout or error: $e');
+              if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+                hasTimeoutError = true;
+              }
             }
           }
         }
@@ -24765,7 +25004,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           _verifyAndIssueQueueNumber(foundBeneficiary);
         }
       } else {
-        // Beneficiary not found
+        // Beneficiary not found - check if it was due to timeout
         if (mounted) {
           setState(() {
             _verifiedBeneficiary = null;
@@ -24773,10 +25012,17 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             _isNFCScanning = false;
             _isSearching = false;
           });
+          
+          // Show timeout message if timeout occurred, otherwise show "not found"
+          final errorMessage = hasTimeoutError 
+              ? AppLanguage.translate('Search timeout. Please check your connection and try again.')
+              : AppLanguage.translate('Beneficiary not found');
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLanguage.translate('Beneficiary not found')),
-              backgroundColor: Colors.red,
+              content: Text(errorMessage),
+              backgroundColor: hasTimeoutError ? Colors.orange : Colors.red,
+              duration: const Duration(seconds: 4),
             ),
           );
           // Restart NFC detection after showing error to listen for next card
