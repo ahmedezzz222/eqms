@@ -18256,72 +18256,103 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                       // widget.distributionAreas is already filtered by admin role in dashboard
                       final displayAreas = widget.distributionAreas;
                       
-                      return DropdownButtonFormField<String>(
-                        value: _selectedDistributionArea,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          filled: true,
-                          fillColor: Colors.white,
-                          hintText: displayAreas.isEmpty 
-                              ? AppLanguage.translate('No areas available')
-                              : AppLanguage.translate('Select Distribution Area'),
-                        ),
-                        items: displayAreas.isEmpty
-                            ? [
-                                DropdownMenuItem(
-                                  value: null,
-                                  enabled: false,
-                                  child: Text(
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Show location hierarchy above dropdown if area is selected
+                          if (_selectedDistributionArea != null)
+                            Builder(
+                              builder: (context) {
+                                try {
+                                  final selectedArea = displayAreas.firstWhere(
+                                    (area) => area.id == _selectedDistributionArea,
+                                  );
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      selectedArea.locationHierarchy,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF1A237E),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  return const SizedBox.shrink();
+                                }
+                              },
+                            ),
+                          DropdownButtonFormField<String>(
+                            value: _selectedDistributionArea,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              filled: true,
+                              fillColor: Colors.white,
+                              hintText: displayAreas.isEmpty 
+                                  ? AppLanguage.translate('No areas available')
+                                  : AppLanguage.translate('Select Distribution Area'),
+                            ),
+                            items: displayAreas.isEmpty
+                                ? [
+                                    DropdownMenuItem(
+                                      value: null,
+                                      enabled: false,
+                                      child: Text(
+                                        AppLanguage.translate('No areas available'),
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      ),
+                                    ),
+                                  ]
+                                : [
+                                    if (displayAreas.length > 1)
+                                      DropdownMenuItem<String>(
+                                        value: null,
+                                        child: Text(AppLanguage.translate('All Areas')),
+                                      ),
+                                    ...displayAreas.map((area) {
+                                      return DropdownMenuItem<String>(
+                                        value: area.id,
+                                        child: Text(
+                                          area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                            selectedItemBuilder: (context) {
+                              if (displayAreas.isEmpty) {
+                                return [
+                                  Text(
                                     AppLanguage.translate('No areas available'),
                                     style: TextStyle(color: Colors.grey[600]),
                                   ),
-                                ),
-                              ]
-                            : [
+                                ];
+                              }
+                              return [
                                 if (displayAreas.length > 1)
-                                  DropdownMenuItem<String>(
-                                    value: null,
-                                    child: Text(AppLanguage.translate('All Areas')),
-                                  ),
+                                  Text(AppLanguage.translate('All Areas')),
                                 ...displayAreas.map((area) {
-                                  return DropdownMenuItem<String>(
-                                    value: area.id,
-                                    child: Text(
-                                      area.fullName,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
+                                  return Text(
+                                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: const TextStyle(fontSize: 14),
                                   );
                                 }).toList(),
-                              ],
-                        selectedItemBuilder: (context) {
-                          if (displayAreas.isEmpty) {
-                            return [
-                              Text(
-                                AppLanguage.translate('No areas available'),
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ];
-                          }
-                          return [
-                            if (displayAreas.length > 1)
-                              Text(AppLanguage.translate('All Areas')),
-                            ...displayAreas.map((area) {
-                              return Text(
-                                area.fullName,
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              );
-                            }).toList(),
-                          ];
-                        },
-                        onChanged: displayAreas.isEmpty ? null : (value) {
-                          print('🔄 Distribution area changed to: $value');
-                          setState(() {
-                            _selectedDistributionArea = value;
-                          });
-                        },
+                              ];
+                            },
+                            onChanged: displayAreas.isEmpty ? null : (value) {
+                              print('🔄 Distribution area changed to: $value');
+                              setState(() {
+                                _selectedDistributionArea = value;
+                              });
+                            },
+                          ),
+                        ],
                       );
                     },
                   ),
