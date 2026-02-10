@@ -13,18 +13,23 @@ class GoogleLensResultHelper {
   static bool _isMonitoring = false;
   
   /// Start monitoring clipboard for Google Lens results
-  /// This checks clipboard every 500ms when app is active
-  static void startMonitoring(Function(String) onTextDetected) {
-    if (_isMonitoring) return;
+  /// This checks clipboard every 100ms when app is active
+  static Future<void> startMonitoring(Function(String) onTextDetected) async {
+    // Stop any existing monitoring first
+    stopMonitoring();
+    
+    // Clear clipboard and reset tracking to avoid detecting old data
+    await clearClipboard();
+    _lastClipboardText = null;
     
     _onTextDetected = onTextDetected;
     _isMonitoring = true;
     
-    // Get initial clipboard content
-    _checkClipboard();
+    // Small delay to ensure clipboard is cleared before starting monitoring
+    await Future.delayed(const Duration(milliseconds: 200));
     
-    // Monitor clipboard periodically
-    _clipboardMonitor = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    // Monitor clipboard very frequently for fastest detection (every 100ms)
+    _clipboardMonitor = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       _checkClipboard();
     });
   }
@@ -51,7 +56,11 @@ class GoogleLensResultHelper {
         _lastClipboardText = currentText;
         
         // Only trigger if text seems meaningful (more than 3 characters)
-        if (currentText.length > 3 && _onTextDetected != null) {
+        // For ID scanning, we want to detect even shorter text if it contains numbers
+        final hasNumbers = RegExp(r'\d{8,}').hasMatch(currentText);
+        final hasText = currentText.length > 3;
+        
+        if ((hasText || hasNumbers) && _onTextDetected != null) {
           _onTextDetected!(currentText);
         }
       }

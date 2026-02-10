@@ -34,7 +34,6 @@ import 'services/beneficiary_service.dart';
 import 'services/serving_transaction_service.dart';
 import 'services/app_settings_service.dart';
 import 'live_text_detection_screen.dart';
-import 'google_lens_result_helper.dart';
 
 // Language Manager
 class AppLanguage {
@@ -226,7 +225,11 @@ class AppLanguage {
       // Queue Point
       'Add Distribution Area': 'Add Queue Point',
       'Distribution Area Name': 'Queue Point Name',
+      'Distribution Area Name (Arabic)': 'Queue Point Name (Arabic)',
+      'Distribution Area Name (English)': 'Queue Point Name (English)',
       'Enter distribution area name': 'Enter queue point name',
+      'Enter distribution area name in Arabic': 'Enter queue point name in Arabic',
+      'Enter distribution area name in English': 'Enter queue point name in English',
       'Create Area': 'Create Queue Point',
       'Area created successfully': 'Queue point created successfully',
       // Common Messages
@@ -526,6 +529,9 @@ class AppLanguage {
       'Please enter password': 'Please enter password',
       'Please select role': 'Please select role',
       'Select governorate': 'Select governorate',
+      'Select city': 'Select city',
+      'Select governorate first': 'Select governorate first',
+      'Failed to create area': 'Failed to create area',
       'Super_Admin': 'Super Admin',
       'Q_Admin': 'Q Admin',
       'pending': 'Pending',
@@ -830,7 +836,11 @@ class AppLanguage {
       // Queue Point
       'Add Distribution Area': 'إضافة نقطة طابور',
       'Distribution Area Name': 'اسم نقطة الطابور',
+      'Distribution Area Name (Arabic)': 'اسم نقطة الطابور (عربي)',
+      'Distribution Area Name (English)': 'اسم نقطة الطابور (إنجليزي)',
       'Enter distribution area name': 'أدخل اسم نقطة الطابور',
+      'Enter distribution area name in Arabic': 'أدخل اسم نقطة الطابور بالعربية',
+      'Enter distribution area name in English': 'أدخل اسم نقطة الطابور بالإنجليزية',
       'Create Area': 'إنشاء نقطة طابور',
       'Area created successfully': 'تم إنشاء نقطة الطابور بنجاح',
       // Common Messages
@@ -1140,6 +1150,9 @@ class AppLanguage {
       'Please enter password': 'يرجى إدخال كلمة المرور',
       'Please select role': 'يرجى اختيار الدور',
       'Select governorate': 'اختر المحافظة',
+      'Select city': 'اختر المدينة',
+      'Select governorate first': 'اختر المحافظة أولاً',
+      'Failed to create area': 'فشل إنشاء المنطقة',
       'Super_Admin': 'مدير عام',
       'Q_Admin': 'مسؤول الطابور',
       'pending': 'قيد الانتظار',
@@ -3105,6 +3118,21 @@ class DistributionArea {
   
   /// Get location hierarchy without area name (e.g., "Egypt > Cairo > Nasr City >")
   String get locationHierarchy => '$country > $governorate > $city >';
+  
+  /// Get area name based on current language (Arabic or English)
+  /// If areaName contains " / ", extracts the appropriate part
+  /// Otherwise returns the full areaName
+  String getLocalizedAreaName() {
+    if (areaName.contains(' / ')) {
+      final parts = areaName.split(' / ');
+      if (parts.length == 2) {
+        // First part is Arabic, second part is English
+        return AppLanguage.isArabic ? parts[0].trim() : parts[1].trim();
+      }
+    }
+    // If format doesn't match, return the full name
+    return areaName;
+  }
 }
 
 // Admin Model
@@ -4951,7 +4979,6 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   bool _useCustomEntity = false;
   String? _idCopyPath;
   String? _photoPath;
-  bool _waitingForGoogleLens = false;
   String? _duplicateIDMessage;
   String? _duplicateMobileMessage; // Track duplicate mobile number message
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
@@ -4959,140 +4986,6 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
   DateTime? _extractedBirthDate;
-  // bool _isGoogleLensAvailable = true; // Default to true, will be checked on init - UNUSED
-  static const MethodChannel _googleLensChannel = MethodChannel('com.et3amapp.eqmsapp/google_lens');
-  
-  
-  /// Callback when text is detected from Google Lens
-  void _onGoogleLensTextDetected(String text) {
-    // Only process text if we're actively waiting for Google Lens results
-    // This prevents popups when opening the screen with clipboard content
-    if (_waitingForGoogleLens && mounted) {
-      print('🔍 Google Lens text detected: ${text.substring(0, text.length > 200 ? 200 : text.length)}');
-      setState(() {
-        _waitingForGoogleLens = false;
-      });
-      _parseAndFillGoogleLensData(text);
-    }
-    // Removed the else clause that showed popup when not waiting for Google Lens
-  }
-  
-  /// Show dialog to confirm using detected Google Lens text
-  
-  /// Parse Google Lens text and fill form fields
-  void _parseAndFillGoogleLensData(String text) {
-    try {
-      print('🔍 Parsing Google Lens text (length: ${text.length})');
-      print('🔍 Full text: ${text.substring(0, text.length > 1000 ? 1000 : text.length)}');
-      
-      // Clean the text - Google Lens sometimes adds extra formatting
-      String cleanedText = text
-          .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
-          .replaceAll(RegExp(r'[^\w\sأ-ي\d\-/]'), '') // Remove special chars except Arabic, numbers, dashes, slashes
-          .trim();
-      
-      // Use existing IDParser to extract data
-      final parsedData = IDParser.parseIDText(cleanedText);
-      
-      print('🔍 Google Lens Extracted Data:');
-      print('  ID Number: ${parsedData['idNumber']}');
-      print('  Name: ${parsedData['name']}');
-      print('  Birth Date: ${parsedData['birthDate']}');
-      print('  Gender: ${parsedData['gender']}');
-      print('  Birth Location: ${parsedData['birthLocation']}');
-      
-      if (mounted) {
-        bool dataExtracted = false;
-        
-        setState(() {
-          // Fill ID Number
-          if (parsedData['idNumber'] != null) {
-            final idNum = parsedData['idNumber'] as String;
-            if (idNum.length == 14) {
-              _idNumberController.text = idNum;
-              _checkDuplicateID(idNum);
-              dataExtracted = true;
-              print('✅ ID Number extracted: $idNum');
-            }
-          }
-          
-          // Fill Name
-          if (parsedData['name'] != null) {
-            final name = parsedData['name'] as String;
-            // Validate name - should not be just numbers or codes
-            if (!RegExp(r'^[A-Z]{1,3}\d{4,}$').hasMatch(name.trim()) && 
-                !RegExp(r'^[A-Z]{2,}\d+$').hasMatch(name.trim()) &&
-                name.length >= 3 &&
-                RegExp(r'[أ-يA-Za-z]').hasMatch(name)) {
-              _nameController.text = name;
-              dataExtracted = true;
-              print('✅ Name extracted: $name');
-            }
-          }
-          
-          // Fill Gender
-          if (parsedData['gender'] != null) {
-            final gender = parsedData['gender'] as String;
-            if (gender.isNotEmpty) {
-              _gender = gender;
-              dataExtracted = true;
-              print('✅ Gender extracted: $gender');
-            }
-          }
-          
-          // Fill Birth Location
-          if (parsedData['birthLocation'] != null) {
-            final location = parsedData['birthLocation'] as String;
-            if (location.isNotEmpty && RegExp(r'[أ-يA-Za-z]').hasMatch(location)) {
-              // You can add a birth location field if needed
-              print('✅ Birth Location extracted: $location');
-            }
-          }
-          
-          // Fill Type based on birth date
-          if (parsedData['birthDate'] != null) {
-            final birthDate = parsedData['birthDate'] as DateTime;
-            final elderlyThreshold = DateTime(1965, 1, 1);
-            if (birthDate.isBefore(elderlyThreshold)) {
-              _type = 'Elderly';
-            }
-            dataExtracted = true;
-            print('✅ Birth Date extracted: $birthDate');
-          }
-        });
-        
-        if (dataExtracted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Data extracted from Google Lens and filled automatically'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        } else {
-          // Show dialog with extracted text for manual review
-          _showManualReviewDialog(cleanedText, parsedData);
-        }
-      }
-    } catch (e, stackTrace) {
-      print('❌ Error parsing Google Lens data: $e');
-      print('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('⚠️ Could not parse data from Google Lens. Please enter manually.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: AppLanguage.translate('Review Text'),
-              textColor: Colors.white,
-              onPressed: () => _showManualReviewDialog(text, {}),
-            ),
-          ),
-        );
-      }
-    }
-  }
   
   /// Show dialog for manual review of extracted data
   void _showManualReviewDialog(String text, Map<String, dynamic> parsedData) {
@@ -5319,61 +5212,16 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
     super.initState();
     // Add lifecycle observer
     WidgetsBinding.instance.addObserver(this);
-    // Start monitoring clipboard for Google Lens results
-    GoogleLensResultHelper.startMonitoring(_onGoogleLensTextDetected);
-    // Check if Google Lens is available
-    _checkGoogleLensAvailability();
     // Auto-start NFC detection when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startNFCDetection();
     });
-  }
-  
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed && _waitingForGoogleLens) {
-      print('🔍 App resumed - checking for Google Lens result...');
-      // Wait a bit for clipboard to update
-      Future.delayed(const Duration(milliseconds: 500), () async {
-        if (mounted && _waitingForGoogleLens) {
-          final clipboardText = await GoogleLensResultHelper.getClipboardText();
-          if (clipboardText != null && clipboardText.trim().isNotEmpty) {
-            print('🔍 Found clipboard text after resume: ${clipboardText.substring(0, clipboardText.length > 200 ? 200 : clipboardText.length)}');
-            _onGoogleLensTextDetected(clipboardText);
-          }
-        }
-      });
-    }
-  }
-  
-  /// Check if Google Lens is available on the device
-  Future<void> _checkGoogleLensAvailability() async {
-    try {
-      if (Platform.isAndroid) {
-        final isAvailable = await _googleLensChannel.invokeMethod('isGoogleLensAvailable');
-        if (mounted) {
-          setState(() {
-            // _isGoogleLensAvailable = isAvailable == true; // UNUSED
-          });
-        }
-      }
-    } catch (e) {
-      print('Error checking Google Lens availability: $e');
-      if (mounted) {
-        setState(() {
-          // _isGoogleLensAvailable = false; // UNUSED
-        });
-      }
-    }
   }
 
   @override
   void dispose() {
     // Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
-    // Stop Google Lens monitoring
-    GoogleLensResultHelper.stopMonitoring();
     // Stop NFC session if active
     NFCHelper.stopNFCSession();
     _nameController.dispose();
@@ -6724,8 +6572,10 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           });
           print('✅ ID Number set: $validIdNumber (${validIdNumber.length} digits)');
           
-          // Check for duplicate ID
-          _checkDuplicateID(validIdNumber);
+          // Check for duplicate ID (fire and forget - don't block)
+          _checkDuplicateID(validIdNumber).catchError((e) {
+            print('⚠️ Error checking duplicate ID: $e');
+          });
           
           // Extract birth date from ID number (only if we have at least 7 digits for date)
           if (validIdNumber.length >= 7) {
@@ -6757,6 +6607,49 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       
       // Extract name from parsed data
       String? extractedName = parsedData['name'] as String?;
+      
+      // If name not found by parser, try to extract it manually from text
+      if (extractedName == null || extractedName.isEmpty) {
+        print('⚠️ Name not found by parser, trying manual extraction...');
+        
+        // Clean the text first
+        final cleanedText = IDParser.convertArabicIndicToWestern(text);
+        final lines = cleanedText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+        
+        // Look for lines that contain Arabic or English text (likely names)
+        for (final line in lines) {
+          // Skip lines with only numbers or dates
+          if (RegExp(r'^\d+$').hasMatch(line) || RegExp(r'\d{2}[/-]\d{2}[/-]\d{4}').hasMatch(line)) {
+            continue;
+          }
+          
+          // Skip lines that are too short or contain mostly numbers
+          if (line.length < 3 || RegExp(r'\d').allMatches(line).length > line.length / 2) {
+            continue;
+          }
+          
+          // Check if line contains Arabic or English text (name-like)
+          final hasArabic = RegExp(r'[أ-ي]').hasMatch(line);
+          final hasEnglish = RegExp(r'[A-Za-z]{3,}').hasMatch(line);
+          
+          if (hasArabic || hasEnglish) {
+            // Remove common ID card phrases
+            final cleanedLine = line
+                .replaceAll(RegExp(r'جمهورية مصر العربية', caseSensitive: false), '')
+                .replaceAll(RegExp(r'بطاقة تحقيق شخصية', caseSensitive: false), '')
+                .replaceAll(RegExp(r'بطاقة وطنية', caseSensitive: false), '')
+                .replaceAll(RegExp(r'الاسم', caseSensitive: false), '')
+                .replaceAll(RegExp(r'name', caseSensitive: false), '')
+                .trim();
+            
+            if (cleanedLine.length >= 3) {
+              extractedName = cleanedLine;
+              print('✅ Found name manually: $extractedName');
+              break;
+            }
+          }
+        }
+      }
       
       if (extractedName != null && extractedName.isNotEmpty) {
         // Clean the name - remove extra whitespace
@@ -7141,17 +7034,19 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final result = await Navigator.push<String>(
-                            context,
+                          // Launch ML Kit OCR camera directly (better Arabic support than Google Lens)
+                          Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const LiveTextDetectionScreen(),
+                              builder: (context) => LiveTextDetectionScreen(
+                                autoReturnOnDetect: true,
+                              ),
                             ),
-                          );
-                          
-                          // Handle the returned text from Live Text Detection
-                          if (result != null && result.isNotEmpty) {
-                            _processLiveTextDetectionResult(result);
-                          }
+                          ).then((result) {
+                            // If result is a string (detected text), process it
+                            if (result != null && result is String && result.isNotEmpty) {
+                              _processLiveTextDetectionResult(result);
+                            }
+                          });
                         },
                         icon: const Icon(Icons.camera_alt, size: 18),
                         label: Text(
@@ -7759,7 +7654,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 return DropdownMenuItem(
                   value: area.id,
                   child: Text(
-                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    area.getLocalizedAreaName(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 14),
@@ -7769,7 +7664,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
               selectedItemBuilder: (context) {
                 return widget.distributionAreas.map((area) {
                   return Text(
-                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    area.getLocalizedAreaName(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 14),
@@ -9523,49 +9418,55 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                 },
                               ),
                             // Use filtered areas from _distributionAreas (already filtered by admin)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFFE0E0E0)),
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.white,
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _getValidSelectedArea(),
-                                  isExpanded: true,
-                                  hint: Text(AppLanguage.translate('Select Distribution Area')),
-                                  items: _distributionAreas.map((area) {
-                                    return DropdownMenuItem<String>(
-                                      value: area.id,
-                                      child: Text(
-                                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    );
-                                  }).toList(),
-                                  selectedItemBuilder: (context) {
-                                    return _distributionAreas.map((area) {
-                                      return Text(
-                                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                        style: const TextStyle(fontSize: 14),
-                                      );
-                                    }).toList();
-                                  },
-                                  focusNode: FocusNode(skipTraversal: true), // Prevent keyboard from appearing
-                                  onChanged: (value) {
-                                    // Dismiss keyboard when dropdown value changes
-                                    FocusScope.of(context).unfocus();
-                                    setState(() {
-                                      _selectedDistributionArea = value;
-                                    });
-                                  },
-                                ),
-                              ),
+                            // Wrap in ValueListenableBuilder to rebuild when language changes
+                            ValueListenableBuilder<String>(
+                              valueListenable: AppLanguage.languageNotifier,
+                              builder: (context, language, child) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFE0E0E0)),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.white,
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _getValidSelectedArea(),
+                                      isExpanded: true,
+                                      hint: Text(AppLanguage.translate('Select Distribution Area')),
+                                      items: _distributionAreas.map((area) {
+                                        return DropdownMenuItem<String>(
+                                          value: area.id,
+                                          child: Text(
+                                            area.getLocalizedAreaName(),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      selectedItemBuilder: (context) {
+                                        return _distributionAreas.map((area) {
+                                          return Text(
+                                            area.getLocalizedAreaName(),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                            style: const TextStyle(fontSize: 14),
+                                          );
+                                        }).toList();
+                                      },
+                                      focusNode: FocusNode(skipTraversal: true), // Prevent keyboard from appearing
+                                      onChanged: (value) {
+                                        // Dismiss keyboard when dropdown value changes
+                                        FocusScope.of(context).unfocus();
+                                        setState(() {
+                                          _selectedDistributionArea = value;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                         ],
                       ),
@@ -10693,7 +10594,7 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                                 return DropdownMenuItem(
                                   value: area.id,
                                   child: Text(
-                                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                    area.getLocalizedAreaName(),
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 1,
                                     style: const TextStyle(fontSize: 14),
@@ -10711,7 +10612,7 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                         }
                     return widget.distributionAreas.map((area) {
                           return Text(
-                            area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                            area.getLocalizedAreaName(),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                             style: const TextStyle(fontSize: 14),
@@ -15480,7 +15381,7 @@ class BeneficiaryRegistrationScreen extends StatefulWidget {
   State<BeneficiaryRegistrationScreen> createState() => _BeneficiaryRegistrationScreenState();
 }
 
-class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationScreen> {
+class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _idNumberController = TextEditingController();
@@ -17076,17 +16977,19 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final result = await Navigator.push<String>(
-                            context,
+                          // Launch ML Kit OCR camera directly (better Arabic support than Google Lens)
+                          Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const LiveTextDetectionScreen(),
+                              builder: (context) => LiveTextDetectionScreen(
+                                autoReturnOnDetect: true,
+                              ),
                             ),
-                          );
-                          
-                          // Handle the returned text from Live Text Detection
-                          if (result != null && result.isNotEmpty) {
-                            _processLiveTextDetectionResult(result);
-                          }
+                          ).then((result) {
+                            // If result is a string (detected text), process it
+                            if (result != null && result is String && result.isNotEmpty) {
+                              _processLiveTextDetectionResult(result);
+                            }
+                          });
                         },
                         icon: const Icon(Icons.camera_alt, size: 18),
                         label: Text(
@@ -17690,7 +17593,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                 return DropdownMenuItem(
                   value: area.id,
                   child: Text(
-                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    area.getLocalizedAreaName(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 14),
@@ -17700,7 +17603,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
               selectedItemBuilder: (context) {
                 return widget.distributionAreas.map((area) {
                   return Text(
-                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    area.getLocalizedAreaName(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 14),
@@ -18315,7 +18218,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                                       return DropdownMenuItem<String>(
                                         value: area.id,
                                         child: Text(
-                                          area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                          area.getLocalizedAreaName(),
                                           overflow: TextOverflow.ellipsis,
                                           maxLines: 1,
                                           style: const TextStyle(fontSize: 14),
@@ -18337,7 +18240,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                                   Text(AppLanguage.translate('All Areas')),
                                 ...displayAreas.map((area) {
                                   return Text(
-                                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                    area.getLocalizedAreaName(),
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 1,
                                     style: const TextStyle(fontSize: 14),
@@ -18516,7 +18419,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                                 ),
                               ),
                               child: Text(
-                                'Served for: ${beneficiary.numberOfUnits} unit${beneficiary.numberOfUnits != '1' ? 's' : ''}',
+                                '${AppLanguage.translate('Eligible for')} ${beneficiary.numberOfUnits} unit${beneficiary.numberOfUnits != '1' ? 's' : ''}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -18716,7 +18619,7 @@ class BeneficiaryDetailsScreen extends StatefulWidget {
   State<BeneficiaryDetailsScreen> createState() => _BeneficiaryDetailsScreenState();
 }
 
-class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
+class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _idNumberController = TextEditingController();
@@ -18746,6 +18649,66 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
   String? _duplicateNFCMessage; // Track duplicate NFC tag ID message
   String? _duplicateNFCReferenceMessage; // Track duplicate NFC reference message
+  
+  /// Process text from Live Text Detection (Google Lens-like) screen
+  void _processLiveTextDetectionResult(String text) {
+    if (text.isEmpty) return;
+    
+    try {
+      // Parse the text using IDParser
+      final parsedData = IDParser.parseIDText(text);
+      
+      // Extract 14-digit ID number
+      var idNumber = parsedData['idNumber'] as String?;
+      
+      // If ID number is not exactly 14 digits, try to extract it directly from text
+      if (idNumber == null || idNumber.length != 14) {
+        final cleanedText = IDParser.convertArabicIndicToWestern(text);
+        final directIdMatch = RegExp(r'\d{14}').firstMatch(cleanedText);
+        if (directIdMatch != null && directIdMatch.group(0) != null) {
+          idNumber = directIdMatch.group(0)!;
+        }
+      }
+      
+      // Set ID number if found
+      if (idNumber != null && idNumber.length == 14) {
+        setState(() {
+          _idNumberController.text = idNumber!;
+        });
+      }
+      
+      // Extract name from parsed data
+      String? extractedName = parsedData['name'] as String?;
+      if (extractedName != null && extractedName.isNotEmpty) {
+        extractedName = extractedName.trim().replaceAll(RegExp(r'\s+'), ' ');
+        final namePattern = RegExp(r'^[أ-ي\s]+$|^[A-Za-z\s]+$');
+        if (namePattern.hasMatch(extractedName)) {
+          setState(() {
+            _nameController.text = extractedName!;
+          });
+        }
+      }
+      
+      // Set ID copy path to indicate that ID was scanned
+      setState(() {
+        _idCopyPath = 'scanned';
+      });
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLanguage.translate('Data extracted from Google Lens and filled automatically')),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error processing Google Lens text: $e');
+    }
+  }
+  
 
   final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
   final List<String> _genderOptions = ['Male', 'Female'];
@@ -18777,6 +18740,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _nameController.text = widget.beneficiary.name;
     _idNumberController.text = widget.beneficiary.idNumber;
     _mobileNumberController.text = widget.beneficiary.mobileNumber ?? '';
@@ -18826,6 +18790,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Stop NFC session if active
     NFCHelper.stopNFCSession();
     _nameController.dispose();
@@ -19205,7 +19170,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                     return DropdownMenuItem(
                       value: area.id,
                       child: Text(
-                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                        area.getLocalizedAreaName(),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(fontSize: 14),
@@ -19215,7 +19180,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                   selectedItemBuilder: (context) {
                     return displayAreas.map((area) {
                       return Text(
-                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                        area.getLocalizedAreaName(),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(fontSize: 14),
@@ -20027,17 +19992,19 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final result = await Navigator.push<String>(
-                            context,
+                          // Launch ML Kit OCR camera directly (better Arabic support than Google Lens)
+                          Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const LiveTextDetectionScreen(),
+                              builder: (context) => LiveTextDetectionScreen(
+                                autoReturnOnDetect: true,
+                              ),
                             ),
-                          );
-                          
-                          // Handle the returned text from Live Text Detection
-                          if (result != null && result.isNotEmpty) {
-                            _processLiveTextDetectionResult(result);
-                          }
+                          ).then((result) {
+                            // If result is a string (detected text), process it
+                            if (result != null && result is String && result.isNotEmpty) {
+                              _processLiveTextDetectionResult(result);
+                            }
+                          });
                         },
                         icon: const Icon(Icons.camera_alt, size: 18),
                         label: Text(
@@ -20554,179 +20521,6 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
     print('⚠️ Could not extract person name from text');
     return null;
   }
-
-  /// Process text from Live Text Detection (Google Lens-like) screen
-  void _processLiveTextDetectionResult(String text) {
-    if (text.isEmpty) return;
-    
-    print('📝 Processing Google Lens text (length: ${text.length})');
-    print('📝 Text preview: ${text.substring(0, text.length > 200 ? 200 : text.length)}');
-    
-    try {
-      // Parse the text using IDParser
-      final parsedData = IDParser.parseIDText(text);
-      
-      print('📝 Parsed data keys: ${parsedData.keys.toList()}');
-      print('📝 ID Number from parser: ${parsedData['idNumber']}');
-      print('📝 Name from parser: ${parsedData['name']}');
-      
-      // Extract 14-digit ID number
-      var idNumber = parsedData['idNumber'] as String?;
-      
-      // If ID number is not exactly 14 digits, try to extract it directly from text
-      if (idNumber == null || idNumber.length != 14) {
-        print('⚠️ ID number not found or invalid length (${idNumber?.length ?? 0}). Trying direct extraction...');
-        
-        // First, convert all Arabic-Indic digits in the full text (including variant forms)
-        // This handles both Persian (۰۱۲۳۴۵۶۷۸۹) and Arabic variant (٠١٢٣٤٥٦٧٨٩) digits
-        final cleanedText = IDParser.convertArabicIndicToWestern(text);
-        print('📝 Text after Arabic-Indic conversion (first 200 chars): ${cleanedText.substring(0, cleanedText.length > 200 ? 200 : cleanedText.length)}');
-        
-        // Also try to match Arabic-Indic digits directly and convert them
-        // Pattern to match sequences that might contain Arabic-Indic digits
-        final arabicIndicPattern = RegExp(r'[0-9۰-۹٠-٩]{12,14}');
-        final arabicMatch = arabicIndicPattern.firstMatch(text);
-        if (arabicMatch != null && arabicMatch.group(0) != null) {
-          final rawId = arabicMatch.group(0)!;
-          final convertedId = IDParser.convertArabicIndicToWestern(rawId);
-          if (convertedId.length >= 12 && convertedId.length <= 14) {
-            idNumber = convertedId;
-            print('✅ Found ID with Arabic-Indic digits, converted: $idNumber');
-          }
-        }
-        
-        // If still not found, try to find 14-digit number in cleaned text directly
-        if (idNumber == null || idNumber.length != 14) {
-          final directIdMatch = RegExp(r'\d{14}').firstMatch(cleanedText);
-          if (directIdMatch != null && directIdMatch.group(0) != null) {
-            idNumber = directIdMatch.group(0)!;
-            print('✅ Found 14-digit ID directly: $idNumber');
-          } else {
-            // Try to find numbers with spaces/dashes and clean them
-            final spacedIdMatch = RegExp(r'\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}').firstMatch(cleanedText);
-            if (spacedIdMatch != null && spacedIdMatch.group(0) != null) {
-              idNumber = spacedIdMatch.group(0)!.replaceAll(RegExp(r'[^\d]'), '');
-              print('✅ Found spaced ID and cleaned: $idNumber');
-            } else {
-              // Try to find any sequence of 12-14 digits (might be partial due to OCR issues)
-              final partialMatch = RegExp(r'\d{12,14}').firstMatch(cleanedText);
-              if (partialMatch != null && partialMatch.group(0) != null) {
-                final partialId = partialMatch.group(0)!;
-                if (partialId.length >= 12) {
-                  idNumber = partialId;
-                  print('⚠️ Found partial ID (${partialId.length} digits): $idNumber - will try to use if valid');
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // Set ID number if found (accept 12-14 digits)
-      if (idNumber != null && idNumber.length >= 12) {
-        // Create non-nullable variable for use inside
-        final validIdNumber = idNumber;
-        
-        // Validate first digit (should be 2 or 3 for Egyptian IDs)
-        final firstDigit = int.tryParse(validIdNumber.substring(0, 1));
-        if (firstDigit == 2 || firstDigit == 3) {
-          setState(() {
-            _idNumberController.text = validIdNumber;
-          });
-          print('✅ ID Number set: $validIdNumber (${validIdNumber.length} digits)');
-          
-          // Extract birth date from ID number (only if we have at least 7 digits for date)
-          if (validIdNumber.length >= 7) {
-            // For partial IDs (less than 14 digits), we can't extract full birth date
-            // But we can try if we have enough digits
-            if (validIdNumber.length == 14) {
-              final birthDate = IDParser.extractBirthDateFromIDNumber(validIdNumber);
-              
-              // Check if birth date is older than 1-1-1965
-              if (birthDate != null) {
-                final cutoffDate = DateTime(1965, 1, 1);
-                if (birthDate.isBefore(cutoffDate)) {
-                  setState(() {
-                    _type = 'Elderly';
-                  });
-                  print('✅ Type set to Elderly (birth date: $birthDate)');
-                }
-                _birthDate = birthDate;
-              }
-            } else {
-              print('⚠️ Partial ID (${validIdNumber.length} digits) - cannot extract birth date');
-            }
-          }
-        } else {
-          print('⚠️ Invalid ID number first digit: $firstDigit');
-        }
-      } else {
-        print('⚠️ ID number not found or invalid length: ${idNumber?.length ?? 0}');
-      }
-      
-      // Extract name - improved extraction for Google Lens results
-      String? extractedName = _extractPersonNameFromGoogleLensText(text);
-      
-      // Fallback to parsed data if direct extraction didn't work
-      if (extractedName == null || extractedName.isEmpty) {
-        extractedName = parsedData['name'] as String?;
-      }
-      
-      if (extractedName != null && extractedName.isNotEmpty) {
-        // Clean the name - remove extra whitespace
-        extractedName = extractedName.trim().replaceAll(RegExp(r'\s+'), ' ');
-        
-        // Validate that name is not just numbers or alphanumeric codes
-        final namePattern = RegExp(r'^[أ-ي\s]+$|^[A-Za-z\s]+$');
-        if (namePattern.hasMatch(extractedName)) {
-          setState(() {
-            _nameController.text = extractedName!;
-          });
-          print('✅ Name set: $extractedName');
-        } else {
-          print('⚠️ Name validation failed: $extractedName');
-        }
-      } else {
-        print('⚠️ Name not found in text');
-      }
-      
-      // Show success message
-      if (mounted) {
-        final hasId = idNumber != null && idNumber.length >= 12;
-        final hasName = extractedName != null && extractedName.isNotEmpty;
-        
-        if (hasId || hasName) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLanguage.translate('Data extracted from Google Lens and filled automatically')),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLanguage.translate('Could not extract ID number or name from text. Please check the text and try again.')),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      }
-    } catch (e, stackTrace) {
-      print('❌ Error processing live text detection result: $e');
-      print('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLanguage.translate('Could not parse data from Google Lens. Please enter manually.')),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
 }
 
 // Queue View Screen
@@ -21003,7 +20797,8 @@ class AddDistributionAreaScreen extends StatefulWidget {
 
 class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _areaNameController = TextEditingController();
+  final _areaNameArabicController = TextEditingController();
+  final _areaNameEnglishController = TextEditingController();
   String? _selectedGovernorate;
   String? _selectedCity;
 
@@ -21075,7 +20870,8 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
 
   @override
   void dispose() {
-    _areaNameController.dispose();
+    _areaNameArabicController.dispose();
+    _areaNameEnglishController.dispose();
     super.dispose();
   }
 
@@ -21097,13 +20893,28 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
       _isLoading = true;
     });
 
+    // Combine Arabic and English names (format: "Arabic / English" or just one if the other is empty)
+    String combinedAreaName;
+    final arabicName = _areaNameArabicController.text.trim();
+    final englishName = _areaNameEnglishController.text.trim();
+    
+    if (arabicName.isNotEmpty && englishName.isNotEmpty) {
+      combinedAreaName = '$arabicName / $englishName';
+    } else if (arabicName.isNotEmpty) {
+      combinedAreaName = arabicName;
+    } else if (englishName.isNotEmpty) {
+      combinedAreaName = englishName;
+    } else {
+      combinedAreaName = ''; // Should not happen due to validation
+    }
+
     try {
       final area = DistributionArea(
         id: '', // Will be set by Firestore
         country: 'Egypt',
         governorate: _selectedGovernorate!,
         city: _selectedCity!,
-        areaName: _areaNameController.text,
+        areaName: combinedAreaName,
       );
 
       // Save to Firestore
@@ -21137,7 +20948,7 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create area: $e'),
+            content: Text('${AppLanguage.translate('Failed to create area')}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -21202,7 +21013,7 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                     child: DropdownButton<String>(
                       value: _selectedGovernorate,
                       isExpanded: true,
-                      hint: const Text('Select governorate'),
+                      hint: Text(AppLanguage.translate('Select governorate')),
                       items: _egyptGovernoratesCities.keys.map((gov) {
                         final displayName = _getGovernorateDisplayName(gov);
                         return DropdownMenuItem(value: gov, child: Text(displayName));
@@ -21230,7 +21041,7 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                     child: DropdownButton<String>(
                       value: _selectedCity,
                       isExpanded: true,
-                      hint: Text(_selectedGovernorate == null ? 'Select governorate first' : 'Select city'),
+                      hint: Text(_selectedGovernorate == null ? AppLanguage.translate('Select governorate first') : AppLanguage.translate('Select city')),
                       items: _selectedGovernorate != null
                           ? _egyptGovernoratesCities[_selectedGovernorate]!.map((city) {
                               return DropdownMenuItem(value: city, child: Text(city));
@@ -21241,12 +21052,22 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('Distribution Area Name *'),
+                _buildLabel('Distribution Area Name (Arabic) *'),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _areaNameController,
-                  decoration: _buildInputDecoration('Enter distribution area name'),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter distribution area name') : null,
+                  controller: _areaNameArabicController,
+                  decoration: _buildInputDecoration('Enter distribution area name in Arabic'),
+                  textDirection: TextDirection.rtl,
+                  validator: (value) => value?.trim().isEmpty ?? true ? AppLanguage.translate('Required') : null,
+                ),
+                const SizedBox(height: 24),
+                _buildLabel('Distribution Area Name (English) *'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _areaNameEnglishController,
+                  decoration: _buildInputDecoration('Enter distribution area name in English'),
+                  textDirection: TextDirection.ltr,
+                  validator: (value) => value?.trim().isEmpty ?? true ? AppLanguage.translate('Required') : null,
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
@@ -25351,18 +25172,26 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             _isSearching = false;
           });
           
-          // Show timeout message if timeout occurred, otherwise show "not found"
-          final errorMessage = hasTimeoutError 
-              ? AppLanguage.translate('Search timeout. Please check your connection and try again.')
-              : AppLanguage.translate('Beneficiary not found');
+          // Show ONLY timeout message if timeout occurred, otherwise show "not found"
+          // Priority: Timeout message takes precedence over "not found"
+          if (hasTimeoutError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLanguage.translate('Search timeout. Please check your connection and try again.')),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLanguage.translate('Beneficiary not found')),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-              backgroundColor: hasTimeoutError ? Colors.orange : Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
-          );
           // Restart NFC detection after showing error to listen for next card
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted && _selectedVerificationMethod == 0) {
@@ -25814,15 +25643,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Issue Queue Number',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: darkBlue,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
                     const Text('Select Queue *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
                     Container(
@@ -26088,9 +25908,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                       ),
                     ],
                     if (_verifiedBeneficiary != null && !_isSearching) ...[
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -26098,76 +25918,70 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                           boxShadow: [
                             BoxShadow(
                               color: Colors.grey.withOpacity(0.2),
-                              spreadRadius: 2,
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                              spreadRadius: 1,
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                    color: Colors.grey[200],
-                                  ),
-                                  child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _verifiedBeneficiary!.name,
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text('ID: ${_verifiedBeneficiary!.idNumber}'),
-                                      Text('Type: ${_verifiedBeneficiary!.type}'),
-                                      Text('Gender: ${_verifiedBeneficiary!.gender}'),
-                                      if (_verifiedBeneficiary!.mobileNumber != null)
-                                        Text('Mobile: ${_verifiedBeneficiary!.mobileNumber}'),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                            // Beneficiary name (smaller)
+                            Text(
+                              _verifiedBeneficiary!.name,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 8),
+                            // Eligible for units
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${AppLanguage.translate("Eligible for")} ${_verifiedBeneficiary!.numberOfUnits} ${_selectedQueue?.unitName ?? "units"}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Queue number (bigger and more prominent)
                             if (_issuedQueueNumber != null) ...[
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 decoration: BoxDecoration(
                                   color: tealGreen.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: tealGreen, width: 2),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                child: Column(
                                   children: [
                                     Text(
-                                      AppLanguage.translate('You Queue No. is : '),
+                                      AppLanguage.translate('Queue No.'),
                                       style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
                                         color: tealGreen,
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
                                     Text(
                                       '$_issuedQueueNumber',
                                       style: const TextStyle(
-                                        fontSize: 32,
+                                        fontSize: 48,
                                         fontWeight: FontWeight.bold,
                                         color: tealGreen,
+                                        height: 1.0,
                                       ),
                                     ),
                                   ],
@@ -26184,15 +25998,15 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             ),
             if (_selectedQueue != null)
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.grey.withOpacity(0.2),
-                      spreadRadius: 2,
-                      blurRadius: 8,
-                      offset: const Offset(0, -2),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: const Offset(0, -1),
                     ),
                   ],
                 ),
@@ -26221,14 +26035,14 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: const Color(0xFF81CF01), size: 24),
-        const SizedBox(height: 4),
+        Icon(icon, color: const Color(0xFF81CF01), size: 18),
+        const SizedBox(height: 2),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 20,
+            fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
+            color: Color(0xFF424242),
           ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
@@ -26236,8 +26050,8 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
+            fontSize: 10,
+            color: Color(0xFF757575),
           ),
           textAlign: TextAlign.center,
           overflow: TextOverflow.ellipsis,
@@ -29067,7 +28881,7 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                                   return DropdownMenuItem<String>(
                                     value: area.id,
                                     child: Text(
-                                      area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                      area.getLocalizedAreaName(),
                                       overflow: TextOverflow.ellipsis,
                                       maxLines: 1,
                                       style: const TextStyle(fontSize: 14),
