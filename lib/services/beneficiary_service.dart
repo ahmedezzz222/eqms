@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:async/async.dart';
 import '../main.dart';
 import 'firebase_service.dart';
 
@@ -155,6 +156,96 @@ class BeneficiaryService {
     
     final snapshot = await query.get();
     return snapshot.docs.map((doc) => documentToBeneficiary(doc)).toList();
+  }
+
+  /// Get beneficiaries filtered by multiple distribution areas (server-side filtering)
+  /// Firestore whereIn has a limit of 10 items, so we batch if needed
+  static Stream<List<Beneficiary>> getBeneficiariesByAreas(
+    List<String> distributionAreaIds, {
+    int? limit,
+    bool activeOnly = false,
+  }) {
+    if (distributionAreaIds.isEmpty) {
+      return Stream.value(<Beneficiary>[]);
+    }
+    
+    // If only one area, use the simpler method
+    if (distributionAreaIds.length == 1) {
+      return getBeneficiariesByArea(distributionAreaIds.first, limit: limit, activeOnly: activeOnly);
+    }
+    
+    // Firestore whereIn limit is 10, so we need to batch if more than 10
+    if (distributionAreaIds.length <= 10) {
+      Query query = _collection.where('distributionArea', whereIn: distributionAreaIds);
+      
+      if (activeOnly) {
+        query = query.where('status', isEqualTo: 'Active');
+      }
+      
+      if (limit != null && limit > 0) {
+        query = query.limit(limit);
+      }
+      
+      return FirebaseService.withRetry<QuerySnapshot>(
+        () => query.snapshots(),
+        maxRetries: 5,
+        initialDelay: const Duration(seconds: 1),
+      ).map((snapshot) {
+        final beneficiaries = snapshot.docs
+            .map((doc) => documentToBeneficiary(doc))
+            .toList();
+        // Sort client-side to avoid composite index requirement
+        beneficiaries.sort((a, b) => b.id.compareTo(a.id));
+        return beneficiaries;
+      });
+    } else {
+      // For more than 10 areas, we need to batch the queries
+      final batches = <List<String>>[];
+      for (int i = 0; i < distributionAreaIds.length; i += 10) {
+        batches.add(distributionAreaIds.sublist(
+          i,
+          i + 10 > distributionAreaIds.length ? distributionAreaIds.length : i + 10,
+        ));
+      }
+      
+      // Create streams for each batch and combine them
+      final streams = batches.map((batch) {
+        Query query = _collection.where('distributionArea', whereIn: batch);
+        if (activeOnly) {
+          query = query.where('status', isEqualTo: 'Active');
+        }
+        if (limit != null && limit > 0) {
+          // Distribute limit across batches
+          query = query.limit((limit / batches.length).ceil());
+        }
+        return FirebaseService.withRetry<QuerySnapshot>(
+          () => query.snapshots(),
+          maxRetries: 5,
+          initialDelay: const Duration(seconds: 1),
+        );
+      });
+      
+      // Combine all streams and merge results
+      return StreamZip(streams).map((snapshots) {
+        final allBeneficiaries = <Beneficiary>[];
+        for (var snapshot in snapshots) {
+          allBeneficiaries.addAll(snapshot.docs.map((doc) => documentToBeneficiary(doc)));
+        }
+        // Remove duplicates by ID
+        final uniqueBeneficiaries = <String, Beneficiary>{};
+        for (var beneficiary in allBeneficiaries) {
+          uniqueBeneficiaries[beneficiary.id] = beneficiary;
+        }
+        final result = uniqueBeneficiaries.values.toList();
+        // Sort client-side
+        result.sort((a, b) => b.id.compareTo(a.id));
+        // Apply limit if specified
+        if (limit != null && limit > 0 && result.length > limit) {
+          return result.take(limit).toList();
+        }
+        return result;
+      });
+    }
   }
 
   /// Get beneficiaries by queue name - OPTIMIZED with real-time Firestore snapshots

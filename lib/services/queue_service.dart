@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:async/async.dart';
 import '../main.dart';
 import 'firebase_service.dart';
 
@@ -190,26 +191,130 @@ class QueueService {
   }
 
   /// Get queues by distribution area
+  /// Note: Removed orderBy to avoid composite index requirement - sorting done client-side
   static Stream<List<Queue>> getQueuesByArea(String distributionAreaId) {
     return FirebaseService.withRetry<QuerySnapshot>(
       () => _collection
           .where('distributionArea', isEqualTo: distributionAreaId)
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       maxRetries: 5,
       initialDelay: const Duration(seconds: 1),
-    ).map((snapshot) => snapshot.docs
-        .map((doc) => _documentToQueue(doc))
-        .toList());
+    ).map((snapshot) {
+      final queues = snapshot.docs
+          .map((doc) => _documentToQueue(doc))
+          .toList();
+      // Sort client-side by createdAt descending to avoid composite index requirement
+      queues.sort((a, b) {
+        // Use queue name as fallback for sorting (newer queues typically have later names)
+        // Or we could add createdAt to the Queue model if needed
+        return b.name.compareTo(a.name);
+      });
+      return queues;
+    });
+  }
+
+  /// Get queues filtered by multiple distribution areas (server-side filtering)
+  /// Firestore whereIn has a limit of 10 items, so we batch if needed
+  static Stream<List<Queue>> getQueuesByAreas(List<String> distributionAreaIds) {
+    if (distributionAreaIds.isEmpty) {
+      return Stream.value(<Queue>[]);
+    }
+    
+    // If only one area, use the simpler method
+    if (distributionAreaIds.length == 1) {
+      return getQueuesByArea(distributionAreaIds.first);
+    }
+    
+    // Firestore whereIn limit is 10, so we need to batch if more than 10
+    // Note: Removed orderBy to avoid composite index requirement - sorting done client-side
+    if (distributionAreaIds.length <= 10) {
+      return FirebaseService.withRetry<QuerySnapshot>(
+        () => _collection
+            .where('distributionArea', whereIn: distributionAreaIds)
+            .snapshots(),
+        maxRetries: 5,
+        initialDelay: const Duration(seconds: 1),
+      ).map((snapshot) {
+        final queues = snapshot.docs
+            .map((doc) => _documentToQueue(doc))
+            .toList();
+        // Sort client-side by name (descending) to avoid composite index requirement
+        queues.sort((a, b) => b.name.compareTo(a.name));
+        return queues;
+      });
+    } else {
+      // For more than 10 areas, we need to batch the queries
+      // Combine results from multiple queries
+      final batches = <List<String>>[];
+      for (int i = 0; i < distributionAreaIds.length; i += 10) {
+        batches.add(distributionAreaIds.sublist(
+          i,
+          i + 10 > distributionAreaIds.length ? distributionAreaIds.length : i + 10,
+        ));
+      }
+      
+      // Create streams for each batch and combine them
+      // Note: Removed orderBy to avoid composite index requirement - sorting done client-side
+      final streams = batches.map((batch) => FirebaseService.withRetry<QuerySnapshot>(
+        () => _collection
+            .where('distributionArea', whereIn: batch)
+            .snapshots(),
+        maxRetries: 5,
+        initialDelay: const Duration(seconds: 1),
+      ));
+      
+      // Combine all streams and merge results
+      return StreamZip(streams).map((snapshots) {
+        final allQueues = <Queue>[];
+        for (var snapshot in snapshots) {
+          allQueues.addAll(snapshot.docs.map((doc) => _documentToQueue(doc)));
+        }
+        // Remove duplicates and sort
+        final uniqueQueues = <String, Queue>{};
+        for (var queue in allQueues) {
+          uniqueQueues[queue.name] = queue;
+        }
+        final result = uniqueQueues.values.toList();
+        result.sort((a, b) => b.name.compareTo(a.name)); // Simple sort by name
+        return result;
+      });
+    }
   }
 
   /// Get queue by ID
-  static Future<Queue?> getQueueById(String id) async {
-    final doc = await _collection.doc(id).get();
+  static Future<Queue?> getQueueById(String id, {bool forceServer = false}) async {
+    // Use get() with source option to force server fetch if needed
+    final doc = forceServer 
+        ? await _collection.doc(id).get(const GetOptions(source: Source.server))
+        : await _collection.doc(id).get();
     if (doc.exists) {
       return _documentToQueue(doc);
     }
     return null;
+  }
+
+  /// Get a stream for a specific queue by ID (for real-time updates)
+  static Stream<Queue?> getQueueStreamById(String id) {
+    return _collection.doc(id).snapshots().map((doc) {
+      if (doc.exists) {
+        return _documentToQueue(doc);
+      }
+      return null;
+    });
+  }
+
+  /// Get a stream for a specific queue by name (for real-time updates)
+  static Stream<Queue?> getQueueStreamByName(String queueName) {
+    return _collection
+        .where('name', isEqualTo: queueName)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        return _documentToQueue(snapshot.docs.first);
+      }
+      return null;
+    });
   }
 
   /// Create a new queue
@@ -248,33 +353,68 @@ class QueueService {
 
   /// Update a queue
   static Future<void> updateQueue(String id, Queue queue) async {
-    await _collection.doc(id).update({
-      'name': queue.name,
-      'queueManager': queue.queueManager,
-      'country': queue.country,
-      'governorate': queue.governorate,
-      'city': queue.city,
-      'queuePointName': queue.queuePointName,
-      'distributionArea': queue.distributionArea,
-      'queueType': queue.queueType,
-      'fromDate': FirebaseService.dateTimeToTimestamp(queue.fromDate),
-      'toDate': FirebaseService.dateTimeToTimestamp(queue.toDate),
-      'fromTime': FirebaseService.timeOfDayToMap(queue.fromTime),
-      'toTime': FirebaseService.timeOfDayToMap(queue.toTime),
-      'unitName': queue.unitName,
-      'customUnitName': queue.unitName == 'Others' ? queue.unitName : null,
-      'numberOfAvailableUnits': queue.numberOfAvailableUnits,
-      'totalAvailableUnits': queue.totalAvailableUnits, // Preserve existing totalAvailableUnits when updating (don't overwrite)
-      'estimatedQueueSize': queue.estimatedQueueSize,
-      'directServe': queue.directServe,
-      'priority': queue.priority,
-      'status': queue.status,
-      'subtitle': queue.subtitle,
-      'isStarted': queue.isStarted,
-      'isCompleted': queue.isCompleted,
-      'isSuspended': queue.isSuspended,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // Debug logging with stack trace to find where it's called from
+    print('📝 QueueService.updateQueue called with:');
+    print('📝 Queue ID: $id');
+    print('📝 numberOfAvailableUnits: ${queue.numberOfAvailableUnits}');
+    print('📝 totalAvailableUnits: ${queue.totalAvailableUnits}');
+    print('📝 estimatedQueueSize: ${queue.estimatedQueueSize}');
+    print('📝 Called from: ${StackTrace.current}');
+    
+    try {
+      final updateData = {
+        'name': queue.name,
+        'queueManager': queue.queueManager,
+        'country': queue.country,
+        'governorate': queue.governorate,
+        'city': queue.city,
+        'queuePointName': queue.queuePointName,
+        'distributionArea': queue.distributionArea,
+        'queueType': queue.queueType,
+        'fromDate': FirebaseService.dateTimeToTimestamp(queue.fromDate),
+        'toDate': FirebaseService.dateTimeToTimestamp(queue.toDate),
+        'fromTime': FirebaseService.timeOfDayToMap(queue.fromTime),
+        'toTime': FirebaseService.timeOfDayToMap(queue.toTime),
+        'unitName': queue.unitName,
+        'customUnitName': queue.unitName == 'Others' ? queue.unitName : null,
+        'numberOfAvailableUnits': queue.numberOfAvailableUnits,
+        'totalAvailableUnits': queue.totalAvailableUnits ?? queue.numberOfAvailableUnits, // Use provided value or fallback to numberOfAvailableUnits
+        'estimatedQueueSize': queue.estimatedQueueSize,
+        'directServe': queue.directServe,
+        'priority': queue.priority,
+        'status': queue.status,
+        'subtitle': queue.subtitle,
+        'isStarted': queue.isStarted,
+        'isCompleted': queue.isCompleted,
+        'isSuspended': queue.isSuspended,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      print('📝 Sending update to Firestore with data:');
+      print('📝 numberOfAvailableUnits: ${updateData['numberOfAvailableUnits']}');
+      print('📝 totalAvailableUnits: ${updateData['totalAvailableUnits']}');
+      print('📝 estimatedQueueSize: ${updateData['estimatedQueueSize']}');
+      
+      await _collection.doc(id).update(updateData);
+      
+      print('✅ Firestore update completed successfully for queue ID: $id');
+      
+      // Verify the update by reading back the document
+      final updatedDoc = await _collection.doc(id).get();
+      if (updatedDoc.exists) {
+        final data = updatedDoc.data() as Map<String, dynamic>;
+        print('✅ Verification - Read back from Firestore:');
+        print('✅ numberOfAvailableUnits: ${data['numberOfAvailableUnits']}');
+        print('✅ totalAvailableUnits: ${data['totalAvailableUnits']}');
+        print('✅ estimatedQueueSize: ${data['estimatedQueueSize']}');
+      } else {
+        print('⚠️ Warning: Queue document not found after update!');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error in QueueService.updateQueue: $e');
+      print('❌ Stack trace: $stackTrace');
+      rethrow; // Re-throw to let caller handle the error
+    }
   }
 
   /// Delete a queue

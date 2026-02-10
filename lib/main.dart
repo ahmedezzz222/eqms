@@ -296,6 +296,7 @@ class AppLanguage {
       'No Order for serving': 'No Order for serving',
       'Serving without tickets': 'Serving without tickets',
       'Eligible for': 'Eligible for',
+      'Served for': 'Served for',
       'meals': 'meals',
       'Already taken': 'Already taken',
       'Mark as Served': 'Mark as Served',
@@ -899,6 +900,7 @@ class AppLanguage {
       'No Order for serving': 'لا يوجد ترتيب للخدمة',
       'Serving without tickets': 'الخدمة بدون تذاكر',
       'Eligible for': 'مؤهل لـ',
+      'Served for': 'تم الخدمة لـ',
       'meals': 'وجبات',
       'Already taken': 'تم أخذه بالفعل',
       'Mark as Served': 'وضع علامة كمخدوم',
@@ -3100,6 +3102,9 @@ class DistributionArea {
   });
 
   String get fullName => '$country > $governorate > $city > $areaName';
+  
+  /// Get location hierarchy without area name (e.g., "Egypt > Cairo > Nasr City >")
+  String get locationHierarchy => '$country > $governorate > $city >';
 }
 
 // Admin Model
@@ -7711,44 +7716,75 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   }
 
   Widget _buildDistributionAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.white,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedDistributionArea,
-          isExpanded: true,
-          hint: const Text('Select distribution area'),
-          items: widget.distributionAreas.map((area) {
-            return DropdownMenuItem(
-              value: area.id,
-              child: Text(
-                area.fullName,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            );
-          }).toList(),
-          selectedItemBuilder: (context) {
-            return widget.distributionAreas.map((area) {
-              return Text(
-                area.fullName,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              );
-            }).toList();
-          },
-          onChanged: (value) {
-            setState(() {
-              _selectedDistributionArea = value;
-            });
-          },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Show location hierarchy above dropdown if area is selected
+        if (_selectedDistributionArea != null)
+          Builder(
+            builder: (context) {
+              try {
+                final selectedArea = widget.distributionAreas.firstWhere(
+                  (area) => area.id == _selectedDistributionArea,
+                );
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    selectedArea.locationHierarchy,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF1A237E),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              } catch (e) {
+                return const SizedBox.shrink();
+              }
+            },
+          ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedDistributionArea,
+              isExpanded: true,
+              hint: const Text('Select distribution area'),
+              items: widget.distributionAreas.map((area) {
+                return DropdownMenuItem(
+                  value: area.id,
+                  child: Text(
+                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                );
+              }).toList(),
+              selectedItemBuilder: (context) {
+                return widget.distributionAreas.map((area) {
+                  return Text(
+                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 14),
+                  );
+                }).toList();
+              },
+              onChanged: (value) {
+                setState(() {
+                  _selectedDistributionArea = value;
+                });
+              },
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -7790,9 +7826,18 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   
   List<DistributionArea> _distributionAreas = [];
   String? _lastAdminId; // Track last admin ID to detect admin changes
+  bool _isLoadingAreas = false; // Prevent multiple simultaneous loads
   
   Future<void> _loadDistributionAreas() async {
+    // Prevent multiple simultaneous loads
+    if (_isLoadingAreas) {
+      print('⏭️ _loadDistributionAreas() already in progress, skipping...');
+      return;
+    }
+    
     print('🚀 _loadDistributionAreas() called');
+    _isLoadingAreas = true;
+    
     try {
       // Update tracked admin ID
       final currentAdminId = AdminService.currentAdminId;
@@ -7883,17 +7928,24 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             }
           }
         });
-      } else if (currentAdmin != null && (currentAdmin.isAdmin || currentAdmin.isQAdmin) && currentAdmin.distributionPoint.isNotEmpty && currentAdmin.distributionPoint.toLowerCase() != 'all') {
+      } else if (currentAdmin != null && (currentAdmin.isAdmin || currentAdmin.isQAdmin)) {
         // For Admin and Q_Admin roles: Filter to only show their assigned distribution areas
+        // Capture the admin reference to avoid null safety issues in closure
+        final admin = currentAdmin!;
+        // Only show areas if distributionPoint is set and not "All"
+        if (admin.distributionPoint.isNotEmpty && admin.distributionPoint.toLowerCase() != 'all') {
         // Match by distributionPoint name with areaName
+          final adminPoint = admin.distributionPoint.toLowerCase().trim();
         final filteredAreas = allAreas.where((area) {
           // Match distributionPoint with areaName (case-insensitive partial match)
-          final adminPoint = currentAdmin!.distributionPoint.toLowerCase();
-          final areaName = area.areaName.toLowerCase();
-          return areaName.contains(adminPoint) || adminPoint.contains(areaName);
+            final areaName = area.areaName.toLowerCase().trim();
+            // Try exact match first, then partial match
+            return areaName == adminPoint || 
+                   areaName.contains(adminPoint) || 
+                   adminPoint.contains(areaName);
         }).toList();
         
-        print('📋 Filtered areas for Admin/Q_Admin: ${filteredAreas.length} areas');
+          print('📋 Filtered areas for Admin/Q_Admin: ${filteredAreas.length} areas (distributionPoint: ${admin.distributionPoint})');
         setState(() {
           _distributionAreas = filteredAreas.isNotEmpty ? filteredAreas : [];
           
@@ -7911,18 +7963,19 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           }
         });
       } else {
-        // No admin logged in or no distribution point assigned, show all areas
-        print('⚠️ No admin or no distribution point - showing all areas');
+          // Admin/Q_Admin without distributionPoint or with "All" - show empty list (only Super Admin can see all)
+          print('⚠️ Admin/Q_Admin without valid distributionPoint - showing no areas');
         setState(() {
-          _distributionAreas = allAreas;
-          
-          // Reset selected area if it's no longer in the list
-          if (_selectedDistributionArea != null) {
-            final exists = _distributionAreas.any((area) => area.id == _selectedDistributionArea);
-            if (!exists) {
+            _distributionAreas = [];
               _selectedDistributionArea = null;
-            }
-          }
+          });
+        }
+      } else {
+        // No admin logged in or unknown role - show empty list for security
+        print('⚠️ No admin or unknown role - showing no areas');
+        setState(() {
+          _distributionAreas = [];
+          _selectedDistributionArea = null;
         });
       }
       
@@ -7930,14 +7983,50 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     } catch (e) {
       print('❌ Error loading distribution areas: $e');
       // Fallback to empty list or default areas
+      if (mounted) {
       setState(() {
         _distributionAreas = [];
       });
+      }
+    } finally {
+      _isLoadingAreas = false; // Reset flag when done
     }
   }
   
   // Queues will be loaded from Firestore via StreamBuilder
   List<Queue> _queues = [];
+  
+  /// Get the appropriate queue stream based on admin's role and assigned areas
+  /// Uses server-side filtering for better performance
+  Stream<List<Queue>> _getQueuesStream() {
+    final currentAdmin = AdminService.currentAdmin;
+    
+    // Super Admin or admin with distributionPoint == "All" can see all queues
+    if (currentAdmin != null && 
+        (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
+      // If a specific area is selected, filter server-side
+      if (_selectedDistributionArea != null) {
+        return QueueService.getQueuesByArea(_selectedDistributionArea!);
+      }
+      // Otherwise, return all queues
+      return QueueService.getAllQueues();
+    }
+    
+    // For regular admins, filter by their assigned distribution areas (server-side)
+    final adminAreaIds = _distributionAreas.map((area) => area.id).toList();
+    
+    if (adminAreaIds.isEmpty) {
+      return Stream.value(<Queue>[]);
+    }
+    
+    // If a specific area is selected and it's in admin's areas, filter by that
+    if (_selectedDistributionArea != null && adminAreaIds.contains(_selectedDistributionArea)) {
+      return QueueService.getQueuesByArea(_selectedDistributionArea!);
+    }
+    
+    // Otherwise, filter by all admin's areas (server-side)
+    return QueueService.getQueuesByAreas(adminAreaIds);
+  }
   
   /// Get valid selected area - ensures the selected value exists in the items list
   String? _getValidSelectedArea() {
@@ -8132,29 +8221,13 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   List<Queue> get _filteredQueues {
-    // Super Admin or admin with distributionPoint == "All" can see all queues
-    final currentAdmin = AdminService.currentAdmin;
-    if (currentAdmin != null && 
-        (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
-      // Show all queues, filter by selected distribution area if one is selected
+    // Queues are already filtered server-side via _getQueuesStream()
+    // Only apply additional client-side filter if a specific area is selected
+    // (This is a fallback for when stream hasn't loaded yet)
       if (_selectedDistributionArea != null) {
         return _queues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
       }
       return _queues;
-    }
-    
-    // Get admin's assigned distribution area IDs
-    final adminAreas = _distributionAreas.map((area) => area.id).toList();
-    
-    // Filter queues by admin's distribution areas
-    List<Queue> adminQueues = _queues.where((q) => adminAreas.contains(q.distributionArea)).toList();
-    
-    // Further filter by selected distribution area if one is selected
-    if (_selectedDistributionArea != null) {
-      adminQueues = adminQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
-    }
-    
-    return adminQueues;
   }
   
   // int get _totalQueues => _filteredQueues.length; // UNUSED
@@ -8441,38 +8514,69 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    if (!queue.isCompleted) ...[
+                    if (!queue.isCompleted && !queue.isMultiDay) ...[
                       _buildActionButton(
                         icon: Icons.play_arrow,
                         label: AppLanguage.translate('Start'),
                         color: Colors.green,
                         onPressed: () {
-                        // When starting the queue, set totalAvailableUnits if not already set
-                        // This preserves the initial total available units
+                        // When starting the queue, get current queue from Firestore first to preserve all fields
+                        // IMPORTANT: Get current queue from Firestore first to preserve all fields (estimatedQueueSize, totalAvailableUnits, etc.)
+                        QueueService.getQueueIdByName(queue.name).then((queueId) async {
+                          if (queueId != null) {
+                            try {
+                              // Get current queue data to preserve all fields
+                              // Force server fetch to get the latest data, not cached
+                              final currentQueue = await QueueService.getQueueById(queueId, forceServer: true);
+                              if (currentQueue != null) {
+                                // Update only status fields, preserving all other fields from current queue
+                                final updatedQueue = currentQueue.copyWith(
+                                  isStarted: true,
+                                  isSuspended: false,
+                                  status: 'active',
+                                  // Explicitly preserve these fields from current queue
+                                  estimatedQueueSize: currentQueue.estimatedQueueSize,
+                                  totalAvailableUnits: currentQueue.totalAvailableUnits ?? currentQueue.numberOfAvailableUnits,
+                                  numberOfAvailableUnits: currentQueue.numberOfAvailableUnits,
+                                );
+                                await QueueService.updateQueue(queueId, updatedQueue);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(AppLanguage.translate('Queue started successfully')),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                // Fallback to widget queue if current not found
                         final updatedQueue = queue.copyWith(
                           isStarted: true,
                           isSuspended: false,
                           status: 'active',
-                          totalAvailableUnits: queue.totalAvailableUnits ?? queue.numberOfAvailableUnits, // Set total if not already set
+                                  totalAvailableUnits: queue.totalAvailableUnits ?? queue.numberOfAvailableUnits,
                         );
-                        QueueService.getQueueIdByName(queue.name).then((queueId) {
-                          if (queueId != null) {
-                            QueueService.updateQueue(queueId, updatedQueue).then((_) {
+                                await QueueService.updateQueue(queueId, updatedQueue);
+                                if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(AppLanguage.translate('Queue started successfully')),
                                   backgroundColor: Colors.green,
                                 ),
                               );
-                            }).catchError((e) {
+                                }
+                              }
+                            } catch (e) {
                               print('Error starting queue: $e');
+                              if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('${AppLanguage.translate('Error starting queue:')} $e'),
                                   backgroundColor: Colors.red,
                                 ),
                               );
-                            });
+                              }
+                            }
                           }
                         });
                       },
@@ -8489,11 +8593,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             beneficiaries: beneficiariesForQueue,
                             onQueueUpdated: (updatedQueue) {
-                              QueueService.getQueueIdByName(queue.name).then((queueId) {
-                                if (queueId != null) {
-                                  QueueService.updateQueue(queueId, updatedQueue);
-                                }
-                              });
+                              // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
+                              // This callback is just for UI updates - no need to update Firestore again
+                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
                             },
                             onBeneficiaryUpdated: (beneficiary) {},
                           ),
@@ -8512,11 +8614,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             distributionAreas: _distributionAreas,
                             onQueueUpdated: (updatedQueue) {
-                              QueueService.getQueueIdByName(queue.name).then((queueId) {
-                                if (queueId != null) {
-                                  QueueService.updateQueue(queueId, updatedQueue);
-                                }
-                              });
+                              // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
+                              // This callback is just for UI updates - no need to update Firestore again
+                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
                             },
                           ),
                         ),
@@ -9060,21 +9160,95 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     IconButton(
                       onPressed: () {
                         // Update queue in Firestore - Start queue (set to active status)
-                        final updatedQueue = queue.copyWith(
+                        // IMPORTANT: Get current queue from Firestore first to preserve all fields (estimatedQueueSize, totalAvailableUnits, etc.)
+                        QueueService.getQueueIdByName(queue.name).then((queueId) async {
+                          if (queueId != null) {
+                            try {
+                              // Get current queue data to preserve all fields
+                              // Force server fetch to get the latest data, not cached
+                              final currentQueue = await QueueService.getQueueById(queueId, forceServer: true);
+                              if (currentQueue != null) {
+                                // Update only status fields, preserving all other fields from current queue
+                                final updatedQueue = currentQueue.copyWith(
                           isStarted: true,
                           isSuspended: false,
                           status: 'active',
-                        );
-                        QueueService.getQueueIdByName(queue.name).then((queueId) {
+                                  // Explicitly preserve these fields from current queue
+                                  estimatedQueueSize: currentQueue.estimatedQueueSize,
+                                  totalAvailableUnits: currentQueue.totalAvailableUnits,
+                                  numberOfAvailableUnits: currentQueue.numberOfAvailableUnits,
+                                );
+                                await QueueService.updateQueue(queueId, updatedQueue);
+                                if (mounted) {
+                                  // Navigate to serving screen after successfully starting the queue
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => QueueServingScreen(
+                                        queue: updatedQueue,
+                                        beneficiaries: beneficiariesForQueue, // Use beneficiaries from Firestore stream
+                                        onQueueUpdated: (updatedQueue) {
+                                          // Update in Firestore - changes will be reflected via StreamBuilder
+                                          QueueService.getQueueIdByName(updatedQueue.name).then((queueId) {
                           if (queueId != null) {
-                            QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(AppLanguage.translate('Queue started successfully')),
-                                  backgroundColor: Colors.green,
+                                              QueueService.updateQueue(queueId, updatedQueue).catchError((e) {
+                                                print('Error updating queue: $e');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('Error updating queue: $e')),
+                                );
+                              }
+                            });
+                                            }
+                                          });
+                                        },
+                                        onBeneficiaryUpdated: (beneficiary) {
+                                          // Beneficiary updates are handled in Firestore, no need to update local list
+                                          // The StreamBuilder will automatically reflect the changes
+                                        },
+                                      ),
                                 ),
                               );
-                            }).catchError((e) {
+                            }
+                              } else {
+                                // Fallback to widget queue if current not found
+                                final updatedQueue = queue.copyWith(
+                                  isStarted: true,
+                                  isSuspended: false,
+                                  status: 'active',
+                                );
+                                await QueueService.updateQueue(queueId, updatedQueue);
+                                if (mounted) {
+                                  // Navigate to serving screen after successfully starting the queue
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => QueueServingScreen(
+                              queue: updatedQueue,
+                                        beneficiaries: beneficiariesForQueue, // Use beneficiaries from Firestore stream
+                              onQueueUpdated: (updatedQueue) {
+                                          // Update in Firestore - changes will be reflected via StreamBuilder
+                                          QueueService.getQueueIdByName(updatedQueue.name).then((queueId) {
+                                  if (queueId != null) {
+                                              QueueService.updateQueue(queueId, updatedQueue).catchError((e) {
+                                      print('Error updating queue: $e');
+                                                if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('Error updating queue: $e')),
+                                      );
+                                                }
+                                    });
+                                  }
+                                });
+                              },
+                              onBeneficiaryUpdated: (beneficiary) {
+                                          // Beneficiary updates are handled in Firestore, no need to update local list
+                                          // The StreamBuilder will automatically reflect the changes
+                              },
+                            ),
+                          ),
+                        );
+                                }
+                              }
+                            } catch (e) {
                               print('Error starting queue: $e');
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -9084,7 +9258,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                   ),
                                 );
                               }
-                            });
+                            }
                           } else {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -9096,43 +9270,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             }
                           }
                         });
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => QueueServingScreen(
-                              queue: updatedQueue,
-                              beneficiaries: [], // Will be loaded from Firebase in the screen
-                              onQueueUpdated: (updatedQueue) {
-                                // Update in Firestore
-                                QueueService.getQueueIdByName(queue.name).then((queueId) {
-                                  if (queueId != null) {
-                                    QueueService.updateQueue(queueId, updatedQueue).then((_) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(AppLanguage.translate('Queue updated successfully')),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                    }).catchError((e) {
-                                      print('Error updating queue: $e');
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('${AppLanguage.translate('Error updating queue:')} $e'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    });
-                                  }
-                                });
-                              },
-                              onBeneficiaryUpdated: (beneficiary) {
-                                final beneficiaryIndex = _beneficiaries.indexWhere((b) => b.id == beneficiary.id);
-                                if (beneficiaryIndex != -1) {
-                                  _updateBeneficiary(beneficiaryIndex, beneficiary);
-                                }
-                              },
-                            ),
-                          ),
-                        );
                       },
                       icon: const Icon(Icons.play_arrow, color: Colors.green),
                       style: IconButton.styleFrom(
@@ -9160,11 +9297,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             beneficiaries: beneficiariesForQueue,
                             onQueueUpdated: (updatedQueue) {
-                              QueueService.getQueueIdByName(queue.name).then((queueId) {
-                                if (queueId != null) {
-                                  QueueService.updateQueue(queueId, updatedQueue);
-                                }
-                              });
+                              // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
+                              // This callback is just for UI updates - no need to update Firestore again
+                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
                             },
                             onBeneficiaryUpdated: (beneficiary) {},
                           ),
@@ -9196,22 +9331,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             distributionAreas: _distributionAreas,
                             onQueueUpdated: (updatedQueue) {
-                      // Update in Firestore - changes will be reflected via StreamBuilder
-                      // Note: Success/error messages are already shown in QueueDetailsScreen,
-                      // so we don't need to show them here to avoid context disposal issues
-                      QueueService.getQueueIdByName(queue.name).then((queueId) {
-                        if (queueId != null) {
-                          QueueService.updateQueue(queueId, updatedQueue).catchError((e) {
-                            print('Error updating queue: $e');
-                            // Error will be handled by QueueDetailsScreen
-                          });
-                        } else {
-                          print('Queue not found in Firestore');
-                        }
-                      }).catchError((e) {
-                        print('Error getting queue ID: $e');
-                        // Error will be handled by QueueDetailsScreen
-                      });
+                      // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
+                      // This callback is just for UI updates - no need to update Firestore again
+                      // The StreamBuilder will automatically reflect the changes
+                      print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
                     },
                           ),
                         ),
@@ -9378,224 +9501,92 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               ),
                             ),
                             SizedBox(height: spacing),
-                            StreamBuilder<List<DistributionArea>>(
-                              stream: DistributionAreaService.getAllAreas(),
-                              builder: (context, snapshot) {
-                              // Get current admin to filter areas
-                              final currentAdmin = AdminService.currentAdmin;
-                              
-                              // Wait for data to load
-                              if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
-                              
-                              if (snapshot.hasError) {
-                                print('StreamBuilder error: ${snapshot.error}');
-                                return Text('Error: ${snapshot.error}');
-                              }
-                              
-                              // Get all areas from Firestore
-                              final allAreas = snapshot.data ?? [];
-                              if (allAreas.isEmpty) {
-                                return const Text('No distribution areas available');
-                              }
-                              
-                              // Remove duplicates by ID
-                              final uniqueMap = <String, DistributionArea>{};
-                              for (final area in allAreas) {
-                                if (!uniqueMap.containsKey(area.id)) {
-                                  uniqueMap[area.id] = area;
-                                }
-                              }
-                              final allUniqueAreas = uniqueMap.values.toList();
-                              
-                              // Filter based on admin role (same logic as Dashboard screen)
-                              List<DistributionArea> displayAreas;
-                              if (currentAdmin != null && allUniqueAreas.isNotEmpty) {
-                                final role = currentAdmin.role ?? '';
-                                final distributionPoint = currentAdmin.distributionPoint ?? '';
-                                final isSuperAdmin = currentAdmin.isSuperAdmin ?? false;
-                                
-                                // Check if this is the test Super Admin user
-                                final isTestSuperAdmin = currentAdmin.mobile == '01010646279';
-                                
-                                final roleLower = role.toLowerCase().trim();
-                                final distPointLower = distributionPoint.toLowerCase().trim();
-                                
-                                final isSuperAdminRole = isSuperAdmin || 
-                                    roleLower == 'super_admin' ||
-                                    roleLower == 'superadmin' ||
-                                    (roleLower.contains('super') && roleLower.contains('admin')) ||
-                                    distPointLower == 'all' ||
-                                    isTestSuperAdmin;
-                                
-                                if (isSuperAdminRole) {
-                                  // Super Admin sees ALL areas
-                                  displayAreas = allUniqueAreas;
-                                } else if ((currentAdmin.isAdmin || currentAdmin.isQAdmin) && 
-                                           distributionPoint.isNotEmpty && 
-                                           distPointLower != 'all') {
-                                  // Admin/Q_Admin sees only their assigned areas
-                                  // Match by distributionPoint name with areaName (case-insensitive partial match)
-                                  displayAreas = allUniqueAreas.where((area) {
-                                    final adminPoint = currentAdmin.distributionPoint.toLowerCase();
-                                    final areaName = area.areaName.toLowerCase();
-                                    return areaName.contains(adminPoint) || adminPoint.contains(areaName);
-                                  }).toList();
-                                } else {
-                                  // No admin logged in or no distribution point assigned, show all areas
-                                  displayAreas = allUniqueAreas;
-                                }
-                              } else {
-                                // No admin, show all areas
-                                displayAreas = allUniqueAreas;
-                              }
-                              
-                              // Update local list only once when data changes (avoid multiple setState calls)
-                              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                                // Remove duplicates before comparing
-                                final uniqueMap = <String, DistributionArea>{};
-                                for (final area in snapshot.data!) {
-                                  if (!uniqueMap.containsKey(area.id)) {
-                                    uniqueMap[area.id] = area;
-                                  }
-                                }
-                                final uniqueFirestoreAreas = uniqueMap.values.toList();
-                                
-                                final currentIds = _distributionAreas.map((a) => a.id).toSet();
-                                final newIds = uniqueFirestoreAreas.map((a) => a.id).toSet();
-                                final hasChanged = currentIds.length != newIds.length || 
-                                    !currentIds.containsAll(newIds) ||
-                                    !newIds.containsAll(currentIds);
-                                
-                                if (hasChanged) {
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (mounted) {
-                                      setState(() {
-                                        _distributionAreas = uniqueFirestoreAreas;
-                                        // Auto-select first area if only one is available for non-super-admins
-                                        if (displayAreas.length == 1 && 
-                                            _selectedDistributionArea == null && 
-                                            currentAdmin != null &&
-                                            !(currentAdmin.isSuperAdmin || currentAdmin.mobile == '01010646279')) {
-                                          _selectedDistributionArea = displayAreas.first.id;
-                                        }
-                                      });
-                                    }
-                                  });
-                                }
-                              }
-                              
-                              // Build dropdown items
-                              final dropdownItems = <DropdownMenuItem<String>>[];
-                              
-                              // Only show "All Areas" if admin has multiple areas assigned or is Super Admin
-                              final showAllAreasOption = displayAreas.length > 1 || 
-                                  (currentAdmin?.isSuperAdmin ?? false) || 
-                                  (currentAdmin?.mobile == '01010646279');
-                              
-                              if (showAllAreasOption) {
-                                dropdownItems.add(
-                                    DropdownMenuItem<String>(
-                                      value: null,
-                                      child: Text(AppLanguage.translate('All Areas')),
+                            // Show location hierarchy above dropdown if area is selected
+                            if (_selectedDistributionArea != null)
+                              Builder(
+                                builder: (context) {
+                                  final selectedArea = _distributionAreas.firstWhere(
+                                    (area) => area.id == _selectedDistributionArea,
+                                    orElse: () => _distributionAreas.first,
+                                  );
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      selectedArea.locationHierarchy,
+                                      style: TextStyle(
+                                        fontSize: isLandscape ? 12 : 14,
+                                        color: const Color(0xFF1A237E),
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                );
-                              }
-                              
-                              // Remove duplicates by ID before adding to dropdown
-                              final uniqueAreas = <String, DistributionArea>{};
-                              for (final area in displayAreas) {
-                                if (!uniqueAreas.containsKey(area.id)) {
-                                  uniqueAreas[area.id] = area;
-                                }
-                              }
-                              
-                              // Add all unique area items
-                              for (final area in uniqueAreas.values) {
-                                dropdownItems.add(
-                                  DropdownMenuItem<String>(
+                                  );
+                                },
+                              ),
+                            // Use filtered areas from _distributionAreas (already filtered by admin)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                                borderRadius: BorderRadius.circular(8),
+                                color: Colors.white,
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _getValidSelectedArea(),
+                                  isExpanded: true,
+                                  hint: Text(AppLanguage.translate('Select Distribution Area')),
+                                  items: _distributionAreas.map((area) {
+                                    return DropdownMenuItem<String>(
                                       value: area.id,
                                       child: Text(
-                                        area.fullName,
+                                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
                                         overflow: TextOverflow.ellipsis,
                                         maxLines: 1,
-                                    ),
-                                  ),
-                                );
-                              }
-                              
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: const Color(0xFFE0E0E0)),
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Colors.white,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  selectedItemBuilder: (context) {
+                                    return _distributionAreas.map((area) {
+                                      return Text(
+                                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                        style: const TextStyle(fontSize: 14),
+                                      );
+                                    }).toList();
+                                  },
+                                  focusNode: FocusNode(skipTraversal: true), // Prevent keyboard from appearing
+                                  onChanged: (value) {
+                                    // Dismiss keyboard when dropdown value changes
+                                    FocusScope.of(context).unfocus();
+                                    setState(() {
+                                      _selectedDistributionArea = value;
+                                    });
+                                  },
                                 ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _getValidSelectedArea(),
-                                    isExpanded: true,
-                                    hint: Text(AppLanguage.translate('Select Distribution Area')),
-                                    items: dropdownItems,
-                                    focusNode: FocusNode(skipTraversal: true), // Prevent keyboard from appearing
-                                    onChanged: (value) {
-                                      // Dismiss keyboard when dropdown value changes
-                                      FocusScope.of(context).unfocus();
-                                      setState(() {
-                                        _selectedDistributionArea = value;
-                                      });
-                                    },
                               ),
                             ),
-                              );
-                            },
-                          ),
                         ],
                       ),
                     ),
                     StreamBuilder<List<Queue>>(
-                      stream: QueueService.getAllQueues(),
+                      stream: _getQueuesStream(),
                       builder: (context, snapshot) {
-                        // Get queues from snapshot with proper type
-                        final List<Queue> allQueues = snapshot.hasData 
+                        // Get queues from snapshot (already filtered server-side)
+                        final List<Queue> adminQueues = snapshot.hasData 
                             ? snapshot.data!
                             : <Queue>[];
                         
                         // Update local queues list from Firestore (for use in other parts of the app)
                         if (snapshot.hasData) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted && _queues != allQueues) {
+                            if (mounted && _queues != adminQueues) {
                               setState(() {
-                                _queues = allQueues;
+                                _queues = adminQueues;
                               });
                             }
                           });
-                        }
-                        
-                        // Super Admin or admin with distributionPoint == "All" can see all queues
-                        final currentAdmin = AdminService.currentAdmin;
-                        List<Queue> adminQueues;
-                        
-                        if (currentAdmin != null && 
-                            (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
-                          // Show all queues, filter by selected distribution area if one is selected
-                          if (_selectedDistributionArea != null) {
-                            adminQueues = allQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
-                          } else {
-                            adminQueues = allQueues;
-                          }
-                        } else {
-                        // Get admin's assigned distribution area IDs
-                        final adminAreas = _distributionAreas.map((area) => area.id).toList();
-                        
-                        // Filter queues by admin's distribution areas
-                          adminQueues = allQueues.where((q) => adminAreas.contains(q.distributionArea)).toList();
-                        
-                        // Further filter by selected distribution area if one is selected
-                        if (_selectedDistributionArea != null) {
-                          adminQueues = adminQueues.where((q) => q.distributionArea == _selectedDistributionArea).toList();
-                          }
                         }
                         
                         // Summary cards removed - no longer displaying statistics
@@ -9626,7 +9617,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             SizedBox(height: isLandscape ? 6 : 12),
                             Expanded(
                               child: StreamBuilder<List<Queue>>(
-                                stream: QueueService.getAllQueues(),
+                                stream: _getQueuesStream(),
                                 builder: (context, snapshot) {
                                   // Show loader only on initial connection, not on active streams
                                   if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
@@ -10363,6 +10354,28 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
   final List<String> _selectedPriority = [];
   String _status = 'active';
 
+  /// Get valid selected area - ensures the selected value exists in widget.distributionAreas
+  String? _getValidSelectedArea() {
+    if (_selectedDistributionArea == null) return null;
+    
+    // Check if the selected value exists in widget.distributionAreas
+    final exists = widget.distributionAreas.any((area) => area.id == _selectedDistributionArea);
+    
+    if (!exists) {
+      // Selected area no longer exists in the list, reset it
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedDistributionArea = null;
+          });
+        }
+      });
+      return null;
+    }
+    
+    return _selectedDistributionArea;
+  }
+
   @override
   void dispose() {
     _queueNameController.dispose();
@@ -10626,91 +10639,46 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                 const SizedBox(height: 16),
                 Text(AppLanguage.translate('Distribution Area *'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                StreamBuilder<List<DistributionArea>>(
-                  stream: DistributionAreaService.getAllAreas(),
-                  builder: (context, snapshot) {
-                    // Get current admin to filter areas
-                    final currentAdmin = AdminService.currentAdmin;
-                    
-                    // Wait for data to load
-                    if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    
-                    if (snapshot.hasError) {
-                      print('StreamBuilder error: ${snapshot.error}');
-                      return Text('Error: ${snapshot.error}');
-                    }
-                    
-                    // Get all areas from Firestore
-                    final allAreas = snapshot.data ?? [];
-                    if (allAreas.isEmpty) {
-                      return const Text('No distribution areas available');
-                    }
-                    
-                    // Remove duplicates by ID
-                    final uniqueMap = <String, DistributionArea>{};
-                    for (final area in allAreas) {
-                      if (!uniqueMap.containsKey(area.id)) {
-                        uniqueMap[area.id] = area;
+                // Show location hierarchy above dropdown if area is selected
+                if (_selectedDistributionArea != null)
+                  Builder(
+                    builder: (context) {
+                      try {
+                        final selectedArea = widget.distributionAreas.firstWhere(
+                          (area) => area.id == _selectedDistributionArea,
+                        );
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            selectedArea.locationHierarchy,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1A237E),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      } catch (e) {
+                        return const SizedBox.shrink();
                       }
-                    }
-                    final allUniqueAreas = uniqueMap.values.toList();
-                    
-                    // Filter based on admin role (same logic as Dashboard screen)
-                    List<DistributionArea> displayAreas;
-                    if (currentAdmin != null && allUniqueAreas.isNotEmpty) {
-                      final role = currentAdmin.role ?? '';
-                      final distributionPoint = currentAdmin.distributionPoint ?? '';
-                      final isSuperAdmin = currentAdmin.isSuperAdmin ?? false;
-                      
-                      // Check if this is the test Super Admin user
-                      final isTestSuperAdmin = currentAdmin.mobile == '01010646279';
-                      
-                      final roleLower = role.toLowerCase().trim();
-                      final distPointLower = distributionPoint.toLowerCase().trim();
-                      
-                      final isSuperAdminRole = isSuperAdmin || 
-                          roleLower == 'super_admin' ||
-                          roleLower == 'superadmin' ||
-                          (roleLower.contains('super') && roleLower.contains('admin')) ||
-                          distPointLower == 'all' ||
-                          isTestSuperAdmin;
-                      
-                      if (isSuperAdminRole) {
-                        // Super Admin sees ALL areas
-                        displayAreas = allUniqueAreas;
-                      } else if ((currentAdmin.isAdmin || currentAdmin.isQAdmin) && 
-                                 distributionPoint.isNotEmpty && 
-                                 distPointLower != 'all') {
-                        // Admin/Q_Admin sees only their assigned areas
-                        // Match by distributionPoint name with areaName (case-insensitive partial match)
-                        displayAreas = allUniqueAreas.where((area) {
-                          final adminPoint = currentAdmin.distributionPoint.toLowerCase();
-                          final areaName = area.areaName.toLowerCase();
-                          return areaName.contains(adminPoint) || adminPoint.contains(areaName);
-                        }).toList();
-                      } else {
-                        // No admin logged in or no distribution point assigned, show all areas
-                        displayAreas = allUniqueAreas;
-                      }
-                    } else {
-                      // No admin, show all areas
-                      displayAreas = allUniqueAreas;
-                    }
-                    
-                    return DropdownButtonFormField<String>(
-                      value: _selectedDistributionArea,
+                    },
+                  ),
+                // Use filtered areas from widget (already filtered by admin in dashboard)
+                // No need for StreamBuilder - widget.distributionAreas is already filtered
+                DropdownButtonFormField<String>(
+                  value: widget.distributionAreas.any((area) => area.id == _selectedDistributionArea)
+                      ? _selectedDistributionArea
+                      : null,
                       isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         filled: true,
                         fillColor: Colors.white,
-                        hintText: displayAreas.isEmpty 
+                    hintText: widget.distributionAreas.isEmpty 
                             ? AppLanguage.translate('No areas available')
                             : AppLanguage.translate('Select Distribution Area'),
                       ),
-                      items: displayAreas.isEmpty
+                  items: widget.distributionAreas.isEmpty
                           ? [
                               DropdownMenuItem(
                                 value: null,
@@ -10721,27 +10689,19 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                                 ),
                               ),
                             ]
-                          : (() {
-                              // Remove duplicates by ID
-                              final uniqueAreas = <String, DistributionArea>{};
-                              for (final area in displayAreas) {
-                                if (!uniqueAreas.containsKey(area.id)) {
-                                  uniqueAreas[area.id] = area;
-                                }
-                              }
-                              return uniqueAreas.values.map((area) {
+                      : widget.distributionAreas.map((area) {
                                 return DropdownMenuItem(
                                   value: area.id,
                                   child: Text(
-                                    area.fullName,
+                                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 1,
+                                    style: const TextStyle(fontSize: 14),
                                   ),
                                 );
-                              }).toList();
-                            })(),
+                        }).toList(),
                       selectedItemBuilder: (context) {
-                        if (displayAreas.isEmpty) {
+                    if (widget.distributionAreas.isEmpty) {
                           return [
                             Text(
                               AppLanguage.translate('No areas available'),
@@ -10749,36 +10709,21 @@ class _NewQueueScreenState extends State<NewQueueScreen> {
                             ),
                           ];
                         }
-                        // Remove duplicates for selectedItemBuilder too
-                        final uniqueAreas = <String, DistributionArea>{};
-                        for (final area in displayAreas) {
-                          if (!uniqueAreas.containsKey(area.id)) {
-                            uniqueAreas[area.id] = area;
-                          }
-                        }
-                        return uniqueAreas.values.map((area) {
+                    return widget.distributionAreas.map((area) {
                           return Text(
-                            area.fullName,
+                            area.areaName.isNotEmpty ? area.areaName : area.fullName,
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
+                            style: const TextStyle(fontSize: 14),
                           );
                         }).toList();
                       },
-                      onChanged: displayAreas.isEmpty ? null : (value) {
-                        // Validate that the selected value exists in unique areas
-                        final uniqueAreas = <String, DistributionArea>{};
-                        for (final area in displayAreas) {
-                          if (!uniqueAreas.containsKey(area.id)) {
-                            uniqueAreas[area.id] = area;
-                          }
-                        }
-                        if (value == null || uniqueAreas.containsKey(value)) {
+                  onChanged: widget.distributionAreas.isEmpty ? null : (value) {
+                    if (value == null || widget.distributionAreas.any((area) => area.id == value)) {
                           setState(() {
                             _selectedDistributionArea = value;
                           });
                         }
-                      },
-                    );
                   },
                 ),
                 const SizedBox(height: 16),
@@ -11322,6 +11267,8 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _queueNameController;
   late TextEditingController _customUnitNameController;
+  late TextEditingController _numberOfAvailableUnitsController;
+  late TextEditingController _estimatedQueueSizeController;
   
   late String? _selectedDistributionArea;
   late String? _selectedQueueType;
@@ -11351,12 +11298,19 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
     if (updateControllers) {
       _queueNameController = TextEditingController(text: queue.name);
     _customUnitNameController = TextEditingController();
+      _numberOfAvailableUnitsController = TextEditingController(text: queue.numberOfAvailableUnits.toString());
+      _estimatedQueueSizeController = TextEditingController(text: queue.estimatedQueueSize.toString());
     } else {
       // Update existing controllers
       _queueNameController.text = queue.name;
       if (_selectedUnitName == 'Others') {
         _customUnitNameController.text = queue.unitName;
       }
+      _numberOfAvailableUnitsController.text = queue.numberOfAvailableUnits.toString();
+      _estimatedQueueSizeController.text = queue.estimatedQueueSize.toString();
+      // Also update the variables to keep them in sync
+      _numberOfAvailableUnits = queue.numberOfAvailableUnits;
+      _estimatedQueueSize = queue.estimatedQueueSize;
     }
     // Validate distribution area exists in the list before setting
     _selectedDistributionArea = queue.distributionArea;
@@ -11414,6 +11368,8 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
   void dispose() {
     _queueNameController.dispose();
     _customUnitNameController.dispose();
+    _numberOfAvailableUnitsController.dispose();
+    _estimatedQueueSizeController.dispose();
     super.dispose();
   }
 
@@ -11479,9 +11435,35 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
       );
       return;
     }
-    if (_numberOfAvailableUnits == null || _estimatedQueueSize == null) {
+    
+    // Read values from controllers - always use controller text as source of truth
+    final numberOfUnitsText = _numberOfAvailableUnitsController.text.trim();
+    final estimatedSizeText = _estimatedQueueSizeController.text.trim();
+    
+    // Validate that text fields are not empty
+    if (numberOfUnitsText.isEmpty || estimatedSizeText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter number of units and estimated queue size')),
+      );
+      return;
+    }
+    
+    // Parse the values from controller text
+    final numberOfUnits = int.tryParse(numberOfUnitsText);
+    final estimatedSize = int.tryParse(estimatedSizeText);
+    
+    // Validate that values are valid integers
+    if (numberOfUnits == null || estimatedSize == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter valid numbers for units and queue size')),
+      );
+      return;
+    }
+    
+    // Validate that values are positive
+    if (numberOfUnits <= 0 || estimatedSize <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Units and queue size must be greater than zero')),
       );
       return;
     }
@@ -11525,9 +11507,9 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
       fromTime: _fromTime!,
       toTime: _toTime!,
       unitName: _selectedUnitName == 'Others' ? _customUnitNameController.text : _selectedUnitName!,
-      numberOfAvailableUnits: _numberOfAvailableUnits!,
-      totalAvailableUnits: _numberOfAvailableUnits!, // Set total to preserve original value
-      estimatedQueueSize: _estimatedQueueSize!,
+      numberOfAvailableUnits: numberOfUnits,
+      totalAvailableUnits: numberOfUnits, // Update totalAvailableUnits to match the new numberOfAvailableUnits
+      estimatedQueueSize: estimatedSize,
       directServe: _directServe,
       priority: _selectedPriority,
       status: _status,
@@ -11552,10 +11534,18 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
         throw Exception(AppLanguage.translate('Queue not found in Firestore'));
       }
 
+      // Debug: Print values being sent to Firestore
+      print('🔍 Updating queue with values:');
+      print('🔍 numberOfAvailableUnits: $numberOfUnits');
+      print('🔍 estimatedQueueSize: $estimatedSize');
+      print('🔍 totalAvailableUnits: $numberOfUnits');
+      print('🔍 Queue ID: $queueId');
+
       // Update in Firestore
       await QueueService.updateQueue(queueId, updatedQueue);
       
       print('✅ Queue updated successfully in Firestore with ID: $queueId');
+      print('✅ Updated values - numberOfAvailableUnits: ${updatedQueue.numberOfAvailableUnits}, estimatedQueueSize: ${updatedQueue.estimatedQueueSize}');
       
       // Close loading dialog
       if (mounted) {
@@ -11783,20 +11773,17 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
                 decoration: InputDecoration(
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Colors.grey[200],
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[400]!),
+                  ),
                 ),
                 items: ['Single Day', 'Multi Day'].map((type) {
                   return DropdownMenuItem(value: type, child: Text(type));
                 }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedQueueType = value;
-                    // Ensure toDate is not before fromDate
-                    if (_fromDate != null && _toDate != null && _toDate!.isBefore(_fromDate!)) {
-                      _toDate = _fromDate;
-                    }
-                  });
-                },
+                onChanged: null, // Disable the dropdown - queue type cannot be changed
+                style: TextStyle(color: Colors.grey[600]), // Dimmed text color
               ),
               const SizedBox(height: 16),
               // Show different UI based on queue type
@@ -12195,7 +12182,7 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
               ],
               const SizedBox(height: 16),
               TextFormField(
-                  initialValue: _numberOfAvailableUnits?.toString() ?? '',
+                controller: _numberOfAvailableUnitsController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                     labelText: AppLanguage.translate('Number of Available Units *'),
@@ -12203,12 +12190,26 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                  onChanged: (value) => _numberOfAvailableUnits = int.tryParse(value),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter number of units') : null,
+                onChanged: (value) {
+                  // Update variable for validation, but controller text is source of truth
+                  setState(() {
+                    _numberOfAvailableUnits = int.tryParse(value);
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return AppLanguage.translate('Please enter number of units');
+                  }
+                  final parsed = int.tryParse(value);
+                  if (parsed == null || parsed <= 0) {
+                    return AppLanguage.translate('Please enter a valid positive number');
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(
-                  initialValue: _estimatedQueueSize?.toString() ?? '',
+                controller: _estimatedQueueSizeController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                     labelText: AppLanguage.translate('Estimated Queue Size *'),
@@ -12216,8 +12217,22 @@ class _QueueDetailsScreenState extends State<QueueDetailsScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                  onChanged: (value) => _estimatedQueueSize = int.tryParse(value),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter estimated queue size') : null,
+                onChanged: (value) {
+                  // Update variable for validation, but controller text is source of truth
+                  setState(() {
+                    _estimatedQueueSize = int.tryParse(value);
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return AppLanguage.translate('Please enter estimated queue size');
+                  }
+                  final parsed = int.tryParse(value);
+                  if (parsed == null || parsed <= 0) {
+                    return AppLanguage.translate('Please enter a valid positive number');
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               CheckboxListTile(
@@ -12751,16 +12766,29 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
           ),
         );
         
-        // Reset form
+        // Reset form - clear all fields
         _formKey.currentState!.reset();
         setState(() {
+          // Clear all text controllers
+          _fullNameController.clear();
+          _mobileController.clear();
+          _passwordController.clear();
+          _notesController.clear();
+          _referenceController.clear();
+          _newDistributionPointController.clear();
+          _newDistributionPointDescController.clear();
+          
+          // Reset all dropdown selections
+          _selectedCountry = 'Egypt';
           _selectedGovernorate = null;
           _selectedCity = null;
           _selectedDistributionPoint = null;
           _useNewDistributionPoint = false;
           _status = 'active';
           _selectedRole = null;
-          _passwordController.clear();
+          
+          // Clear available distribution areas
+          _availableDistributionAreas = [];
         });
       }
     } catch (e, stackTrace) {
@@ -12842,29 +12870,13 @@ class _CreateAdminScreenState extends State<CreateAdminScreen> {
               const SizedBox(height: 24),
               _buildLabel('Distribution Point *'),
               const SizedBox(height: 8),
-              // Use StreamBuilder to load distribution areas from Firestore
-              StreamBuilder<List<DistributionArea>>(
-                stream: DistributionAreaService.getAllAreas(),
-                initialData: widget.distributionAreas, // Use local list as initial data
-                builder: (context, snapshot) {
-                  // Always show dropdown, use local list if stream hasn't loaded yet or has error
-                  List<DistributionArea> displayAreas;
-                  
-                  if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                    // Still loading and no data yet - use local list
-                    displayAreas = widget.distributionAreas;
-                  } else if (snapshot.hasError) {
-                    // Error occurred - use local list
-                    displayAreas = widget.distributionAreas;
-                  } else {
-                    // Use Firestore data if available, otherwise fall back to local
-                    final firestoreAreas = snapshot.data ?? [];
-                    displayAreas = firestoreAreas.isNotEmpty ? firestoreAreas : widget.distributionAreas;
-                  }
-                  
-                  // Filter areas by selected city
+              // Use filtered areas from widget (already filtered by admin in dashboard)
+              // Filter areas by selected city from the already-filtered list
+              Builder(
+                builder: (context) {
+                  // Filter areas by selected city from widget.distributionAreas (already filtered by admin)
                   final cityAreas = _selectedCity != null
-                      ? displayAreas.where((area) => area.city == _selectedCity).toList()
+                      ? widget.distributionAreas.where((area) => area.city == _selectedCity).toList()
                       : <DistributionArea>[];
                   
                   // Update local list for reference (no setState to avoid rebuilds)
@@ -17635,44 +17647,75 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   }
 
   Widget _buildDistributionAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.white,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedDistributionArea,
-          isExpanded: true,
-          hint: const Text('Select distribution area'),
-          items: widget.distributionAreas.map((area) {
-            return DropdownMenuItem(
-              value: area.id,
-              child: Text(
-                area.fullName,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            );
-          }).toList(),
-          selectedItemBuilder: (context) {
-            return widget.distributionAreas.map((area) {
-              return Text(
-                area.fullName,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              );
-            }).toList();
-          },
-          onChanged: (value) {
-            setState(() {
-              _selectedDistributionArea = value;
-            });
-          },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Show location hierarchy above dropdown if area is selected
+        if (_selectedDistributionArea != null)
+          Builder(
+            builder: (context) {
+              try {
+                final selectedArea = widget.distributionAreas.firstWhere(
+                  (area) => area.id == _selectedDistributionArea,
+                );
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    selectedArea.locationHierarchy,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF1A237E),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              } catch (e) {
+                return const SizedBox.shrink();
+              }
+            },
+          ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedDistributionArea,
+              isExpanded: true,
+              hint: const Text('Select distribution area'),
+              items: widget.distributionAreas.map((area) {
+                return DropdownMenuItem(
+                  value: area.id,
+                  child: Text(
+                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                );
+              }).toList(),
+              selectedItemBuilder: (context) {
+                return widget.distributionAreas.map((area) {
+                  return Text(
+                    area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 14),
+                  );
+                }).toList();
+              },
+              onChanged: (value) {
+                setState(() {
+                  _selectedDistributionArea = value;
+                });
+              },
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -17750,6 +17793,43 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
       // If no admin or no distribution point, show all areas
       _adminDistributionAreaIds = widget.distributionAreas.map((area) => area.id).toList();
     }
+  }
+
+  /// Get the appropriate beneficiaries stream based on admin's role and assigned areas
+  /// Uses server-side filtering for better performance
+  Stream<List<Beneficiary>> _getBeneficiariesStream() {
+    final currentAdmin = AdminService.currentAdmin;
+    final limit = _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit;
+    
+    // If a specific area is selected, use that area's stream
+    if (_selectedDistributionArea != null) {
+      return BeneficiaryService.getBeneficiariesByArea(
+        _selectedDistributionArea!,
+        limit: limit,
+        activeOnly: false,
+      );
+    }
+    
+    // Super Admin or admin with distributionPoint == "All" can see all beneficiaries
+    if (currentAdmin != null && 
+        (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
+      return BeneficiaryService.getAllBeneficiaries(
+        limit: limit,
+        activeOnly: false,
+      );
+    }
+    
+    // For regular admins, filter by their assigned distribution areas (server-side)
+    if (_adminDistributionAreaIds.isEmpty) {
+      return Stream.value(<Beneficiary>[]);
+    }
+    
+    // Filter by all admin's areas (server-side)
+    return BeneficiaryService.getBeneficiariesByAreas(
+      _adminDistributionAreaIds,
+      limit: limit,
+      activeOnly: false,
+    );
   }
 
   @override
@@ -18169,65 +18249,12 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                 ),
                 if (_isExpanded) ...[
                   const SizedBox(height: 12),
-                  StreamBuilder<List<DistributionArea>>(
-                    stream: DistributionAreaService.getAllAreas(),
-                    builder: (context, snapshot) {
-                      List<DistributionArea> displayAreas = [];
-                      
-                      if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                        // Still loading and no data yet - use local list
-                        displayAreas = widget.distributionAreas;
-                      } else if (snapshot.hasError) {
-                        // Error occurred - use local list
-                        print('StreamBuilder error: ${snapshot.error}');
-                        displayAreas = widget.distributionAreas;
-                      } else {
-                        // Use Firestore data if available, otherwise fall back to local
-                        final firestoreAreas = snapshot.data ?? [];
-                        displayAreas = firestoreAreas.isNotEmpty ? firestoreAreas : widget.distributionAreas;
-                      }
-                      
-                      // Filter by admin's distribution areas
-                      // Match admin's distributionPoint with area names (same logic as initState)
-                      final currentAdmin = AdminService.currentAdmin;
-                      if (currentAdmin != null && currentAdmin.distributionPoint.isNotEmpty && displayAreas.isNotEmpty) {
-                        // Super Admin or admin with distributionPoint == "All" can see all areas
-                        if (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all') {
-                          // Show all areas for Super Admin
-                          displayAreas = displayAreas;
-                        } else {
-                        final adminPoint = currentAdmin.distributionPoint.toLowerCase();
-                        final filtered = displayAreas.where((area) {
-                          final areaName = area.areaName.toLowerCase();
-                          final matches = areaName.contains(adminPoint) || adminPoint.contains(areaName);
-                          if (matches) {
-                            print('✅ Matched area: ${area.areaName} with admin point: ${currentAdmin.distributionPoint}');
-                          }
-                          return matches;
-                        }).toList();
-                        
-                        // If filtered list is not empty, use it; otherwise show all areas as fallback
-                        if (filtered.isNotEmpty) {
-                          displayAreas = filtered;
-                          print('📊 Using filtered areas: ${displayAreas.length}');
-                        } else {
-                          print('⚠️ No areas matched admin point "${currentAdmin.distributionPoint}" - showing all ${displayAreas.length} areas as fallback');
-                          }
-                        }
-                        
-                        print('📊 Admin distribution point: ${currentAdmin.distributionPoint}');
-                        print('📊 Total areas from Firestore: ${snapshot.data?.length ?? 0}');
-                        print('📊 Final display areas count: ${displayAreas.length}');
-                      } else {
-                        if (currentAdmin == null) {
-                          print('⚠️ No admin logged in - showing all areas');
-                        } else if (currentAdmin.distributionPoint.isEmpty) {
-                          print('⚠️ Admin has no distribution point - showing all areas');
-                        } else {
-                          print('⚠️ No areas loaded - displayAreas is empty');
-                        }
-                      }
-                      // If no admin or no distribution point, show all areas (no filtering)
+                  // Use filtered areas from widget (already filtered by admin in dashboard)
+                  // No need for StreamBuilder - widget.distributionAreas is already filtered
+                  Builder(
+                    builder: (context) {
+                      // widget.distributionAreas is already filtered by admin role in dashboard
+                      final displayAreas = widget.distributionAreas;
                       
                       return DropdownButtonFormField<String>(
                         value: _selectedDistributionArea,
@@ -18349,16 +18376,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
           Expanded(
             child: StreamBuilder<List<Beneficiary>>(
               key: ValueKey<String?>('${_selectedDistributionArea}_${_activeSearchQuery}'), // Force rebuild when area or active search changes
-              stream: _selectedDistributionArea != null
-                  ? BeneficiaryService.getBeneficiariesByArea(
-                      _selectedDistributionArea!, 
-                      limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
-                      activeOnly: false, // Show all beneficiaries including banned
-                    )
-                  : BeneficiaryService.getAllBeneficiaries(
-                      limit: _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit, // Load all when searching, paginated otherwise
-                      activeOnly: false, // Show all beneficiaries including banned
-                    ),
+              stream: _getBeneficiariesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -18453,6 +18471,27 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                             Text(
                               'Status: ${beneficiary.status}',
                               style: const TextStyle(fontSize: 12),
+                            ),
+                            // Show eligible units with highlighted color
+                            Container(
+                              margin: const EdgeInsets.only(top: 4, bottom: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF81CF01).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: const Color(0xFF81CF01).withOpacity(0.5),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                'Served for: ${beneficiary.numberOfUnits} unit${beneficiary.numberOfUnits != '1' ? 's' : ''}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1A237E),
+                                ),
+                              ),
                             ),
                             if (beneficiary.createdBy != null && beneficiary.createdBy!.isNotEmpty)
                               FutureBuilder<Admin?>(
@@ -19092,36 +19131,76 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> {
           }
         }
         
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFE0E0E0)),
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.white,
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: validSelectedArea,
-              isExpanded: true,
-              hint: const Text('Select distribution area'),
-              items: displayAreas.map((area) {
-                return DropdownMenuItem(
-                  value: area.id,
-                  child: Text(
-                    area.fullName,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedDistributionArea = value;
-                  _selectedQueuePoint = null;
-                });
-              },
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Show location hierarchy above dropdown if area is selected
+            if (validSelectedArea != null)
+              Builder(
+                builder: (context) {
+                  try {
+                    final selectedArea = displayAreas.firstWhere(
+                      (area) => area.id == validSelectedArea,
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        selectedArea.locationHierarchy,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1A237E),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    return const SizedBox.shrink();
+                  }
+                },
+              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: validSelectedArea,
+                  isExpanded: true,
+                  hint: const Text('Select distribution area'),
+                  items: displayAreas.map((area) {
+                    return DropdownMenuItem(
+                      value: area.id,
+                      child: Text(
+                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    );
+                  }).toList(),
+                  selectedItemBuilder: (context) {
+                    return displayAreas.map((area) {
+                      return Text(
+                        area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 14),
+                      );
+                    }).toList();
+                  },
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedDistributionArea = value;
+                      _selectedQueuePoint = null;
+                    });
+                  },
+                ),
+              ),
             ),
-          ),
+          ],
         );
       },
     );
@@ -20665,7 +20744,7 @@ class QueueViewScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            if (!queue.isStarted && !queue.isCompleted)
+            if (!queue.isStarted && !queue.isCompleted && !queue.isMultiDay)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -21239,9 +21318,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   String? _lastProcessedTagId; // Track last processed tag to prevent duplicate searches
   DateTime? _lastTagDetectionTime; // Track last tag detection time
   static const Duration _tagDetectionCooldown = Duration(milliseconds: 1500); // Cooldown period
+  String? _lastSearchedValue; // Track last searched value to prevent duplicate error messages
   final Map<String, int> _unitsToServe = {}; // Track units to serve for each beneficiary
   Timer? _searchDebounceTimer; // Debounce timer for search input
   final Set<String> _servingInProgress = {}; // Track beneficiaries currently being served to prevent duplicate calls
+  StreamSubscription<Queue?>? _queueUpdateSubscription; // Listen for real-time queue updates
+  bool _isInitialized = false; // Flag to prevent updates during initialization
+  Timer? _tapTimer; // Timer to handle single vs double tap
+  bool _isDoubleTap = false; // Flag to prevent single tap from firing on double tap
 
   late final String _effectiveQueueName; // Day-specific key for Multi Day queues
 
@@ -21251,10 +21335,20 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     super.initState();
     _availableUnits = widget.queue.numberOfAvailableUnits;
     _totalAvailableUnits = widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits; // Use stored total or current as fallback
-    _servingOption = 'queueOrder'; // Default to Queue order sequence
+    _servingOption = 'grace10'; // Default to Grace 10 option
     
     // Load current queue data from Firebase to get accurate available units and calculate total
-    _loadCurrentQueueData();
+    _loadCurrentQueueData().then((_) {
+      // Mark as initialized after loading current data
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    });
+    
+    // Listen for real-time queue updates (e.g., when queue is edited)
+    _setupQueueUpdateListener();
 
     // Multi Day beneficiaries are saved under a day-specific queue key:
     //   <queue.name>_YYYY-MM-DD
@@ -21279,7 +21373,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // Load beneficiaries from Firebase assigned to this queue (async, non-blocking)
     _loadQueueBeneficiaries();
     
-    // Listen to search controller changes
+    // Listen to search controller changes (only for clearing selection, not for searching)
     void _onSearchChanged() {
       if (!mounted) return; // Prevent operations if widget is disposed
       
@@ -21292,16 +21386,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         _lastTagDetectionTime = null;
       }
       
-      // Debounce search to avoid too many Firebase calls while typing
-      _searchDebounceTimer?.cancel();
-      if (currentText.isNotEmpty) {
-        _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-          if (mounted) {
-            _handleSearchInput(currentText);
-          }
-        });
-      } else {
-        // Clear selection immediately if search is empty
+      // Clear last searched value if user manually edits the field
+      // This allows showing error message again for the same value if user re-searches
+      if (_lastSearchedValue != null && currentText != _lastSearchedValue) {
+        _lastSearchedValue = null;
+      }
+      
+      // Only clear selection if search is empty (don't auto-search while typing)
+      if (currentText.isEmpty) {
         if (mounted) {
           setState(() {
             _selectedBeneficiary = null;
@@ -21316,7 +21408,11 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     
     // Auto-focus search field and start NFC detection
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _searchFocusNode.requestFocus();
+      // Unfocus search field to hide keyboard at start
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+        _searchFocusNode.unfocus();
+      }
       _startNFCDetection();
     });
   }
@@ -21418,20 +21514,21 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           }
           
           // Current remaining = numberOfAvailableUnits (already decremented when serving)
-          // OR calculate as: Total Available - Total Served
+          // Trust the Firebase value as it may have been manually edited
           int currentRemaining = currentQueue.numberOfAvailableUnits;
           
           // Calculate total served units from queueHistory
           int totalServed = await _calculateTotalServedUnits();
           
-          // Verify: Current Remaining should equal Total Available - Total Served
-          // If they don't match, use the calculated value for consistency
+          // Validate: Current Remaining should equal Total Available - Total Served
+          // But trust the Firebase value if there's a mismatch (may have been manually edited)
           if (totalAvailable != null) {
             final calculatedRemaining = totalAvailable - totalServed;
-            if (calculatedRemaining != currentRemaining) {
-              print('⚠️ Warning: Current remaining mismatch. Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using calculated value.');
-              currentRemaining = calculatedRemaining;
+            if ((calculatedRemaining - currentRemaining).abs() > 1) {
+              // Only log if difference is significant (more than 1 unit)
+              print('ℹ️ Info: Current remaining from Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using Firebase value (may have been manually edited).');
             }
+            // Always use the Firebase value when explicitly set
           }
           
           setState(() {
@@ -21452,6 +21549,93 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           _totalAvailableUnits = widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits;
         });
       }
+    }
+  }
+  
+  /// Setup a listener for real-time queue updates (e.g., when queue is edited)
+  void _setupQueueUpdateListener() async {
+    try {
+      // Get queue ID first
+      final queueId = await QueueService.getQueueIdByName(widget.queue.name);
+      if (queueId != null) {
+        // Listen for real-time updates to this specific queue
+        _queueUpdateSubscription = QueueService.getQueueStreamById(queueId).listen(
+          (updatedQueue) {
+            if (updatedQueue != null && mounted) {
+              print('🔄 Queue updated detected in serving screen: ${updatedQueue.name}');
+              print('🔄 New numberOfAvailableUnits: ${updatedQueue.numberOfAvailableUnits}, totalAvailableUnits: ${updatedQueue.totalAvailableUnits}');
+              
+              // Update the state with the new queue data
+              _updateQueueData(updatedQueue);
+            }
+          },
+          onError: (error) {
+            print('❌ Error in queue update stream: $error');
+          },
+        );
+      } else {
+        // Fallback: try listening by name
+        _queueUpdateSubscription = QueueService.getQueueStreamByName(widget.queue.name).listen(
+          (updatedQueue) {
+            if (updatedQueue != null && mounted) {
+              print('🔄 Queue updated detected in serving screen (by name): ${updatedQueue.name}');
+              print('🔄 New numberOfAvailableUnits: ${updatedQueue.numberOfAvailableUnits}, totalAvailableUnits: ${updatedQueue.totalAvailableUnits}');
+              
+              // Update the state with the new queue data
+              _updateQueueData(updatedQueue);
+            }
+          },
+          onError: (error) {
+            print('❌ Error in queue update stream (by name): $error');
+          },
+        );
+      }
+    } catch (e) {
+      print('⚠️ Warning: Could not setup queue update listener: $e');
+    }
+  }
+  
+  /// Update queue data when queue is modified (called from stream listener)
+  Future<void> _updateQueueData(Queue updatedQueue) async {
+    try {
+      // Get total available units
+      int? totalAvailable = updatedQueue.totalAvailableUnits;
+      if (totalAvailable == null) {
+        if (!updatedQueue.isStarted) {
+          totalAvailable = updatedQueue.numberOfAvailableUnits;
+        } else {
+          totalAvailable = await _calculateTotalAvailableUnitsForOldQueues(updatedQueue);
+        }
+      }
+      
+      // Calculate total served units
+      int totalServed = await _calculateTotalServedUnits();
+      
+      // Trust the numberOfAvailableUnits from Firebase when queue is updated (e.g., from edit screen)
+      // This value is the source of truth when explicitly set via edit
+      int currentRemaining = updatedQueue.numberOfAvailableUnits;
+      
+      // Only validate and warn if there's a significant mismatch, but trust the Firebase value
+      if (totalAvailable != null) {
+        final calculatedRemaining = totalAvailable - totalServed;
+        if ((calculatedRemaining - currentRemaining).abs() > 1) {
+          // Only warn if difference is more than 1 (allowing for minor discrepancies)
+          print('⚠️ Info: Current remaining from Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using Firebase value (may have been manually edited).');
+        }
+        // Always use the Firebase value when it's explicitly set (trust the edit)
+      }
+      
+      if (mounted) {
+        setState(() {
+          _availableUnits = currentRemaining;
+          _totalAvailableUnits = totalAvailable;
+          _totalServedUnits = totalServed;
+        });
+        
+        print('✅ Queue data updated in serving screen: Available=$currentRemaining, Total=$totalAvailable, Served=$totalServed');
+      }
+    } catch (e) {
+      print('❌ Error updating queue data: $e');
     }
   }
   
@@ -21503,8 +21687,12 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     // Stop NFC session when screen is disposed
     NFCHelper.stopNFCSession();
     
-    // Cancel timer
+    // Cancel queue update subscription
+    _queueUpdateSubscription?.cancel();
+    
+    // Cancel timers
     _searchDebounceTimer?.cancel();
+    _tapTimer?.cancel();
     
     // Remove listener before disposing controller
     if (_searchListener != null) {
@@ -21517,6 +21705,61 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     _scrollController.dispose();
     
     super.dispose();
+  }
+
+  // Helper function to show popup message dialog with close button
+  void _showMessageDialog(String message, {Color? backgroundColor, IconData? icon}) {
+    if (!mounted) return;
+    
+    final bgColor = backgroundColor ?? Colors.blue;
+    final messageIcon = icon ?? (backgroundColor == Colors.red 
+        ? Icons.error_outline 
+        : backgroundColor == Colors.green 
+            ? Icons.check_circle 
+            : backgroundColor == Colors.orange 
+                ? Icons.warning 
+                : Icons.info_outline);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Icon(messageIcon, color: bgColor, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                backgroundColor == Colors.red 
+                    ? 'Error' 
+                    : backgroundColor == Colors.green 
+                        ? 'Success' 
+                        : backgroundColor == Colors.orange 
+                            ? 'Warning' 
+                            : 'Information',
+                style: TextStyle(color: bgColor, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            message,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Close',
+              style: TextStyle(color: bgColor, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startNFCDetection() async {
@@ -21561,13 +21804,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         onError: (String error) {
           print('NFC: Error in serving screen: $error');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('NFC Error: $error'),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            _showMessageDialog('NFC Error: $error', backgroundColor: Colors.orange);
           }
         },
       );
@@ -21830,13 +22067,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             // Not from same area - show error
             print('❌ Beneficiary is not in the same distribution area');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Beneficiary "${foundBeneficiary.name}" is not assigned to this distribution area. Their area: ${foundBeneficiary.distributionArea}'),
-                  backgroundColor: Colors.orange,
-                  duration: const Duration(seconds: 4),
-                ),
-              );
+              _showMessageDialog('Beneficiary "${foundBeneficiary.name}" is not assigned to this distribution area. Their area: ${foundBeneficiary.distributionArea}', backgroundColor: Colors.orange);
             }
             foundBeneficiary = null;
           } else if (!_localBeneficiaries.any((b) => b.id == foundBeneficiary!.id)) {
@@ -21910,26 +22141,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             
             // Show success message
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Beneficiary "${updatedBeneficiary.name}" added to queue without ticket. Ready to serve.'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
+              _showMessageDialog('Beneficiary "${updatedBeneficiary.name}" added to queue without ticket. Ready to serve.', backgroundColor: Colors.green);
             }
           }
         } else {
           // Not eligible - show specific message
           print('❌ Beneficiary is not eligible for without tickets serving');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Beneficiary is not eligible for without tickets serving. They may already have a ticket issued for this queue.'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 4),
-              ),
-            );
+            _showMessageDialog('Beneficiary is not eligible for without tickets serving. They may already have a ticket issued for this queue.', backgroundColor: Colors.orange);
           }
           foundBeneficiary = null; // Clear found beneficiary so it doesn't get selected
         }
@@ -21938,6 +22157,34 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
       // Update selection if found
       if (foundBeneficiary != null) {
+        // Check if beneficiary is already fully served
+        final eligibleUnits = int.tryParse(foundBeneficiary.numberOfUnits) ?? 1;
+        int currentUnitsTaken = foundBeneficiary.unitsTaken;
+        
+        // For multi-day queues, check day-specific units taken
+        if (widget.queue.isMultiDay) {
+          try {
+            final dayStr = '${widget.queue.fromDate.year}-${widget.queue.fromDate.month.toString().padLeft(2, '0')}-${widget.queue.fromDate.day.toString().padLeft(2, '0')}';
+            final dayQueueName = '${widget.queue.name}_$dayStr';
+            final historySnapshot = await FirebaseService.firestore
+                .collection('queueHistory')
+                .where('beneficiaryId', isEqualTo: foundBeneficiary.id)
+                .where('dayQueueName', isEqualTo: dayQueueName)
+                .where('action', isEqualTo: 'served')
+                .get();
+            
+            currentUnitsTaken = historySnapshot.docs.fold(0, (sum, doc) {
+              final data = doc.data();
+              return sum + (data['unitsServed'] as int? ?? 0);
+            });
+          } catch (e) {
+            print('Note: Could not query queueHistory for day-specific units: $e');
+            // Fallback to global unitsTaken
+          }
+        }
+        
+        final isAlreadyServed = currentUnitsTaken >= eligibleUnits;
+        
         setState(() {
           _selectedBeneficiary = foundBeneficiary;
           // Store NFC code if it looks like an NFC code
@@ -21949,15 +22196,18 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         });
         _scrollToBeneficiary(foundBeneficiary);
         
-        // Show success feedback
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        // Show warning if already served, otherwise show success
+        // Only show message if this is a new search value (prevent duplicate messages)
+        if (mounted && _lastSearchedValue != normalizedValue) {
+          _lastSearchedValue = normalizedValue;
+          if (isAlreadyServed) {
+            _showMessageDialog(
+              'Warning: Beneficiary "${foundBeneficiary.name}" has already been fully served. Served: $currentUnitsTaken/$eligibleUnits ${widget.queue.unitName.toLowerCase()}.',
+              backgroundColor: Colors.orange,
+            );
+          } else {
+            _showMessageDialog('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}', backgroundColor: Colors.green);
+          }
         }
       } else {
         // Clear selection if no match found
@@ -21965,17 +22215,12 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           _selectedBeneficiary = null;
         });
         
-        // Show error message if searching in Firebase but not found
-        if ((_servingOption == 'noOrder' || _servingOption == 'withoutTickets') && normalizedValue.length >= 8) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${AppLanguage.translate('Beneficiary not found')} for: ${normalizedValue.length > 20 ? normalizedValue.substring(0, 20) + '...' : normalizedValue}'),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
+        // Show error message when beneficiary is not found (for all serving options and search values)
+        // Only show error if this is a new search value (prevent duplicate messages)
+        if (mounted && normalizedValue.isNotEmpty && _lastSearchedValue != normalizedValue) {
+          _lastSearchedValue = normalizedValue;
+          final searchValueDisplay = normalizedValue.length > 30 ? normalizedValue.substring(0, 30) + '...' : normalizedValue;
+          _showMessageDialog('${AppLanguage.translate('Beneficiary not found')}: $searchValueDisplay', backgroundColor: Colors.orange);
         }
       }
   }
@@ -22062,13 +22307,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     } catch (e) {
       print('Error adding beneficiary to queue: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error adding beneficiary to queue: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        _showMessageDialog('Error adding beneficiary to queue: $e', backgroundColor: Colors.red);
       }
     }
   }
@@ -22253,26 +22492,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       _scrollToBeneficiary(foundBeneficiary);
       
       // Show success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showMessageDialog('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}', backgroundColor: Colors.green);
     } else {
       // Clear selection if not found
       setState(() {
         _selectedBeneficiary = null;
       });
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLanguage.translate('Beneficiary not found')} for NFC: $nfcCode'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showMessageDialog('${AppLanguage.translate('Beneficiary not found')} for NFC: $nfcCode', backgroundColor: Colors.orange);
     }
   }
 
@@ -22292,9 +22519,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       });
       _scrollToBeneficiary(foundBeneficiary);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLanguage.translate('Beneficiary not found'))),
-      );
+      _showMessageDialog(AppLanguage.translate('Beneficiary not found'), backgroundColor: Colors.orange);
     }
   }
 
@@ -22314,9 +22539,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       });
       _scrollToBeneficiary(foundBeneficiary);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLanguage.translate('Beneficiary not found'))),
-      );
+      _showMessageDialog(AppLanguage.translate('Beneficiary not found'), backgroundColor: Colors.orange);
     }
   }
 
@@ -22348,19 +22571,189 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   }
 
   void _selectBeneficiary(Beneficiary beneficiary) {
+    // Cancel any pending single tap
+    _tapTimer?.cancel();
+    
+    // If double tap was just detected, don't select
+    if (_isDoubleTap) {
+      _isDoubleTap = false;
+      return;
+    }
+    
+    // Delay single tap to allow double tap detection
+    _tapTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!_isDoubleTap && mounted) {
     setState(() {
       _selectedBeneficiary = beneficiary;
+        });
+      }
     });
+  }
+  
+  void _deselectBeneficiary() {
+    // Cancel pending single tap
+    _tapTimer?.cancel();
+    _isDoubleTap = true;
+    
+    setState(() {
+      _selectedBeneficiary = null;
+    });
+    
+    // Reset flag after a short delay
+    Timer(const Duration(milliseconds: 350), () {
+      _isDoubleTap = false;
+    });
+  }
+  
+  /// Get the next beneficiary that should be served in queue order
+  /// Returns null if no beneficiary needs to be served next, or if queue order doesn't apply
+  /// This is a synchronous version that uses cached data - for accurate day-specific calculations,
+  /// the async version in _serveBeneficiary is used
+  Beneficiary? _getNextBeneficiaryToServe() {
+    // Only applies to queue order serving option
+    if (_servingOption != 'queueOrder') {
+      return null;
+    }
+    
+    // Get sorted list of beneficiaries by queue number
+    final sortedBeneficiaries = List<Beneficiary>.from(_localBeneficiaries);
+    sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 999999).compareTo(b.queueNumber ?? 999999));
+    
+    // Find the next beneficiary that should be served (lowest queue number that hasn't been fully served)
+    for (var b in sortedBeneficiaries) {
+      if (b.queueNumber == null) continue;
+      
+      final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+      
+      // For multi-day queues, we use unitsTaken as approximation
+      // The exact day-specific calculation happens in _serveBeneficiary
+      // For UI purposes, this approximation is sufficient
+      int dayUnitsTaken = b.unitsTaken;
+      
+      // Check if this beneficiary hasn't been fully served yet
+      if (dayUnitsTaken < eligibleUnits) {
+        return b; // Found the next one to serve
+      }
+    }
+    
+    return null; // All beneficiaries are fully served
+  }
+  
+  /// Check if a beneficiary is the next one to serve in queue order
+  bool _isNextInQueueOrder(Beneficiary beneficiary) {
+    if (_servingOption != 'queueOrder') {
+      return true; // Not queue order mode, so all can be served
+    }
+    
+    if (beneficiary.queueNumber == null) {
+      return true; // No queue number, allow serving
+    }
+    
+    final nextBeneficiary = _getNextBeneficiaryToServe();
+    if (nextBeneficiary == null) {
+      return true; // No next beneficiary, allow serving
+    }
+    
+    // Check if this beneficiary is the next one to serve
+    return nextBeneficiary.id == beneficiary.id;
+  }
+  
+  /// Calculate the current grace window for grace5/grace10 modes
+  /// Returns a map with 'start' and 'end' queue numbers for the current active grace window
+  /// The window automatically advances when all beneficiaries in the current window are fully served
+  Map<String, int> _calculateGraceWindow(List<Beneficiary> sortedBeneficiaries, Map<String, int> daySpecificUnitsTaken) {
+    final graceCount = _servingOption == 'grace5' ? 5 : 10;
+    
+    // Find the first unserved beneficiary - this will be the start of our grace window
+    int windowStart = 0;
+    
+    for (var b in sortedBeneficiaries) {
+      if (b.queueNumber == null) continue;
+      
+      final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+      final dayUnitsTaken = widget.queue.isMultiDay 
+          ? (daySpecificUnitsTaken[b.id] ?? 0)
+          : b.unitsTaken;
+      final isFullyServed = dayUnitsTaken >= eligibleUnits;
+      
+      // Found the first unserved beneficiary - this is our window start
+      if (!isFullyServed) {
+        windowStart = b.queueNumber!;
+        break;
+      }
+    }
+    
+    // If no unserved beneficiary found, all are served - use highest + 1 as fallback
+    if (windowStart == 0) {
+      int highestServedQueueNumber = 0;
+      for (var b in sortedBeneficiaries) {
+        if (b.queueNumber == null) continue;
+        final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+        final dayUnitsTaken = widget.queue.isMultiDay 
+            ? (daySpecificUnitsTaken[b.id] ?? 0)
+            : b.unitsTaken;
+        if (dayUnitsTaken >= eligibleUnits && b.queueNumber! > highestServedQueueNumber) {
+          highestServedQueueNumber = b.queueNumber!;
+        }
+      }
+      windowStart = highestServedQueueNumber + 1;
+    }
+    
+    // Calculate window end
+    final windowEnd = windowStart + graceCount - 1;
+    
+    // Check if all beneficiaries in the current window are fully served
+    // If yes, find the next unserved beneficiary and move the window
+    bool allInWindowServed = true;
+    int nextUnservedAfterWindow = windowEnd + 1;
+    
+    for (var b in sortedBeneficiaries) {
+      if (b.queueNumber == null) continue;
+      
+      // Check if this beneficiary is within the current window
+      if (b.queueNumber! >= windowStart && b.queueNumber! <= windowEnd) {
+        final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+        final dayUnitsTaken = widget.queue.isMultiDay 
+            ? (daySpecificUnitsTaken[b.id] ?? 0)
+            : b.unitsTaken;
+        
+        if (dayUnitsTaken < eligibleUnits) {
+          allInWindowServed = false;
+          break; // Found at least one unserved in window, so window is still active
+        }
+      }
+      
+      // Track the next unserved beneficiary after the current window
+      if (b.queueNumber! > windowEnd && nextUnservedAfterWindow == windowEnd + 1) {
+        final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+        final dayUnitsTaken = widget.queue.isMultiDay 
+            ? (daySpecificUnitsTaken[b.id] ?? 0)
+            : b.unitsTaken;
+        
+        if (dayUnitsTaken < eligibleUnits) {
+          nextUnservedAfterWindow = b.queueNumber!;
+        }
+      }
+    }
+    
+    // If all in current window are served, advance to next window
+    if (allInWindowServed && nextUnservedAfterWindow > windowEnd) {
+      windowStart = nextUnservedAfterWindow;
+      return {
+        'start': windowStart,
+        'end': windowStart + graceCount - 1,
+      };
+    }
+    
+    return {
+      'start': windowStart,
+      'end': windowEnd,
+    };
   }
 
   void _showBeneficiaryImage(Beneficiary beneficiary) {
     if (beneficiary.photoPath == null || beneficiary.photoPath!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No photo available for this beneficiary'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showMessageDialog('No photo available for this beneficiary', backgroundColor: Colors.orange);
       return;
     }
 
@@ -22484,9 +22877,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
-                    autofocus: true,
+                    autofocus: false,
                     decoration: InputDecoration(
-                      hintText: AppLanguage.translate('Scan NFC, Enter Mobile or National ID'),
+                      hintText: AppLanguage.translate('Search by Name, ID, Mobile, or NFC reference'),
                       prefixIcon: Icon(
                         _isNFCScanning ? Icons.nfc : Icons.search,
                         color: const Color(0xFF81CF01),
@@ -22571,61 +22964,16 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               ),
             ),
           // Statistics Section
-          // Use a debounced stream to prevent excessive rebuilds
-          StreamBuilder<List<Queue>>(
-            stream: QueueService.getAllQueues(),
-            builder: (context, queueSnapshot) {
-              // Early return if no data to prevent unnecessary processing
-              if (!queueSnapshot.hasData) {
-                return _buildStatisticsSection(
-                  _availableUnits,
-                  _totalAvailableUnits ?? widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits,
-                );
-              }
-              // Get current queue data to ensure accurate available units
+          // Use local state (updated by _loadCurrentQueueData) instead of loading all queues
+          // This avoids loading all queues just to get one queue's data
+          Builder(
+            builder: (context) {
+              // Use local state values (updated by _loadCurrentQueueData)
               int currentAvailableUnits = _availableUnits;
               int totalAvailableUnits = _totalAvailableUnits ?? widget.queue.totalAvailableUnits ?? widget.queue.numberOfAvailableUnits;
-              
-              if (queueSnapshot.hasData) {
-                final currentQueue = queueSnapshot.data!.firstWhere(
-                  (q) => q.name == widget.queue.name,
-                  orElse: () => widget.queue,
-                );
-                
-                // Use totalAvailableUnits from queue (set at creation/update/start)
-                if (currentQueue.totalAvailableUnits != null) {
-                  totalAvailableUnits = currentQueue.totalAvailableUnits!;
-                  // Update local state if different
-                  if (_totalAvailableUnits != currentQueue.totalAvailableUnits && mounted) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        setState(() {
-                          _totalAvailableUnits = currentQueue.totalAvailableUnits;
-                        });
-                      }
-                    });
-                  }
-                } else {
-                  // For old queues without totalAvailableUnits, calculate it
-                  if (_totalAvailableUnits == null) {
-                    _calculateTotalAvailableUnitsForOldQueues(currentQueue).then((total) {
-                      if (mounted && total != null) {
-                        setState(() {
-                          _totalAvailableUnits = total;
-                        });
-                      }
-                    });
-                    // Use current as fallback while calculating
-                    totalAvailableUnits = currentQueue.numberOfAvailableUnits;
-                  } else {
-                    totalAvailableUnits = _totalAvailableUnits!;
-                  }
-                }
                 
                 // Calculate current remaining: Total Available - Total Served
-                // Use cached total served for synchronous calculation, then update async
-                // totalAvailableUnits is guaranteed to be non-null at this point
-                // Calculate synchronously using cached total served
+              // Use cached total served for synchronous calculation
                 currentAvailableUnits = totalAvailableUnits - _totalServedUnits;
                 
                 // Recalculate asynchronously only if not already calculating (prevent concurrent calls)
@@ -22649,13 +22997,12 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     _isCalculatingServedUnits = false;
                     print('Error calculating total served units: $e');
                   });
-                }
               }
               
               // Build statistics section (cached computations)
               // totalAvailableUnits is guaranteed to be non-null at this point
               return _buildStatisticsSection(
-                totalAvailableUnits - _totalServedUnits,
+                currentAvailableUnits,
                 totalAvailableUnits,
               );
             },
@@ -22768,27 +23115,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                       bool isWithinGraceRange = true;
                       String? graceRangeMessage;
                       if ((_servingOption == 'grace5' || _servingOption == 'grace10') && beneficiary.queueNumber != null) {
-                        // Calculate highest served queue number from fully served beneficiaries
-                        int highestServedQueueNumber = 0;
-                        for (var b in sortedBeneficiaries) {
-                          if (b.queueNumber != null && servedBeneficiaryIds.contains(b.id)) {
-                            // Verify they are fully served
-                            final bEligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
-                            final bDayUnitsTaken = widget.queue.isMultiDay 
-                                ? (daySpecificUnitsTaken[b.id] ?? 0)
-                                : b.unitsTaken;
-                            if (bDayUnitsTaken >= bEligibleUnits && b.queueNumber! > highestServedQueueNumber) {
-                              highestServedQueueNumber = b.queueNumber!;
-                            }
-                          }
-                        }
-                        
+                        // Calculate current grace window (automatically advances when all in window are served)
+                        final graceWindow = _calculateGraceWindow(sortedBeneficiaries, daySpecificUnitsTaken);
+                        final graceStart = graceWindow['start']!;
+                        final graceEnd = graceWindow['end']!;
                         final graceCount = _servingOption == 'grace5' ? 5 : 10;
-                        final graceStart = highestServedQueueNumber + 1;
-                        final graceEnd = highestServedQueueNumber + graceCount;
                         
                         isWithinGraceRange = beneficiary.queueNumber! >= graceStart && beneficiary.queueNumber! <= graceEnd;
-                        if (!isWithinGraceRange && highestServedQueueNumber > 0) {
+                        if (!isWithinGraceRange && graceStart > 0) {
                           graceRangeMessage = 'Next ${graceCount} only (${graceStart}-${graceEnd})';
                         }
                       }
@@ -22803,8 +23137,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                           child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            InkWell(
+                            GestureDetector(
                               onTap: () => _selectBeneficiary(beneficiary),
+                              onDoubleTap: () => _deselectBeneficiary(),
                               child: ListTile(
                                 leading: Stack(
                                   children: [
@@ -22856,7 +23191,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${AppLanguage.translate('Eligible for')} ${dayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
+                                      '${AppLanguage.translate('Served for')} ${dayUnitsTaken}/$eligibleUnits ${widget.queue.unitName.toLowerCase()}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w500,
                                         color: isSelected ? Colors.black87 : const Color(0xFF81CF01),
@@ -22892,7 +23227,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                               ),
                             ),
                             if (!isServed && remainingUnits > 0 && _availableUnits > 0)
-                              Container(
+                              Opacity(
+                                opacity: (_servingOption == 'queueOrder' && !_isNextInQueueOrder(beneficiary)) ? 0.4 : 1.0,
+                                child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
                                   border: Border(
@@ -22950,15 +23287,21 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                       color: Colors.blue,
                                     ),
                                     const SizedBox(width: 16),
-                                    ElevatedButton(
-                                      onPressed: (isServing || !isWithinGraceRange) ? null : () {
+                                    Builder(
+                                      builder: (context) {
+                                        // Check if this beneficiary is next in queue order
+                                        final isNextInQueue = _isNextInQueueOrder(beneficiary);
+                                        final isButtonDisabled = isServing || !isWithinGraceRange || !isNextInQueue;
+                                        
+                                        return ElevatedButton(
+                                          onPressed: isButtonDisabled ? null : () {
                                         final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
                                         if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
                                           _serveBeneficiary(beneficiary, units);
                                         }
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: (isServing || !isWithinGraceRange) ? Colors.grey : Colors.blue,
+                                            backgroundColor: isButtonDisabled ? Colors.grey : Colors.blue,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                         minimumSize: const Size(80, 40),
@@ -22973,12 +23316,15 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                               ),
                                             )
                                           : Text(
-                                              graceRangeMessage ?? AppLanguage.translate('Serve'),
+                                              AppLanguage.translate('Serve'),
                                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                             ),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
+                              ),
                               ),
                           ],
                         ),
@@ -23126,9 +23472,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   Future<void> _serveBeneficiary(Beneficiary beneficiary, int units) async {
     if (units <= 0 || _availableUnits < units) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not enough units available')),
-        );
+        _showMessageDialog('Not enough units available', backgroundColor: Colors.red);
       }
       return;
     }
@@ -23176,13 +23520,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           beneficiary.queueNumber != null &&
           nextBeneficiaryToServe.queueNumber! < beneficiary.queueNumber!) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Queue order sequence: Must serve beneficiary "${nextBeneficiaryToServe.name}" (Queue #${nextBeneficiaryToServe.queueNumber}) before serving "${beneficiary.name}" (Queue #${beneficiary.queueNumber}). Cannot skip queue sequence.'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+          _showMessageDialog('Queue order sequence: Must serve beneficiary "${nextBeneficiaryToServe.name}" (Queue #${nextBeneficiaryToServe.queueNumber}) before serving "${beneficiary.name}" (Queue #${beneficiary.queueNumber}). Cannot skip queue sequence.', backgroundColor: Colors.orange);
         }
         // Remove from serving in progress
         setState(() {
@@ -23213,13 +23551,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       if (highestServedQueueNumber > 0 && 
           (beneficiary.queueNumber! < graceStart || beneficiary.queueNumber! > graceEnd)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Grace ${graceCount} mode: Can only serve the next ${graceCount} beneficiaries (queue numbers ${graceStart}-${graceEnd}). Current: ${beneficiary.queueNumber}'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 4),
-            ),
-          );
+          _showMessageDialog('Grace ${graceCount} mode: Can only serve the next ${graceCount} beneficiaries (queue numbers ${graceStart}-${graceEnd}). Current: ${beneficiary.queueNumber}', backgroundColor: Colors.orange);
         }
         // Remove from serving in progress
         setState(() {
@@ -23251,13 +23583,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       final isEligible = await _checkWithoutTicketsEligibility(currentBeneficiary);
       if (!isEligible) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Beneficiary is not eligible for without tickets serving. They may already be in this queue or have a queue number.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
+          _showMessageDialog('Beneficiary is not eligible for without tickets serving. They may already be in this queue or have a queue number.', backgroundColor: Colors.orange);
         }
         return;
       }
@@ -23314,13 +23640,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           );
           if (wasServed) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue. Cannot serve the same type again on the same day.'),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 5),
-                ),
-              );
+              _showMessageDialog('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue. Cannot serve the same type again on the same day.', backgroundColor: Colors.red);
             }
             return;
           }
@@ -23329,13 +23649,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         }
         // If all checks fail, block serving to be safe (fail closed for security)
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Unable to verify serving eligibility. Please try again or contact support.'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          _showMessageDialog('Unable to verify serving eligibility. Please try again or contact support.', backgroundColor: Colors.orange);
         }
         return;
       }
@@ -23395,13 +23709,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         if (unitNameMatches && servedQueueName != null) {
           // Beneficiary was already served today in another queue with the same unit type
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in queue "$servedQueueName". Cannot serve the same type again on the same day.'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 5),
-              ),
-            );
+            _showMessageDialog('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in queue "$servedQueueName". Cannot serve the same type again on the same day.', backgroundColor: Colors.red);
           }
           return;
         }
@@ -23410,13 +23718,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       print('Error checking if beneficiary was served today in another queue: $e');
       // Fail closed for security - block serving if we can't verify
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to verify serving eligibility. Please try again.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        _showMessageDialog('Unable to verify serving eligibility. Please try again.', backgroundColor: Colors.orange);
       }
       return;
     }
@@ -23458,9 +23760,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         // Validate: day-specific units taken + new units must not exceed eligible units
         if (dayUnitsTaken + units > eligibleUnits) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Cannot exceed eligible units. Already served $dayUnitsTaken units today.')),
-            );
+            _showMessageDialog('Cannot exceed eligible units. Already served $dayUnitsTaken units today.', backgroundColor: Colors.red);
           }
           setState(() {
             _servingInProgress.remove(beneficiary.id);
@@ -23473,9 +23773,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         final newUnitsTaken = currentBeneficiary.unitsTaken + units;
         if (newUnitsTaken > eligibleUnits) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Cannot exceed eligible units')),
-            );
+            _showMessageDialog('Cannot exceed eligible units', backgroundColor: Colors.red);
           }
           setState(() {
             _servingInProgress.remove(beneficiary.id);
@@ -23488,9 +23786,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       final newUnitsTaken = currentBeneficiary.unitsTaken + units;
       if (newUnitsTaken > eligibleUnits) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cannot exceed eligible units')),
-          );
+          _showMessageDialog('Cannot exceed eligible units', backgroundColor: Colors.red);
         }
         setState(() {
           _servingInProgress.remove(beneficiary.id);
@@ -23595,12 +23891,35 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
       
       // Update queue's available units in Firebase
+      // IMPORTANT: Only update numberOfAvailableUnits when actually serving
+      // Do NOT update estimatedQueueSize or totalAvailableUnits - those are set by queue creation/editing
       final newAvailableUnits = _availableUnits - units;
       final queueId = await QueueService.getQueueIdByName(widget.queue.name);
       if (queueId != null) {
-        await QueueService.updateQueue(queueId, widget.queue.copyWith(
+        // Get current queue data to preserve all fields (especially estimatedQueueSize and totalAvailableUnits)
+        final currentQueue = await QueueService.getQueueById(queueId);
+        if (currentQueue != null) {
+          // Update ONLY numberOfAvailableUnits, preserving all other fields from current queue
+          // This ensures estimatedQueueSize and totalAvailableUnits are not overwritten
+          await QueueService.updateQueue(queueId, currentQueue.copyWith(
           numberOfAvailableUnits: newAvailableUnits,
-        ));
+            // Explicitly preserve these fields - do NOT use widget.queue values
+            estimatedQueueSize: currentQueue.estimatedQueueSize,
+            totalAvailableUnits: currentQueue.totalAvailableUnits,
+          ));
+          print('✅ Updated queue after serving: numberOfAvailableUnits=$newAvailableUnits (preserved estimatedQueueSize=${currentQueue.estimatedQueueSize}, totalAvailableUnits=${currentQueue.totalAvailableUnits})');
+        } else {
+          // Fallback: Get fresh data from Firestore
+          print('⚠️ Warning: Could not get current queue, trying fresh fetch...');
+          final freshQueue = await QueueService.getQueueById(queueId);
+          if (freshQueue != null) {
+            await QueueService.updateQueue(queueId, freshQueue.copyWith(
+              numberOfAvailableUnits: newAvailableUnits,
+              estimatedQueueSize: freshQueue.estimatedQueueSize,
+              totalAvailableUnits: freshQueue.totalAvailableUnits,
+            ));
+          }
+        }
       }
       
       // Update local state immediately for instant UI feedback
@@ -23629,7 +23948,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         });
         
         widget.onBeneficiaryUpdated(updatedBeneficiary);
-        widget.onQueueUpdated(widget.queue.copyWith(numberOfAvailableUnits: newAvailableUnits));
+        // Don't call onQueueUpdated here - the queue is already updated in Firestore above
+        // The StreamBuilder will automatically reflect the changes
+        // Calling onQueueUpdated with widget.queue would overwrite other fields with old values
         
         // Calculate day-specific units taken for success message
         int dayUnitsAfterServing = 0;
@@ -23655,12 +23976,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           dayUnitsAfterServing = updatedBeneficiary.unitsTaken;
         }
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${units} unit(s) served successfully. Eligible: $dayUnitsAfterServing/$eligibleUnits ${widget.queue.unitName.toLowerCase()}'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showMessageDialog('${units} unit(s) served successfully. Eligible: $dayUnitsAfterServing/$eligibleUnits ${widget.queue.unitName.toLowerCase()}', backgroundColor: Colors.green);
         
         print('✅ UI updated: beneficiary ${currentBeneficiary.name} now shows $dayUnitsAfterServing/$eligibleUnits');
       }
@@ -23668,24 +23984,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       print('Error serving beneficiary: $e');
       if (mounted) {
         Navigator.pop(context); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error serving units: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showMessageDialog('Error serving units: $e', backgroundColor: Colors.red);
       }
     }
     } catch (e) {
       // Catch any errors from the outer try block (validation, eligibility checks, etc.)
       print('Error in _serveBeneficiary (outer): $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showMessageDialog('Error: $e', backgroundColor: Colors.red);
       }
     } finally {
       // Always remove from serving in progress, even if there was an error or early return
@@ -24318,16 +24624,17 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         if (_selectedQueue == null && todayQueues.isNotEmpty) {
           setState(() {
             _selectedQueue = todayQueues.first;
-            // For multi-day queues, set today as default if today is within the queue's date range
+            // For multi-day queues, always set today as selected day (required)
             if (_selectedQueue!.isMultiDay) {
               final fromDateOnly = DateTime(_selectedQueue!.fromDate.year, _selectedQueue!.fromDate.month, _selectedQueue!.fromDate.day);
               final toDateOnly = DateTime(_selectedQueue!.toDate.year, _selectedQueue!.toDate.month, _selectedQueue!.toDate.day);
               
-              // Check if today is within the queue's date range
+              // Always set today if it's within the queue's date range
               if (todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0) {
-                _selectedDay = todayOnly; // Set today as default
+                _selectedDay = todayOnly; // Set today as default (required)
               } else {
-                _selectedDay = null; // Today is not in range, keep null
+                // If today is not in range, use the first day of the queue
+                _selectedDay = fromDateOnly;
               }
             } else {
               _selectedDay = null; // Reset day selection for single-day queues
@@ -25420,18 +25727,19 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         if (mounted) {
           setState(() {
             _selectedQueue = todayQueues.first;
-            // For multi-day queues, set today as default if today is within the queue's date range
+            // For multi-day queues, always set today as selected day (required)
             if (_selectedQueue!.isMultiDay) {
               final today = DateTime.now();
               final todayOnly = DateTime(today.year, today.month, today.day);
               final fromDateOnly = DateTime(_selectedQueue!.fromDate.year, _selectedQueue!.fromDate.month, _selectedQueue!.fromDate.day);
               final toDateOnly = DateTime(_selectedQueue!.toDate.year, _selectedQueue!.toDate.month, _selectedQueue!.toDate.day);
               
-              // Check if today is within the queue's date range
+              // Always set today if it's within the queue's date range
               if (todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0) {
-                _selectedDay = todayOnly; // Set today as default
+                _selectedDay = todayOnly; // Set today as default (required)
               } else {
-                _selectedDay = null; // Today is not in range, keep null
+                // If today is not in range, use the first day of the queue
+                _selectedDay = fromDateOnly;
               }
             } else {
               _selectedDay = null; // Reset day selection for single-day queues
@@ -25511,18 +25819,19 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedQueue = value;
-                              // For multi-day queues, set today as default if today is within the queue's date range
+                              // For multi-day queues, always set today as selected day (required)
                               if (value != null && value.isMultiDay) {
                                 final today = DateTime.now();
                                 final todayOnly = DateTime(today.year, today.month, today.day);
                                 final fromDateOnly = DateTime(value.fromDate.year, value.fromDate.month, value.fromDate.day);
                                 final toDateOnly = DateTime(value.toDate.year, value.toDate.month, value.toDate.day);
                                 
-                                // Check if today is within the queue's date range
+                                // Always set today if it's within the queue's date range
                                 if (todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0) {
-                                  _selectedDay = todayOnly; // Set today as default
+                                  _selectedDay = todayOnly; // Set today as default (required)
                                 } else {
-                                  _selectedDay = null; // Today is not in range, keep null
+                                  // If today is not in range, use the first day of the queue
+                                  _selectedDay = fromDateOnly;
                                 }
                               } else {
                                 _selectedDay = null; // Reset day selection for single-day queues
@@ -25536,7 +25845,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                         ),
                       ),
                     ),
-                    // Day selection for Multi Day queues
+                    // Day selection for Multi Day queues (shows today, disabled)
                     if (_selectedQueue != null && _selectedQueue!.isMultiDay) ...[
                       const SizedBox(height: 24),
                       const Text('Select Day *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -25544,9 +25853,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFFE0E0E0)),
+                          border: Border.all(color: Colors.grey[300]!),
                           borderRadius: BorderRadius.circular(8),
-                          color: Colors.white,
+                          color: Colors.grey[200], // Dimmed background
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<DateTime>(
@@ -25577,14 +25886,10 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                 ),
                               );
                             }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedDay = value;
-                                _verifiedBeneficiary = null;
-                                _issuedQueueNumber = null;
-                              });
-                              _loadQueueStatistics();
-                            },
+                            onChanged: null, // Disabled - cannot change day selection
+                            style: TextStyle(
+                              color: Colors.grey[600], // Dimmed text color
+                            ),
                           ),
                         ),
                       ),
@@ -28730,7 +29035,12 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                                 ...displayAreas.map((area) {
                                   return DropdownMenuItem<String>(
                                     value: area.id,
-                                    child: Text(area.fullName),
+                                    child: Text(
+                                      area.areaName.isNotEmpty ? area.areaName : area.fullName,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
                                   );
                                 }).toList(),
                               ],
