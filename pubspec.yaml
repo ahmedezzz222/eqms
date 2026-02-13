@@ -90,6 +90,9 @@ dependencies:
   # Async utilities for combining streams
   async: ^2.11.0
 
+  # Open URLs (e.g. Google Lens on web)
+  url_launcher: ^6.2.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
