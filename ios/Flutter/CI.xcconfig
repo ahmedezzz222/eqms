@@ -1,0 +1,3 @@
+// Overridden by GitHub Actions when building IPA (secrets set).
+// Local builds: keep Automatic so Xcode manages signing.
+CODE_SIGN_STYLE = Automatic
