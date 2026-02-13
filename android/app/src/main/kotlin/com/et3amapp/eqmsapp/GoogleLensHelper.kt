@@ -1,6 +1,7 @@
 package com.et3amapp.eqmsapp
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -91,73 +92,153 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
         resultCallback = result
         
         try {
-            // Try multiple methods to launch Google Lens
+            val packageName = "com.google.android.googlequicksearchbox"
+            val packageManager = activity.packageManager
             
-            // Method 1: Try direct Lens activity
-            val lensIntent1 = Intent(Intent.ACTION_VIEW).apply {
-                setPackage("com.google.android.googlequicksearchbox")
-                setAction("com.google.android.apps.search.lens.LENS_ACTIVITY")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Check if Google app is installed
+            try {
+                packageManager.getPackageInfo(packageName, 0)
+            } catch (e: Exception) {
+                resultCallback?.error(
+                    "GOOGLE_LENS_NOT_INSTALLED",
+                    "Google app is not installed. Please install Google app from Play Store.",
+                    "Package: $packageName"
+                )
+                resultCallback = null
+                return
             }
             
-            if (lensIntent1.resolveActivity(activity.packageManager) != null) {
+            // Method 1: Try direct Lens activity with component name (most reliable)
+            // Try different possible activity names
+            val possibleActivities = listOf(
+                "com.google.android.apps.search.lens.LensActivity",
+                "com.google.android.apps.lens.LensActivity",
+                "com.google.android.apps.search.lens.LensEntryPointActivity",
+                "com.google.android.apps.search.lens.LensLauncherActivity"
+            )
+            
+            for (activityName in possibleActivities) {
                 try {
+                    val componentName = android.content.ComponentName(packageName, activityName)
+                    val lensIntent1 = Intent().apply {
+                        component = componentName
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    
                     activity.startActivity(lensIntent1)
+                    android.util.Log.d("GoogleLensHelper", "Method 1 (Component: $activityName) succeeded")
                     resultCallback?.success("Google Lens camera opened. Please copy the detected text.")
                     resultCallback = null
                     return
                 } catch (e: Exception) {
-                    // Continue to next method
+                    android.util.Log.d("GoogleLensHelper", "Method 1 (Component: $activityName) failed: ${e.message}")
                 }
             }
             
-            // Method 2: Try opening Google app with Lens intent
-            val lensIntent2 = Intent(Intent.ACTION_VIEW).apply {
-                setPackage("com.google.android.googlequicksearchbox")
-                setData(Uri.parse("https://lens.google.com"))
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            
-            if (lensIntent2.resolveActivity(activity.packageManager) != null) {
+            // Method 2: Try direct Lens activity with action (try without resolveActivity check first)
+            try {
+                val lensIntent2 = Intent("com.google.android.apps.search.lens.LENS_ACTIVITY").apply {
+                    setPackage(packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                
+                // Try to launch directly first (sometimes resolveActivity returns null but activity exists)
                 try {
                     activity.startActivity(lensIntent2)
+                    android.util.Log.d("GoogleLensHelper", "Method 2 (Action - direct) succeeded")
+                    resultCallback?.success("Google Lens camera opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                } catch (e: Exception) {
+                    android.util.Log.d("GoogleLensHelper", "Method 2 (Action - direct) failed: ${e.message}, trying with resolveActivity check")
+                    
+                    // If direct launch fails, check if activity exists first
+                    if (lensIntent2.resolveActivity(packageManager) != null) {
+                        activity.startActivity(lensIntent2)
+                        android.util.Log.d("GoogleLensHelper", "Method 2 (Action - with check) succeeded")
+                        resultCallback?.success("Google Lens camera opened. Please copy the detected text.")
+                        resultCallback = null
+                        return
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleLensHelper", "Method 2 (Action) failed: ${e.message}")
+            }
+            
+            // Method 3: Try Lens activity with custom URL scheme
+            try {
+                val lensIntent3 = Intent(Intent.ACTION_VIEW).apply {
+                    setPackage(packageName)
+                    data = Uri.parse("googlelens://")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                
+                if (lensIntent3.resolveActivity(packageManager) != null) {
+                    activity.startActivity(lensIntent3)
+                    android.util.Log.d("GoogleLensHelper", "Method 3 (URL scheme) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleLensHelper", "Method 3 (URL scheme) failed: ${e.message}")
+            }
+            
+            // Method 4: Try opening Google app with Lens URL
+            try {
+                val lensIntent4 = Intent(Intent.ACTION_VIEW).apply {
+                    setPackage(packageName)
+                    data = Uri.parse("https://lens.google.com")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                
+                if (lensIntent4.resolveActivity(packageManager) != null) {
+                    activity.startActivity(lensIntent4)
+                    android.util.Log.d("GoogleLensHelper", "Method 4 (HTTPS URL) succeeded")
                     resultCallback?.success("Google app opened. Please use Lens feature and copy the detected text.")
                     resultCallback = null
                     return
-                } catch (e: Exception) {
-                    // Continue to next method
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleLensHelper", "Method 4 (HTTPS URL) failed: ${e.message}")
             }
             
-            // Method 3: Try opening Google app directly
-            val googleAppIntent = Intent(Intent.ACTION_MAIN).apply {
-                setPackage("com.google.android.googlequicksearchbox")
-                addCategory(Intent.CATEGORY_LAUNCHER)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            
-            if (googleAppIntent.resolveActivity(activity.packageManager) != null) {
-                try {
+            // Method 5: Try opening Google app directly (user can navigate to Lens)
+            try {
+                val googleAppIntent = Intent(Intent.ACTION_MAIN).apply {
+                    setPackage(packageName)
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                
+                if (googleAppIntent.resolveActivity(packageManager) != null) {
                     activity.startActivity(googleAppIntent)
-                    resultCallback?.success("Google app opened. Please use Lens feature from the app and copy the detected text.")
+                    android.util.Log.d("GoogleLensHelper", "Method 5 (Main launcher) succeeded")
+                    resultCallback?.success("Google app opened. Please tap the Lens icon and copy the detected text.")
                     resultCallback = null
                     return
-                } catch (e: Exception) {
-                    // Continue to error
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleLensHelper", "Method 5 (Main launcher) failed: ${e.message}")
             }
             
             // If all methods fail, return error with helpful message
             resultCallback?.error(
                 "GOOGLE_LENS_NOT_AVAILABLE",
-                "Google Lens is not available on this device. Please install Google app from Play Store, or use the 'Scan ID' button for OCR detection.",
-                "Google app package: com.google.android.googlequicksearchbox"
+                "Could not launch Google Lens. The app is installed but Lens feature may not be available. Please open Google app manually and use the Lens feature.",
+                "Package: $packageName"
             )
             resultCallback = null
         } catch (e: Exception) {
+            android.util.Log.e("GoogleLensHelper", "launchGoogleLensCamera error: ${e.message}", e)
             resultCallback?.error(
                 "GOOGLE_LENS_ERROR",
-                "Failed to launch Google Lens: ${e.message}. Please use the 'Scan ID' button for OCR detection instead.",
+                "Failed to launch Google Lens: ${e.message}",
                 e.toString()
             )
             resultCallback = null

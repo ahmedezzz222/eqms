@@ -84,6 +84,9 @@ dependencies:
   # Shared preferences for local storage
   shared_preferences: ^2.2.2
   
+  # HTTP client for API calls
+  http: ^1.2.0
+  
   # Async utilities for combining streams
   async: ^2.11.0
 
