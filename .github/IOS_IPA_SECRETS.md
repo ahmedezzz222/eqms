@@ -1,14 +1,24 @@
 # iOS IPA build – GitHub Actions secrets
 
-The workflow **Build iOS IPA** (`.github/workflows/build-ios-ipa.yml`) runs on macOS and can produce an IPA when **code signing secrets** are set in the repository.
+The workflow **Build iOS IPA** (`.github/workflows/build-ios-ipa.yml`) runs on macOS and can produce an IPA when **code signing secrets** are set and the **ENABLE_IPA_SIGNING** variable is set.
 
-## When no secrets are set
+## One-time: enable IPA signing in the workflow
+
+1. Go to **Settings** → **Secrets and variables** → **Actions**.
+2. Open the **Variables** tab (not Secrets).
+3. Click **New repository variable**.
+4. Name: `ENABLE_IPA_SIGNING`, Value: `true`.
+5. Save.
+
+Only after this (and adding the secrets below) will the workflow build and upload an IPA. Leave the variable unset or set to anything other than `true` to only run the no-signing build (verify project compiles).
+
+## When ENABLE_IPA_SIGNING is not set (or not 'true')
 
 - The workflow still runs and executes **Build iOS only (no signing)**.
 - It runs `flutter build ios --release --no-codesign` to check that the project compiles.
 - **No IPA is produced** (expected). You’ll see a notice in the job summary.
 
-## When secrets are set
+## When ENABLE_IPA_SIGNING is 'true' and secrets are set
 
 - The workflow imports your certificate and provisioning profile, configures signing, and runs **Build IPA (with signing)**.
 - It runs `flutter build ipa` and uploads the **ipa** as a job artifact.
@@ -18,7 +28,8 @@ The workflow **Build iOS IPA** (`.github/workflows/build-ios-ipa.yml`) runs on m
 
 ## Required repository secrets
 
-Add these under **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
+Add these under **Settings** → **Secrets and variables** → **Actions** → **Secrets** → **New repository secret**.  
+Also set the **Variables** → **ENABLE_IPA_SIGNING** = `true` (see above).
 
 | Secret name | Description |
 |-------------|--------------|

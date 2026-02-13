@@ -1,4 +1,5 @@
 # Build iOS IPA for eqmsapp (runs on macOS; requires Apple code signing secrets).
+# Set repository variable ENABLE_IPA_SIGNING = 'true' when secrets are configured (see .github/IOS_IPA_SECRETS.md).
 name: Build iOS IPA
 
 on:
@@ -34,9 +35,9 @@ jobs:
         run: |
           cd ios && pod install --repo-update && cd ..
 
-      # Code signing: only when secrets are provided
+      # Code signing: only when ENABLE_IPA_SIGNING variable is 'true' and secrets are in env
       - name: Create keychain and import certificate
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+        if: vars.ENABLE_IPA_SIGNING == 'true'
         env:
           BUILD_KEYCHAIN: build.keychain-db
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -55,13 +56,13 @@ jobs:
           rm -f certificate.p12
 
       - name: Install provisioning profile
-        if: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        if: vars.ENABLE_IPA_SIGNING == 'true'
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Configure code signing for CI (with secrets)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        if: vars.ENABLE_IPA_SIGNING == 'true'
         run: |
           echo "CODE_SIGN_STYLE = Manual" > ios/Flutter/CI.xcconfig
           echo "DEVELOPMENT_TEAM = ${{ secrets.DEVELOPMENT_TEAM_ID }}" >> ios/Flutter/CI.xcconfig
@@ -69,23 +70,23 @@ jobs:
           echo "CODE_SIGN_IDENTITY = Apple Distribution" >> ios/Flutter/CI.xcconfig
 
       - name: Configure for no-signing build (no secrets)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 == '' || secrets.APPLE_PROVISIONING_PROFILE_BASE64 == '' }}
+        if: vars.ENABLE_IPA_SIGNING != 'true'
         run: |
           # Without secrets, avoid "development team required". Manual + identity "-" = do not sign.
           printf 'CODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nDEVELOPMENT_TEAM =\n' > ios/Flutter/CI.xcconfig
 
       - name: Build IPA (with signing)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        if: vars.ENABLE_IPA_SIGNING == 'true'
         run: flutter build ipa
 
       - name: Build iOS only (no signing - verify project compiles)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 == '' || secrets.APPLE_PROVISIONING_PROFILE_BASE64 == '' }}
+        if: vars.ENABLE_IPA_SIGNING != 'true'
         run: |
           echo "::notice::Code signing secrets not set. Add secrets to produce IPA. See .github/IOS_IPA_SECRETS.md"
           flutter build ios --release --no-codesign
 
       - name: Upload IPA artifact
-        if: ${{ success() && secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        if: success() && vars.ENABLE_IPA_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
