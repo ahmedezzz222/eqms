@@ -1,4 +1,4 @@
-# Build iOS IPA for eqmsapp (runs on macOS; requires Apple code signing secrets)
+# Build iOS IPA for eqmsapp (runs on macOS; requires Apple code signing secrets).
 name: Build iOS IPA
 
 on:
