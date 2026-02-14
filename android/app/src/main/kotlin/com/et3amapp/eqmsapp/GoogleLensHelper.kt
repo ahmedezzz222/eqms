@@ -86,22 +86,89 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
     
     /**
      * Launch Google Lens with camera (live view)
-     * This opens Google Lens camera view directly
+     * This opens Google Lens app directly (not URL/browser)
      */
     fun launchGoogleLensCamera(result: MethodChannel.Result) {
         resultCallback = result
         
         try {
-            val packageName = "com.google.android.googlequicksearchbox"
             val packageManager = activity.packageManager
             
-            // Check if Google app is installed
+            // Method 0a: Implicit intent - let system open whichever app handles googlelens:// (works when Lens is installed under any package)
+            try {
+                val implicitLens = Intent(Intent.ACTION_VIEW).apply {
+                    data = Uri.parse("googlelens://")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                val resolve = packageManager.resolveActivity(implicitLens, PackageManager.MATCH_DEFAULT_ONLY)
+                if (resolve != null) {
+                    activity.startActivity(implicitLens)
+                    android.util.Log.d("GoogleLensHelper", "Method 0a (Implicit googlelens://) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("GoogleLensHelper", "Method 0a (Implicit) failed: ${e.message}")
+            }
+            
+            // Method 0b: Try standalone Google Lens app (com.google.android.apps.lens)
+            val standaloneLensPackage = "com.google.android.apps.lens"
+            try {
+                packageManager.getPackageInfo(standaloneLensPackage, 0)
+                val mainIntent = packageManager.getLaunchIntentForPackage(standaloneLensPackage)
+                if (mainIntent != null) {
+                    mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    activity.startActivity(mainIntent)
+                    android.util.Log.d("GoogleLensHelper", "Method 0b (Standalone Lens app) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+                // Standalone app installed but no launcher - try VIEW with googlelens:// and package
+                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setPackage(standaloneLensPackage)
+                    data = Uri.parse("googlelens://")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (viewIntent.resolveActivity(packageManager) != null) {
+                    activity.startActivity(viewIntent)
+                    android.util.Log.d("GoogleLensHelper", "Method 0b (Standalone googlelens://) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("GoogleLensHelper", "Method 0b (Standalone Lens) not available: ${e.message}")
+            }
+            
+            // Method 0c: Search for any installed app with "lens" in package name and try to launch
+            try {
+                val installed = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                for (app in installed) {
+                    if (app.packageName.lowercase().contains("lens")) {
+                        val launch = packageManager.getLaunchIntentForPackage(app.packageName)
+                        if (launch != null) {
+                            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            activity.startActivity(launch)
+                            android.util.Log.d("GoogleLensHelper", "Method 0c (Found lens package: ${app.packageName}) succeeded")
+                            resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                            resultCallback = null
+                            return
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("GoogleLensHelper", "Method 0c (Query packages) failed: ${e.message}")
+            }
+            
+            val packageName = "com.google.android.googlequicksearchbox"
             try {
                 packageManager.getPackageInfo(packageName, 0)
             } catch (e: Exception) {
                 resultCallback?.error(
                     "GOOGLE_LENS_NOT_INSTALLED",
-                    "Google app is not installed. Please install Google app from Play Store.",
+                    "Google Lens could not be opened. Using in-app camera instead.",
                     "Package: $packageName"
                 )
                 resultCallback = null
@@ -109,12 +176,13 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
             }
             
             // Method 1: Try direct Lens activity with component name (most reliable)
-            // Try different possible activity names
             val possibleActivities = listOf(
                 "com.google.android.apps.search.lens.LensActivity",
                 "com.google.android.apps.lens.LensActivity",
                 "com.google.android.apps.search.lens.LensEntryPointActivity",
-                "com.google.android.apps.search.lens.LensLauncherActivity"
+                "com.google.android.apps.search.lens.LensLauncherActivity",
+                "com.google.android.apps.search.lens.LensActivityWithCamera",
+                "com.google.vr.apps.opus.lens.LensActivity"
             )
             
             for (activityName in possibleActivities) {
@@ -133,6 +201,28 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
                     return
                 } catch (e: Exception) {
                     android.util.Log.d("GoogleLensHelper", "Method 1 (Component: $activityName) failed: ${e.message}")
+                }
+            }
+            
+            // Method 1b: Same activities but for standalone Lens package
+            for (activityName in listOf(
+                "com.google.android.apps.lens.LensActivity",
+                "com.google.android.apps.lens.camera.LensActivity"
+            )) {
+                try {
+                    val componentName = android.content.ComponentName(standaloneLensPackage, activityName)
+                    val lensIntent = Intent().apply {
+                        component = componentName
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    activity.startActivity(lensIntent)
+                    android.util.Log.d("GoogleLensHelper", "Method 1b (Standalone component: $activityName) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                } catch (e: Exception) {
+                    android.util.Log.d("GoogleLensHelper", "Method 1b ($activityName) failed: ${e.message}")
                 }
             }
             
@@ -187,27 +277,7 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
                 android.util.Log.e("GoogleLensHelper", "Method 3 (URL scheme) failed: ${e.message}")
             }
             
-            // Method 4: Try opening Google app with Lens URL
-            try {
-                val lensIntent4 = Intent(Intent.ACTION_VIEW).apply {
-                    setPackage(packageName)
-                    data = Uri.parse("https://lens.google.com")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                }
-                
-                if (lensIntent4.resolveActivity(packageManager) != null) {
-                    activity.startActivity(lensIntent4)
-                    android.util.Log.d("GoogleLensHelper", "Method 4 (HTTPS URL) succeeded")
-                    resultCallback?.success("Google app opened. Please use Lens feature and copy the detected text.")
-                    resultCallback = null
-                    return
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("GoogleLensHelper", "Method 4 (HTTPS URL) failed: ${e.message}")
-            }
-            
-            // Method 5: Try opening Google app directly (user can navigate to Lens)
+            // Method 4: Try opening Google app launcher (user can tap Lens icon)
             try {
                 val googleAppIntent = Intent(Intent.ACTION_MAIN).apply {
                     setPackage(packageName)
@@ -218,19 +288,19 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
                 
                 if (googleAppIntent.resolveActivity(packageManager) != null) {
                     activity.startActivity(googleAppIntent)
-                    android.util.Log.d("GoogleLensHelper", "Method 5 (Main launcher) succeeded")
+                    android.util.Log.d("GoogleLensHelper", "Method 4 (Main launcher) succeeded")
                     resultCallback?.success("Google app opened. Please tap the Lens icon and copy the detected text.")
                     resultCallback = null
                     return
                 }
             } catch (e: Exception) {
-                android.util.Log.e("GoogleLensHelper", "Method 5 (Main launcher) failed: ${e.message}")
+                android.util.Log.e("GoogleLensHelper", "Method 4 (Main launcher) failed: ${e.message}")
             }
             
             // If all methods fail, return error with helpful message
             resultCallback?.error(
                 "GOOGLE_LENS_NOT_AVAILABLE",
-                "Could not launch Google Lens. The app is installed but Lens feature may not be available. Please open Google app manually and use the Lens feature.",
+                "Google Lens could not be opened. Using in-app camera instead.",
                 "Package: $packageName"
             )
             resultCallback = null

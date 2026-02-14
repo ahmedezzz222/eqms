@@ -144,6 +144,7 @@ class AppLanguage {
       'Waiting for Google Lens result. Copy text from Google Lens and return to app.': 'Waiting for Google Lens result. Copy text from Google Lens and return to app.',
       'Data extracted from Google Lens and filled automatically': 'Data extracted from Google Lens and filled automatically',
       'Could not parse data from Google Lens. Please enter manually.': 'Could not parse data from Google Lens. Please enter manually.',
+      'Google Lens could not be opened. Using in-app camera instead.': 'Google Lens could not be opened. Using in-app camera instead.',
       'Request Admin Account': 'Request Admin Account',
       // Queue Management
       'Add New Queue': 'Add New Queue',
@@ -231,6 +232,9 @@ class AppLanguage {
       'Distribution Area Name': 'Queue Point Name',
       'Distribution Area Name (Arabic)': 'Queue Point Name (Arabic)',
       'Distribution Area Name (English)': 'Queue Point Name (English)',
+      'Distribution Area Name (Arabic) *': 'Queue Point Name (Arabic) *',
+      'Distribution Area Name (English) *': 'Queue Point Name (English) *',
+      'Please select governorate and city': 'Please select governorate and city',
       'Enter distribution area name': 'Enter queue point name',
       'Enter distribution area name in Arabic': 'Enter queue point name in Arabic',
       'Enter distribution area name in English': 'Enter queue point name in English',
@@ -266,6 +270,7 @@ class AppLanguage {
       'Notes': 'Notes',
       'Reference (Optional)': 'Reference (Optional)',
       'Country': 'Country',
+      'Egypt': 'Egypt',
       'Governorate': 'Governorate',
       'City': 'City',
       'Distribution Point': 'Distribution Point',
@@ -842,6 +847,9 @@ class AppLanguage {
       'Distribution Area Name': 'اسم نقطة الطابور',
       'Distribution Area Name (Arabic)': 'اسم نقطة الطابور (عربي)',
       'Distribution Area Name (English)': 'اسم نقطة الطابور (إنجليزي)',
+      'Distribution Area Name (Arabic) *': 'اسم نقطة الطابور (عربي) *',
+      'Distribution Area Name (English) *': 'اسم نقطة الطابور (إنجليزي) *',
+      'Please select governorate and city': 'يرجى اختيار المحافظة والمدينة',
       'Enter distribution area name': 'أدخل اسم نقطة الطابور',
       'Enter distribution area name in Arabic': 'أدخل اسم نقطة الطابور بالعربية',
       'Enter distribution area name in English': 'أدخل اسم نقطة الطابور بالإنجليزية',
@@ -877,6 +885,7 @@ class AppLanguage {
       'Notes': 'الملاحظات',
       'Reference (Optional)': 'المرجع (اختياري)',
       'Country': 'الدولة',
+      'Egypt': 'مصر',
       'Governorate': 'المحافظة',
       'City': 'المدينة',
       'Distribution Point': 'نقطة التوزيع',
@@ -6598,7 +6607,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(e.message ?? 'Google Lens not available. Using camera instead.'),
+                content: Text(AppLanguage.translate('Google Lens could not be opened. Using in-app camera instead.')),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 3),
               ),
@@ -6606,7 +6615,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           }
         }
       }
-      // Non-Android or Google Lens failed: open in-app camera
+      // Non-Android or native Lens failed: open in-app camera
       final result = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder: (context) => const LiveTextDetectionScreen(
@@ -16646,7 +16655,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(e.message ?? 'Google Lens not available. Using camera instead.'),
+                content: Text(AppLanguage.translate('Google Lens could not be opened. Using in-app camera instead.')),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 3),
               ),
@@ -16654,7 +16663,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           }
         }
       }
-      // Non-Android or Google Lens failed: open in-app camera
+      // Non-Android or native Lens failed: open in-app camera
       final result = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder: (context) => const LiveTextDetectionScreen(
@@ -18193,6 +18202,10 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   List<String> _adminDistributionAreaIds = [];
   final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
   
+  // Cache stream so StreamBuilder is not reset on every build (fixes "loading forever")
+  Stream<List<Beneficiary>>? _cachedBeneficiariesStream;
+  String _cachedStreamKey = '';
+  
   // Performance optimizations
   Timer? _searchDebounce;
   static const int _initialLoadLimit = 100; // Load first 100 beneficiaries
@@ -18237,41 +18250,51 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     }
   }
 
-  /// Get the appropriate beneficiaries stream based on admin's role and assigned areas
-  /// Uses server-side filtering for better performance
+  /// Key for stream cache so we don't create a new stream on every build (which resets StreamBuilder to waiting).
+  String _getBeneficiariesStreamKey() {
+    return '${_selectedDistributionArea ?? 'all'}_${_activeSearchQuery}_${_adminDistributionAreaIds.length}';
+  }
+
+  /// Get the appropriate beneficiaries stream based on admin's role and assigned areas.
+  /// Returns a cached stream when the key hasn't changed so StreamBuilder keeps receiving data.
   Stream<List<Beneficiary>> _getBeneficiariesStream() {
+    final key = _getBeneficiariesStreamKey();
+    if (_cachedBeneficiariesStream != null && _cachedStreamKey == key) {
+      return _cachedBeneficiariesStream!;
+    }
+    _cachedStreamKey = key;
     final currentAdmin = AdminService.currentAdmin;
     final limit = _activeSearchQuery.isNotEmpty ? null : _initialLoadLimit;
     
-    // If a specific area is selected, use that area's stream
     if (_selectedDistributionArea != null) {
-      return BeneficiaryService.getBeneficiariesByArea(
+      _cachedBeneficiariesStream = BeneficiaryService.getBeneficiariesByArea(
         _selectedDistributionArea!,
         limit: limit,
         activeOnly: false,
       );
+      return _cachedBeneficiariesStream!;
     }
     
-    // Super Admin or admin with distributionPoint == "All" can see all beneficiaries
-    if (currentAdmin != null && 
+    if (currentAdmin != null &&
         (currentAdmin.isSuperAdmin || currentAdmin.distributionPoint.toLowerCase() == 'all')) {
-      return BeneficiaryService.getAllBeneficiaries(
+      _cachedBeneficiariesStream = BeneficiaryService.getAllBeneficiaries(
         limit: limit,
         activeOnly: false,
       );
+      return _cachedBeneficiariesStream!;
     }
     
-    // For regular admins, filter by their assigned distribution areas (server-side)
     if (_adminDistributionAreaIds.isEmpty) {
-      return Stream.value(<Beneficiary>[]);
+      _cachedBeneficiariesStream = Stream.value(<Beneficiary>[]);
+      return _cachedBeneficiariesStream!;
     }
     
-    // Filter by all admin's areas (server-side)
-    return BeneficiaryService.getBeneficiariesByAreas(
+    _cachedBeneficiariesStream = BeneficiaryService.getBeneficiariesByAreas(
       _adminDistributionAreaIds,
       limit: limit,
       activeOnly: false,
     );
+    return _cachedBeneficiariesStream!;
   }
 
   @override
@@ -19258,7 +19281,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(e.message ?? 'Google Lens not available. Using camera instead.'),
+                content: Text(AppLanguage.translate('Google Lens could not be opened. Using in-app camera instead.')),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 3),
               ),
@@ -19266,7 +19289,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
           }
         }
       }
-      // Non-Android or Google Lens failed: open in-app camera
+      // Non-Android or native Lens failed: open in-app camera
       final result = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder: (context) => const LiveTextDetectionScreen(
@@ -21574,7 +21597,7 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
     
     if (_selectedGovernorate == null || _selectedCity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select governorate and city')),
+        SnackBar(content: Text(AppLanguage.translate('Please select governorate and city'))),
       );
       return;
     }
@@ -21682,15 +21705,15 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                _buildLabel('Country'),
+                _buildLabel(AppLanguage.translate('Country')),
                 const SizedBox(height: 8),
                 TextFormField(
-                  initialValue: 'Egypt',
+                  initialValue: AppLanguage.translate('Egypt'),
                   enabled: false,
-                  decoration: _buildInputDecoration('Egypt'),
+                  decoration: _buildInputDecoration(AppLanguage.translate('Egypt')),
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('Governorate *'),
+                _buildLabel(AppLanguage.translate('Governorate *')),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -21718,7 +21741,7 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('City *'),
+                _buildLabel(AppLanguage.translate('City *')),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -21742,20 +21765,20 @@ class _AddDistributionAreaScreenState extends State<AddDistributionAreaScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('Distribution Area Name (Arabic) *'),
+                _buildLabel(AppLanguage.translate('Distribution Area Name (Arabic) *')),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _areaNameArabicController,
-                  decoration: _buildInputDecoration('Enter distribution area name in Arabic'),
+                  decoration: _buildInputDecoration(AppLanguage.translate('Enter distribution area name in Arabic')),
                   textDirection: TextDirection.rtl,
                   validator: (value) => value?.trim().isEmpty ?? true ? AppLanguage.translate('Required') : null,
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('Distribution Area Name (English) *'),
+                _buildLabel(AppLanguage.translate('Distribution Area Name (English) *')),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _areaNameEnglishController,
-                  decoration: _buildInputDecoration('Enter distribution area name in English'),
+                  decoration: _buildInputDecoration(AppLanguage.translate('Enter distribution area name in English')),
                   textDirection: TextDirection.ltr,
                   validator: (value) => value?.trim().isEmpty ?? true ? AppLanguage.translate('Required') : null,
                 ),
@@ -23186,11 +23209,13 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     if (_servingOption != 'queueOrder') {
       return true; // Not queue order mode, so all can be served
     }
-    
+    // Priority beneficiaries (queue priority) can be served directly — treat as "next"
+    if (_beneficiaryHasQueuePriority(beneficiary, widget.queue)) {
+      return true;
+    }
     if (beneficiary.queueNumber == null) {
       return true; // No queue number, allow serving
     }
-    
     final nextBeneficiary = _getNextBeneficiaryToServe();
     if (nextBeneficiary == null) {
       return true; // No next beneficiary, allow serving
@@ -23698,12 +23723,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                         child: Card(
                           clipBehavior: Clip.antiAlias, // Better performance
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          elevation: isSelected ? 4 : 1,
+                          elevation: isSelected ? 8 : 4,
+                          shadowColor: Colors.black38,
                           color: isSelected ? const Color(0xFF81CF01).withOpacity(0.1) : Colors.white,
                           child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             GestureDetector(
+                              behavior: HitTestBehavior.deferToChild,
                               onTap: () => _selectBeneficiary(beneficiary),
                               onDoubleTap: () => _deselectBeneficiary(),
                               child: ListTile(
@@ -23731,9 +23758,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                               )
                                             : const CircleAvatar(child: Icon(Icons.person));
                                         
-                                        // Only make photo clickable if display setting is true
+                                        // Only make photo clickable if display setting is true; tap opens full photo and does not select the row
                                         if (showImages && beneficiary.photoPath != null && beneficiary.photoPath!.isNotEmpty) {
                                           return GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
                                             onTap: () {
                                               _showBeneficiaryImage(beneficiary);
                                             },
@@ -24044,8 +24072,9 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     }
     
     // Check queue order sequence - must serve in order, cannot skip
-    // NOTE: "No Order" option allows skipping any beneficiary, so we skip this check for noOrder
-    if (_servingOption == 'queueOrder' && beneficiary.queueNumber != null) {
+    // Priority beneficiaries (queue priority) can be served directly without following sequence
+    if (_servingOption == 'queueOrder' && beneficiary.queueNumber != null &&
+        !_beneficiaryHasQueuePriority(beneficiary, widget.queue)) {
       // Get sorted list of beneficiaries by queue number
       final sortedBeneficiaries = List<Beneficiary>.from(_localBeneficiaries);
       sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 999999).compareTo(b.queueNumber ?? 999999));
@@ -27116,7 +27145,7 @@ class _RequestAdminAccountScreenState extends State<RequestAdminAccountScreen> {
     }
     if (_selectedGovernorate == null || _selectedCity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select governorate and city')),
+        SnackBar(content: Text(AppLanguage.translate('Please select governorate and city'))),
       );
       return;
     }

@@ -10,15 +10,15 @@ class BeneficiaryService {
       FirebaseService.firestore.collection('beneficiaries');
 
   /// Get all beneficiaries with pagination support
+  /// Avoids orderBy on Firestore to prevent requiring an index; sorts client-side instead.
   static Stream<List<Beneficiary>> getAllBeneficiaries({int? limit, bool activeOnly = false}) {
     Query query;
     
-    // If activeOnly is true, we can't use orderBy with where (requires composite index)
-    // So we'll filter and sort client-side for better compatibility
+    // Avoid orderBy with where (requires composite index). Use simple query and sort client-side.
     if (activeOnly) {
       query = _collection.where('status', isEqualTo: 'Active');
     } else {
-      query = _collection.orderBy('createdAt', descending: true);
+      query = _collection; // No orderBy - sort client-side to avoid index requirement
     }
     
     if (limit != null && limit > 0) {
@@ -30,19 +30,25 @@ class BeneficiaryService {
       maxRetries: 5,
       initialDelay: const Duration(seconds: 1),
     ).map((snapshot) {
-      final beneficiaries = snapshot.docs
-          .map((doc) => documentToBeneficiary(doc))
+      final docsWithData = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final createdAt = data['createdAt'] as Timestamp?;
+        return {'doc': doc, 'createdAt': createdAt};
+      }).toList();
+      docsWithData.sort((a, b) {
+        final aTime = a['createdAt'] as Timestamp?;
+        final bTime = b['createdAt'] as Timestamp?;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+      final beneficiaries = docsWithData
+          .map((item) => documentToBeneficiary(item['doc'] as DocumentSnapshot))
           .toList();
-      
-      // Sort by createdAt descending if activeOnly (client-side sort)
       if (activeOnly) {
-        beneficiaries.sort((a, b) {
-          // We need to get createdAt from the document
-          // For now, sort by ID (newer IDs come later) or use a timestamp if available
-          return b.id.compareTo(a.id); // Simple fallback
-        });
+        beneficiaries.sort((a, b) => b.id.compareTo(a.id));
       }
-      
       return beneficiaries;
     });
   }
