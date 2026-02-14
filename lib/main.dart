@@ -89,6 +89,7 @@ class AppLanguage {
       'Tap NFC card or enter NFC code/reference': 'Tap NFC card or enter NFC code/reference',
       'NFC Detection': 'NFC Detection',
       'NFC is not available on this device': 'NFC is not available on this device',
+      'NFC is only available in the mobile app. Please enter the NFC code manually below.': 'NFC is only available in the mobile app. Please enter the NFC code manually below.',
       'Please enable NFC in your device settings if it is not already enabled, then bring the NFC card close to your device.': 'Please enable NFC in your device settings if it is not already enabled, then bring the NFC card close to your device.',
       'Waiting for NFC card...': 'Waiting for NFC card...',
       'NFC Disabled': 'NFC Disabled',
@@ -713,6 +714,7 @@ class AppLanguage {
       'Scan NFC, Enter Mobile or National ID': 'امسح NFC، أدخل الجوال أو الهوية الوطنية',
       'NFC Detection': 'كشف NFC',
       'NFC is not available on this device': 'NFC غير متاح على هذا الجهاز',
+      'NFC is only available in the mobile app. Please enter the NFC code manually below.': 'NFC متاح فقط في تطبيق الموبايل. يرجى إدخال رمز NFC يدوياً أدناه.',
       'Please enable NFC in your device settings if it is not already enabled, then bring the NFC card close to your device.': 'يرجى تفعيل NFC في إعدادات جهازك إذا لم يكن مفعلاً بالفعل، ثم قرب بطاقة NFC من جهازك.',
       'Waiting for NFC card...': 'في انتظار بطاقة NFC...',
       'NFC Disabled': 'NFC معطل',
@@ -5303,13 +5305,11 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         onTagDetected: (id) {
           if (mounted) {
             setState(() {
-              // Display masked NFC tag ID, but we need to store original for saving
-              // Store original ID in controller's value (we'll extract it when saving)
-              // For now, display masked version
+              // Replace existing text in NFC field with detected tag (masked for display)
+              _originalNfcTagId = id;
               _nfcCodeController.text = NFCHelper.maskNfcTagId(id);
-              _nfcDetected = true; // Mark as detected
-              // Store original ID in a hidden way - we'll use the original 'id' when saving
-              // The masked value is only for display
+              _nfcDetected = true;
+              _duplicateNFCMessage = null;
             });
           }
         },
@@ -5442,26 +5442,15 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         return;
       }
 
-      // Get NFC code to check - prefer original, but if manually entered, use the text field value
-      // Note: If manually entered, the text might be masked, so we need to handle that
+      // Get NFC code to check - prefer original (from scan); if manually entered and not masked, use text field
+      // If field shows masked value but we don't have _originalNfcTagId (e.g. cleared by focus), don't block - proceed without NFC for this submission
       String? nfcCodeToCheck = _originalNfcTagId;
       if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
         final textFieldValue = _nfcCodeController.text.trim();
-        if (textFieldValue.isNotEmpty) {
-          // If the text contains asterisks, it's masked - we can't validate it properly
-          // In this case, we should ask user to scan the card again
-          if (textFieldValue.contains('*')) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(AppLanguage.translate('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.')),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-            return;
-          }
+        if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
           nfcCodeToCheck = textFieldValue;
         }
+        // If text contains '*' (masked) and no _originalNfcTagId: skip duplicate check and allow registration; NFC won't be saved for this beneficiary
       }
 
       if (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) {
@@ -6091,7 +6080,9 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLanguage.translate('NFC is not available on this device')),
+              content: Text(AppLanguage.translate(
+                kIsWeb ? 'NFC is only available in the mobile app. Please enter the NFC code manually below.' : 'NFC is not available on this device',
+              )),
               backgroundColor: Colors.orange,
             ),
           );
@@ -6105,11 +6096,11 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         onTagDetected: (id) {
           if (mounted) {
             setState(() {
-              // Store original NFC tag ID for saving
+              // Replace existing text in NFC field with detected tag (masked for display)
               _originalNfcTagId = id;
-              // Display masked NFC tag ID to user
               _nfcCodeController.text = NFCHelper.maskNfcTagId(id);
-              _nfcDetected = true; // Mark as detected
+              _nfcDetected = true;
+              _duplicateNFCMessage = null; // Clear previous duplicate warning when new tag is detected
             });
             
             // Check for duplicate NFC tag ID
@@ -7303,6 +7294,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                   focusNode: _idNumberFocusNode,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
+                  maxLength: 14,
                   decoration: _buildInputDecoration('Enter National ID (14 digits)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -7375,6 +7367,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                   focusNode: _mobileNumberFocusNode,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
+                  maxLength: 11,
                   decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -7647,13 +7640,15 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                           fillColor: Colors.white,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           isDense: true,
-                          suffixIcon: _nfcDetected
-                              ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
-                              : IconButton(
-                            icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
-                            onPressed: _scanNFCCard,
-                            tooltip: AppLanguage.translate('Scan NFC Card'),
-                          ),
+                          suffixIcon: kIsWeb
+                              ? null
+                              : (_nfcDetected
+                                  ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
+                                  : IconButton(
+                                      icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
+                                      onPressed: _scanNFCCard,
+                                      tooltip: AppLanguage.translate('Scan NFC Card'),
+                                    )),
                         ),
                         onChanged: (value) {
                           // Reset detection status if user manually edits the field
@@ -15897,13 +15892,11 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         onTagDetected: (id) {
           if (mounted) {
             setState(() {
-              // Display masked NFC tag ID, but we need to store original for saving
-              // Store original ID in controller's value (we'll extract it when saving)
-              // For now, display masked version
+              // Replace existing text in NFC field with detected tag (masked for display)
+              _originalNfcTagId = id;
               _nfcCodeController.text = NFCHelper.maskNfcTagId(id);
-              _nfcDetected = true; // Mark as detected
-              // Store original ID in a hidden way - we'll use the original 'id' when saving
-              // The masked value is only for display
+              _nfcDetected = true;
+              _duplicateNFCMessage = null;
             });
           }
         },
@@ -17037,7 +17030,9 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLanguage.translate('NFC is not available on this device')),
+              content: Text(AppLanguage.translate(
+                kIsWeb ? 'NFC is only available in the mobile app. Please enter the NFC code manually below.' : 'NFC is not available on this device',
+              )),
               backgroundColor: Colors.orange,
             ),
           );
@@ -17051,11 +17046,11 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         onTagDetected: (id) {
           if (mounted) {
             setState(() {
-              // Store original NFC tag ID for saving
+              // Replace existing text in NFC field with detected tag (masked for display)
               _originalNfcTagId = id;
-              // Display masked NFC tag ID to user
               _nfcCodeController.text = NFCHelper.maskNfcTagId(id);
-              _nfcDetected = true; // Mark as detected
+              _nfcDetected = true;
+              _duplicateNFCMessage = null; // Clear previous duplicate warning when new tag is detected
             });
             
             // Check for duplicate NFC tag ID
@@ -17350,26 +17345,15 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         return;
       }
 
-      // Get NFC code to check - prefer original, but if manually entered, use the text field value
-      // Note: If manually entered, the text might be masked, so we need to handle that
+      // Get NFC code to check - prefer original (from scan); if manually entered and not masked, use text field
+      // If field shows masked value but we don't have _originalNfcTagId (e.g. cleared by focus), don't block - proceed without NFC for this submission
       String? nfcCodeToCheck = _originalNfcTagId;
       if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
         final textFieldValue = _nfcCodeController.text.trim();
-        if (textFieldValue.isNotEmpty) {
-          // If the text contains asterisks, it's masked - we can't validate it properly
-          // In this case, we should ask user to scan the card again
-          if (textFieldValue.contains('*')) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(AppLanguage.translate('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.')),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-            return;
-          }
+        if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
           nfcCodeToCheck = textFieldValue;
         }
+        // If text contains '*' (masked) and no _originalNfcTagId: skip duplicate check and allow registration; NFC won't be saved for this beneficiary
       }
 
       if (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) {
@@ -17446,7 +17430,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           isEntity: _isEntity,
           entityName: _isEntity ? entityName : null,
           numberOfUnits: units,
-          nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.isNotEmpty ? _nfcCodeController.text : null),
+          nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.trim().isNotEmpty && !_nfcCodeController.text.contains('*') ? _nfcCodeController.text.trim() : null),
           nfcReference: _nfcReferenceController.text.trim().isNotEmpty ? _nfcReferenceController.text.trim() : null,
           photoPath: _photoPath,
           status: _status,
@@ -17621,6 +17605,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                   focusNode: _idNumberFocusNode,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
+                  maxLength: 14,
                   decoration: _buildInputDecoration('Enter National ID (14 digits)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -17693,6 +17678,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                   focusNode: _mobileNumberFocusNode,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
+                  maxLength: 11,
                   decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -17961,13 +17947,15 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                           fillColor: Colors.white,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           isDense: true,
-                          suffixIcon: _nfcDetected
-                              ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
-                              : IconButton(
-                            icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
-                            onPressed: _scanNFCCard,
-                            tooltip: AppLanguage.translate('Scan NFC Card'),
-                          ),
+                          suffixIcon: kIsWeb
+                              ? null
+                              : (_nfcDetected
+                                  ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
+                                  : IconButton(
+                                      icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
+                                      onPressed: _scanNFCCard,
+                                      tooltip: AppLanguage.translate('Scan NFC Card'),
+                                    )),
                         ),
                         onChanged: (value) {
                           // Reset detection status if user manually edits the field
@@ -19618,23 +19606,11 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
     }
 
     // Check for duplicate NFC tag ID before proceeding (exclude current beneficiary)
-    // Get NFC code to check - prefer original, but if manually entered, use the text field value
+    // Prefer original (from scan); if manually entered and not masked, use text field. If masked and no original, don't block.
     String? nfcCodeToCheck = _originalNfcTagId;
     if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
       final textFieldValue = _nfcCodeController.text.trim();
-      if (textFieldValue.isNotEmpty) {
-        // If the text contains asterisks, it's masked - we can't validate it properly
-        // In this case, we should ask user to scan the card again
-        if (textFieldValue.contains('*')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please scan the NFC card again. Manual entry of masked NFC codes is not allowed.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-          return;
-        }
+      if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
         nfcCodeToCheck = textFieldValue;
       }
     }
@@ -19689,7 +19665,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
         numberOfUnits: units,
         isEntity: isEntity, // Preserve existing value
         entityName: entityName, // Preserve existing value
-        nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.isNotEmpty ? _nfcCodeController.text : null),
+        nfcPreprintedCode: _originalNfcTagId ?? (_nfcCodeController.text.trim().isNotEmpty && !_nfcCodeController.text.contains('*') ? _nfcCodeController.text.trim() : null),
         nfcReference: _nfcReferenceController.text.trim().isNotEmpty ? _nfcReferenceController.text.trim() : null,
         idCopyPath: _idCopyPath,
         photoPath: _photoPath,
@@ -20603,13 +20579,15 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
 
   Future<void> _scanNFCCard() async {
     try {
-      // Check if NFC is available
+      // Check if NFC is available (on web it never is)
       final isAvailable = await NFCHelper.isNFCAvailable();
       if (!isAvailable) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLanguage.translate('NFC is not available on this device')),
+              content: Text(AppLanguage.translate(
+                kIsWeb ? 'NFC is only available in the mobile app. Please enter the NFC code manually below.' : 'NFC is not available on this device',
+              )),
               backgroundColor: Colors.orange,
             ),
           );
@@ -20623,11 +20601,11 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
         onTagDetected: (id) {
           if (mounted) {
             setState(() {
-              // Store original NFC tag ID for saving
+              // Replace existing text in NFC field with detected tag (masked for display)
               _originalNfcTagId = id;
-              // Display masked NFC tag ID to user
               _nfcCodeController.text = NFCHelper.maskNfcTagId(id);
-              _nfcDetected = true; // Mark as detected
+              _nfcDetected = true;
+              _duplicateNFCMessage = null; // Clear previous duplicate warning when new tag is detected
             });
             
             // Check for duplicate NFC tag ID
@@ -20780,8 +20758,20 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _idNumberController,
-                  decoration: _buildInputDecoration('Enter ID number'),
-                  validator: (value) => value?.isEmpty ?? true ? AppLanguage.translate('Please enter ID number') : null,
+                  keyboardType: TextInputType.number,
+                  maxLength: 14,
+                  decoration: _buildInputDecoration('Enter ID number (14 digits)'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return AppLanguage.translate('Please enter ID number');
+                    }
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    if (cleanValue.length != 14) return 'National ID must be exactly 14 digits';
+                    if (!RegExp(r'^\d{14}$').hasMatch(cleanValue)) return 'National ID must contain only digits';
+                    final firstDigit = int.tryParse(cleanValue.substring(0, 1));
+                    if (firstDigit != 2 && firstDigit != 3) return 'Invalid National ID format (must start with 2 or 3)';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 24),
                 _buildLabel('Mobile Number *'),
@@ -20789,13 +20779,16 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                 TextFormField(
                   controller: _mobileNumberController,
                   keyboardType: TextInputType.phone,
-                  decoration: _buildInputDecoration('Enter mobile number'),
+                  maxLength: 11,
+                  decoration: _buildInputDecoration('Enter mobile number (11 digits)'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return AppLanguage.translate('Please enter mobile number');
                     }
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    if (cleanValue.length != 11) return 'Mobile number must be exactly 11 digits';
                     final regex = RegExp(r'^01[0-2,5]{1}[0-9]{8}$');
-                    if (!regex.hasMatch(value)) {
+                    if (!regex.hasMatch(cleanValue)) {
                       return AppLanguage.translate('Invalid Egyptian mobile number');
                     }
                     return null;
@@ -20974,13 +20967,15 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                           fillColor: Colors.white,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           isDense: true,
-                          suffixIcon: _nfcDetected
-                              ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
-                              : IconButton(
-                            icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
-                            onPressed: _scanNFCCard,
-                            tooltip: AppLanguage.translate('Scan NFC Card'),
-                          ),
+                          suffixIcon: kIsWeb
+                              ? null
+                              : (_nfcDetected
+                                  ? const Icon(Icons.check_circle, color: Colors.green, size: 24)
+                                  : IconButton(
+                                      icon: const Icon(Icons.nfc, color: Color(0xFF81CF01)),
+                                      onPressed: _scanNFCCard,
+                                      tooltip: AppLanguage.translate('Scan NFC Card'),
+                                    )),
                         ),
                         onChanged: (value) {
                           // Reset detection status if user manually edits the field
@@ -25300,7 +25295,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLanguage.translate('NFC is not available on this device')),
+              content: Text(AppLanguage.translate(
+                kIsWeb ? 'NFC is only available in the mobile app. Please enter the NFC code manually below.' : 'NFC is not available on this device',
+              )),
               backgroundColor: Colors.orange,
             ),
           );
@@ -26552,6 +26549,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                 controller: _searchController,
                                 focusNode: _searchFocusNode,
                                 autofocus: _selectedVerificationMethod != 0,
+                                maxLength: _selectedVerificationMethod == 1 ? 11 : (_selectedVerificationMethod == 2 ? 14 : null),
                                 decoration: InputDecoration(
                                   hintText: hintText,
                                   prefixIcon: Icon(

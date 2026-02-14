@@ -94,14 +94,27 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
         try {
             val packageManager = activity.packageManager
             
-            // Method 0a: Implicit intent - let system open whichever app handles googlelens:// (works when Lens is installed under any package)
+            // Method 0a: Implicit intent - open any app that handles googlelens:// (do NOT use MATCH_DEFAULT_ONLY; on Samsung/etc. no default may be set)
             try {
                 val implicitLens = Intent(Intent.ACTION_VIEW).apply {
                     data = Uri.parse("googlelens://")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                val resolve = packageManager.resolveActivity(implicitLens, PackageManager.MATCH_DEFAULT_ONLY)
-                if (resolve != null) {
+                var resolve = packageManager.resolveActivity(implicitLens, 0)
+                if (resolve == null) {
+                    // Fallback: query all activities that handle googlelens:// and launch the first one (Samsung A54 etc.)
+                    @Suppress("DEPRECATION")
+                    val list = packageManager.queryIntentActivities(implicitLens, 0)
+                    if (list.isNotEmpty()) {
+                        val first = list[0]
+                        implicitLens.setPackage(first.activityInfo.packageName)
+                        activity.startActivity(implicitLens)
+                        android.util.Log.d("GoogleLensHelper", "Method 0a (queryIntentActivities) succeeded: ${first.activityInfo.packageName}")
+                        resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                        resultCallback = null
+                        return
+                    }
+                } else {
                     activity.startActivity(implicitLens)
                     android.util.Log.d("GoogleLensHelper", "Method 0a (Implicit googlelens://) succeeded")
                     resultCallback?.success("Google Lens opened. Please copy the detected text.")
@@ -112,6 +125,35 @@ class GoogleLensHelper(private val activity: FlutterActivity) {
                 android.util.Log.d("GoogleLensHelper", "Method 0a (Implicit) failed: ${e.message}")
             }
             
+            // Method 0a2: Try standalone Lens from Play Store (com.google.ar.lens) - common on Samsung/other devices
+            val arLensPackage = "com.google.ar.lens"
+            try {
+                packageManager.getPackageInfo(arLensPackage, 0)
+                val mainIntent = packageManager.getLaunchIntentForPackage(arLensPackage)
+                if (mainIntent != null) {
+                    mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    activity.startActivity(mainIntent)
+                    android.util.Log.d("GoogleLensHelper", "Method 0a2 (com.google.ar.lens launcher) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setPackage(arLensPackage)
+                    data = Uri.parse("googlelens://")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (viewIntent.resolveActivity(packageManager) != null) {
+                    activity.startActivity(viewIntent)
+                    android.util.Log.d("GoogleLensHelper", "Method 0a2 (com.google.ar.lens googlelens://) succeeded")
+                    resultCallback?.success("Google Lens opened. Please copy the detected text.")
+                    resultCallback = null
+                    return
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("GoogleLensHelper", "Method 0a2 (com.google.ar.lens) not available: ${e.message}")
+            }
+
             // Method 0b: Try standalone Google Lens app (com.google.android.apps.lens)
             val standaloneLensPackage = "com.google.android.apps.lens"
             try {
