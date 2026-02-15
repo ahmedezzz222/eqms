@@ -89,6 +89,115 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  Future<void> _cleanupAllMockData() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Cleaning up all mock data...';
+    });
+
+    try {
+      final result = await OneTimeSetup.cleanupAllMockData();
+      final mockCount = result['mockBeneficiaries'] as int? ?? 0;
+      final sampleCount = result['sampleDocs'] as int? ?? 0;
+      final total = mockCount + sampleCount;
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage = total > 0
+            ? 'Removed $mockCount mock beneficiary(ies), $sampleCount sample doc(s).'
+            : 'No mock data found (already clean).';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(total > 0
+                ? '✅ Mock data cleaned: $mockCount beneficiaries, $sampleCount sample docs.'
+                : '✅ No mock data to remove.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Error: $e';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearServingAndQueueHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear serving & queue history?'),
+        content: const Text(
+          'This will permanently delete ALL documents in:\n\n'
+          '• servingTransactions\n'
+          '• queueHistory\n\n'
+          'Issued queue numbers and serving records will be lost. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Clearing servingTransactions and queueHistory...';
+    });
+
+    try {
+      final result = await OneTimeSetup.clearServingAndQueueHistory();
+      final servingCount = result['servingTransactions'] ?? 0;
+      final queueCount = result['queueHistory'] ?? 0;
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Cleared: $servingCount servingTransactions, $queueCount queueHistory.';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Cleared $servingCount servingTransactions, $queueCount queueHistory.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Error: $e';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,11 +214,12 @@ class _SetupScreenState extends State<SetupScreen> {
             colors: [Color(0xFFE8F5E9), Colors.white],
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               const Text(
                 'Firebase Collections Setup',
                 style: TextStyle(
@@ -169,12 +279,40 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
               ),
               
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _cleanupAllMockData,
+                icon: const Icon(Icons.cleaning_services),
+                label: const Text('Clean Up All Mock Data'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.deepOrange,
+                  side: const BorderSide(color: Colors.deepOrange),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _clearServingAndQueueHistory,
+                icon: const Icon(Icons.history),
+                label: const Text('Clear servingTransactions & queueHistory'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
               if (_isComplete) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _isLoading ? null : _cleanupSamples,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Remove Sample Documents'),
+                  label: const Text('Remove Sample Documents Only'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.orange,
                     side: const BorderSide(color: Colors.orange),
@@ -214,8 +352,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         ),
                       )),
               
-              const Spacer(),
-              
+              const SizedBox(height: 32),
               const Text(
                 'Note: This will create sample documents in each collection.\n'
                 'You can remove them after verification.',
@@ -226,8 +363,10 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 24),
             ],
           ),
+        ),
         ),
       ),
     );

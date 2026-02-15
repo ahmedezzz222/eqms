@@ -47,7 +47,6 @@ class QueueService {
       maxRetries: 3,
       initialDelay: const Duration(milliseconds: 500),
     ).map((snapshot) {
-      print('📦 QueueService: History - Received ${snapshot.docs.length} documents');
       return _processSnapshot(snapshot);
     });
   }
@@ -62,7 +61,6 @@ class QueueService {
             .get(GetOptions(source: Source.cache));
         
         if (cacheSnapshot.docs.isNotEmpty) {
-          print('📦 QueueService: Using cache - Received ${cacheSnapshot.docs.length} documents from Firestore cache');
           final cachedQueues = _processSnapshot(cacheSnapshot);
           
           // Set last emitted IDs
@@ -75,7 +73,7 @@ class QueueService {
           }
         }
       } catch (cacheError) {
-        print('📦 QueueService: No cache available (${cacheError.toString()}), will fetch from server');
+        // No cache - will fetch from server
       }
       
       // Then fetch from server in the background for fresh data (limited to 200 for initial load)
@@ -92,8 +90,6 @@ class QueueService {
           )
           .then((serverSnapshot) {
             if (_streamController == null || _streamController!.isClosed) return;
-            
-            print('📦 QueueService: Server fetch - Received ${serverSnapshot.docs.length} documents from Firestore server');
             final serverQueues = _processSnapshot(serverSnapshot);
             
             // Only emit if the list has changed (check by IDs)
@@ -123,8 +119,6 @@ class QueueService {
       ).listen(
         (snapshot) {
           if (_streamController == null || _streamController!.isClosed) return;
-          
-          print('📦 QueueService: Stream update - Received ${snapshot.docs.length} documents from Firestore');
           final queues = _processSnapshot(snapshot);
           
           // Only emit if the list has changed (check by IDs)
@@ -136,8 +130,6 @@ class QueueService {
             if (!_streamController!.isClosed) {
               _streamController!.add(queues);
             }
-          } else {
-            print('⏭️ QueueService: Skipping duplicate emission');
           }
         },
         onError: (error) {
@@ -168,8 +160,6 @@ class QueueService {
         })
         .whereType<Queue>()
         .toList();
-    
-    print('✅ QueueService: Converted ${queues.length} queues');
     return queues;
   }
   
@@ -420,6 +410,26 @@ class QueueService {
   /// Delete a queue
   static Future<void> deleteQueue(String id) async {
     await _collection.doc(id).delete();
+  }
+
+  /// Reset all queue counter documents so the next issued ticket gets number 1.
+  /// Used with one-time cleanup when clearing mock/seed queue assignments.
+  /// Returns the number of counter documents deleted.
+  static Future<int> resetAllQueueCounters() async {
+    final collection = FirebaseService.firestore.collection('queueCounters');
+    int deleted = 0;
+    const batchSize = 500;
+    while (true) {
+      final snapshot = await collection.limit(batchSize).get();
+      if (snapshot.docs.isEmpty) break;
+      final batch = FirebaseService.firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+        deleted++;
+      }
+      await batch.commit();
+    }
+    return deleted;
   }
 
   /// Convert Firestore document to Queue model

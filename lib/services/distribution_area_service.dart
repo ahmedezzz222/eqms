@@ -39,8 +39,6 @@ class DistributionAreaService {
     try {
       // Fetch initial data from server immediately
       final initialSnapshot = await _collection.get(GetOptions(source: Source.server));
-      print('📦 DistributionAreaService: Initial fetch - Received ${initialSnapshot.docs.length} documents from Firestore server');
-      
       final initialAreas = _processSnapshot(initialSnapshot);
       
       // Set last emitted IDs
@@ -60,8 +58,6 @@ class DistributionAreaService {
       ).listen(
         (snapshot) {
           if (_streamController == null || _streamController!.isClosed) return;
-          
-          print('📦 DistributionAreaService: Stream update - Received ${snapshot.docs.length} documents from Firestore');
           final areas = _processSnapshot(snapshot);
           
           // Only emit if the list of IDs has changed
@@ -106,8 +102,6 @@ class DistributionAreaService {
         .whereType<DistributionArea>()
         .toList();
     
-    print('✅ DistributionAreaService: Converted ${areas.length} areas');
-    
     // Sort manually to avoid composite index requirement
     areas.sort((a, b) {
       final countryCompare = a.country.compareTo(b.country);
@@ -116,8 +110,6 @@ class DistributionAreaService {
       if (govCompare != 0) return govCompare;
       return a.city.compareTo(b.city);
     });
-    
-    print('✅ DistributionAreaService: Returning ${areas.length} sorted areas');
     return areas;
   }
 

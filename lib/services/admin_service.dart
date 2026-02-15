@@ -70,25 +70,20 @@ class AdminService {
   /// Returns Admin if credentials are valid, null otherwise
   /// Includes retry logic and Safari-specific fallback strategies
   static Future<Admin?> authenticateAdmin(String mobile, String password) async {
-    print('🔐 Starting authentication for mobile: $mobile');
-    
     // Strategy 1: Try using getAdminByMobile (simpler query, better for Safari)
     try {
-      print('📱 Strategy 1: Using getAdminByMobile...');
       final admin = await getAdminByMobile(mobile)
           .timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 20),
             onTimeout: () {
               print('⚠️ getAdminByMobile timed out');
-              throw TimeoutException('getAdminByMobile timed out', const Duration(seconds: 10));
+              throw TimeoutException('getAdminByMobile timed out', const Duration(seconds: 20));
             },
           );
       
       if (admin != null) {
-        print('✅ Admin found via getAdminByMobile');
         // Check password
         if (admin.password == password && admin.status == 'active') {
-          print('✅ Authentication successful via Strategy 1');
           return admin;
         } else {
           print('⚠️ Password mismatch or inactive status');
@@ -106,8 +101,6 @@ class AdminService {
     
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        print('🔐 Strategy 2, attempt $attempt/$maxRetries: Using where query...');
-        
         // For Safari, try different source strategies
         Source source;
         if (attempt == 1) {
@@ -156,7 +149,6 @@ class AdminService {
           return null;
         }
         
-        print('✅ Authentication successful via Strategy 2, attempt $attempt');
         return _documentToAdmin(doc);
       } on TimeoutException catch (e) {
         print('❌ Strategy 2 timeout on attempt $attempt: $e');
@@ -189,7 +181,6 @@ class AdminService {
     
     // Strategy 3: Fallback - fetch limited admins and filter client-side (Safari fallback)
     try {
-      print('🔐 Strategy 3: Fallback - fetching admins and filtering client-side...');
       final query = await _collection
           .limit(100) // Reasonable limit
           .get(GetOptions(source: Source.serverAndCache))
@@ -210,7 +201,6 @@ class AdminService {
           final status = data['status'] as String? ?? 'pending';
           
           if (storedPassword == password && status == 'active') {
-            print('✅ Authentication successful via Strategy 3 (fallback)');
             return _documentToAdmin(doc);
           } else {
             print('⚠️ Password mismatch or inactive status in fallback');

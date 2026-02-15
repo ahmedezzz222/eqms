@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/beneficiary_service.dart';
 import '../services/firebase_collections_setup.dart';
 
 /// One-time setup utility to initialize Firebase collections
@@ -71,6 +72,30 @@ class OneTimeSetup {
     print('🧹 Cleaning up sample documents...');
     await FirebaseCollectionsSetup.cleanupSampleData();
     print('✅ Cleanup complete!');
+  }
+
+  /// Clean up all mock and sample data: mock beneficiaries + sample/schema docs (sample IDs, createdBy system, sample queueHistory).
+  /// Returns counts: mockBeneficiaries, sampleDocs (total), and per-collection breakdown from FirebaseCollectionsSetup.
+  static Future<Map<String, dynamic>> cleanupAllMockData() async {
+    print('🧹 Cleaning up all mock data...');
+    final mockCount = await BeneficiaryService.deleteBeneficiariesCreatedBy('mock');
+    if (mockCount > 0) {
+      print('  ✓ Removed $mockCount mock beneficiary(ies)');
+    }
+    final sampleRemoved = await FirebaseCollectionsSetup.cleanupAllMockAndSampleData();
+    final sampleTotal = sampleRemoved.values.fold<int>(0, (a, b) => a + b);
+    print('✅ Mock data cleanup complete: $mockCount mock beneficiaries, $sampleTotal sample doc(s) removed.');
+    return {
+      'mockBeneficiaries': mockCount,
+      'sampleDocs': sampleTotal,
+      'byCollection': sampleRemoved,
+    };
+  }
+
+  /// Clear all documents from servingTransactions and queueHistory.
+  /// Returns counts: servingTransactions, queueHistory.
+  static Future<Map<String, int>> clearServingAndQueueHistory() async {
+    return FirebaseCollectionsSetup.clearServingAndQueueHistoryCollections();
   }
 }
 

@@ -52,6 +52,7 @@ class AppLanguage {
       'Logout': 'Logout',
       'Dashboard': 'Dashboard',
       'Reports': 'Reports',
+      'Firebase Setup': 'Firebase Setup',
       'Admin Management': 'Q Admin Management',
       'Add Volunteer': 'Add Q Co-admin',
       'Preferences': 'Preferences',
@@ -80,6 +81,7 @@ class AppLanguage {
       'No beneficiaries found': 'No beneficiaries found',
       'Search by name or ID': 'Search by name or ID',
       'Search by Name, ID, Mobile, or NFC reference': 'Search by Name, ID, Mobile, or NFC reference',
+      'Search by Name, ID, Mobile, NFC code, or NFC reference': 'Search by Name, ID, Mobile, NFC code, or NFC reference',
       'You Queue No. is : ': 'You Queue No. is : ',
       'NFC': 'NFC',
       'National ID': 'National ID',
@@ -277,6 +279,7 @@ class AppLanguage {
       'Distribution Point': 'Distribution Point',
       'Distribution Area': 'Distribution Area',
       'Distribution Area *': 'Distribution Area *',
+      'Priority type *': 'Priority type *',
       'Distribution area not found. Please select a valid area.': 'Distribution area not found. Please select a valid area.',
       'Other': 'Other',
       'Enter custom entity name': 'Enter custom entity name',
@@ -674,6 +677,7 @@ class AppLanguage {
       'Logout': 'تسجيل الخروج',
       'Dashboard': 'لوحة التحكم',
       'Reports': 'التقارير',
+      'Firebase Setup': 'إعداد Firebase',
       'Admin Management': 'إدارة مسؤولي الطابور',
       'Add Volunteer': 'إضافة مساعد مسؤول الطابور',
       'Preferences': 'التفضيلات',
@@ -702,6 +706,7 @@ class AppLanguage {
       'No beneficiaries found': 'لم يتم العثور على مستفيدين',
       'Search by name or ID': 'البحث بالاسم أو رقم الهوية',
       'Search by Name, ID, Mobile, or NFC reference': 'البحث بالاسم أو رقم البطاقة أو رقم الموبايل أو مرجع NFC',
+      'Search by Name, ID, Mobile, NFC code, or NFC reference': 'البحث بالاسم أو رقم البطاقة أو الموبايل أو رمز NFC أو مرجع NFC',
       'You Queue No. is : ': 'رقم الطابور الخاص بك هو : ',
       'NFC': 'NFC',
       'National ID': 'الهوية الوطنية',
@@ -992,6 +997,7 @@ class AppLanguage {
       'Initial Assigned Queue Point *': 'نقطة الطابور المخصصة الأولية *',
       'ID Copy *': 'نسخة الهوية *',
       'Type *': 'النوع *',
+      'Priority type *': 'نوع الأولوية *',
       'Gender *': 'الجنس *',
       'Name *': 'الاسم *',
       'ID Number *': 'رقم الهوية *',
@@ -3566,6 +3572,27 @@ Future<void> _initializeFirebaseInBackground() async {
   }
 }
 
+/// Ensures the one-time queue-assignments cleanup has run before issuing a queue number.
+/// Prevents issuing number 14 (or any wrong number) when cleanup is still running in background.
+Future<void> _ensureQueueAssignmentsCleanupDone() async {
+  final prefs = await SharedPreferences.getInstance();
+  try {
+    if (!(prefs.getBool('queue_assignments_cleared_done') ?? false)) {
+      await BeneficiaryService.clearAllQueueAssignmentsFromBeneficiaries();
+      // Do NOT delete queueHistory 'issued' - beneficiaries must stay visible in queue lists
+      await QueueService.resetAllQueueCounters();
+      await prefs.setBool('queue_assignments_cleared_done', true);
+    }
+    // One-time: reset counters for installs that ran old cleanup without counter reset
+    if (!(prefs.getBool('queue_counters_reset_done') ?? false)) {
+      await QueueService.resetAllQueueCounters();
+      await prefs.setBool('queue_counters_reset_done', true);
+    }
+  } catch (e) {
+    print('⚠️ Queue assignments ensure-cleanup error: $e');
+  }
+}
+
 /// Initialize Firestore collections in background without blocking the app
 /// This runs after Firebase is ready and doesn't block anything
 Future<void> _initializeFirestoreCollectionsInBackground() async {
@@ -3577,13 +3604,102 @@ Future<void> _initializeFirestoreCollectionsInBackground() async {
     return;
   }
   
-  // Run collections setup completely in background - don't await
-  // This ensures it never blocks the app
+  // Run one-time cleanups FIRST (before collections setup), then collections in background
   Future(() async {
       try {
-        print('🚀 Starting Firestore collections setup in background...');
-        
-        // Run collections setup and roles initialization in parallel with timeout
+        // One-time cleanup (RUN FIRST): so it completes before user reaches dashboard/issuance
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final assignmentsClearedDone = prefs.getBool('queue_assignments_cleared_done') ?? false;
+          if (!assignmentsClearedDone) {
+            final beneficiariesUpdated = await BeneficiaryService.clearAllQueueAssignmentsFromBeneficiaries();
+            // Do NOT delete queueHistory 'issued' records - that would remove beneficiaries from queue lists
+            final countersReset = await QueueService.resetAllQueueCounters();
+            if (beneficiariesUpdated > 0 || countersReset > 0) {
+              print('✅ Queue assignments cleared: $beneficiariesUpdated unassigned, $countersReset counter(s) reset.');
+            }
+            await prefs.setBool('queue_assignments_cleared_done', true);
+          }
+          final servedStateClearedDone = prefs.getBool('served_state_cleared_done') ?? false;
+          if (!servedStateClearedDone) {
+            final servedReset = await BeneficiaryService.resetAllServedStateFromBeneficiaries();
+            if (servedReset > 0) {
+              print('✅ Served state cleared: $servedReset beneficiary(ies) reset.');
+            }
+            await prefs.setBool('served_state_cleared_done', true);
+          }
+          final countersResetDone = prefs.getBool('queue_counters_reset_done') ?? false;
+          if (!countersResetDone) {
+            final countersReset = await QueueService.resetAllQueueCounters();
+            if (countersReset > 0) {
+              print('✅ Queue counters reset (one-time): $countersReset counter(s).');
+            }
+            await prefs.setBool('queue_counters_reset_done', true);
+          }
+        } catch (e) {
+          print('⚠️ Queue assignments cleanup error (non-critical): $e');
+        }
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (!(prefs.getBool('mock_beneficiaries_cleanup_done') ?? false)) {
+            final removed = await BeneficiaryService.deleteBeneficiariesCreatedBy('mock');
+            if (removed > 0) print('✅ Removed $removed mock beneficiaries.');
+            await prefs.setBool('mock_beneficiaries_cleanup_done', true);
+          }
+        } catch (e) {
+          print('⚠️ Mock beneficiaries cleanup error (non-critical): $e');
+        }
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final renumberDone = prefs.getBool('queue_number_renumber_done') ?? false;
+          if (!renumberDone) {
+            final list = await BeneficiaryService.getBeneficiariesWithQueueAssignment();
+            final groups = <String, List<Beneficiary>>{};
+            for (final b in list) {
+              final q = b.initialAssignedQueuePoint;
+              if (q == null || q.isEmpty) continue;
+              groups.putIfAbsent(q, () => []).add(b);
+            }
+            int totalUpdated = 0;
+            for (final entry in groups.entries) {
+              final queueName = entry.key;
+              final beneficiaries = List<Beneficiary>.from(entry.value);
+              beneficiaries.sort((a, b) {
+                final an = a.queueNumber ?? 999999;
+                final bn = b.queueNumber ?? 999999;
+                if (an != bn) return an.compareTo(bn);
+                return a.id.compareTo(b.id);
+              });
+              for (var i = 0; i < beneficiaries.length; i++) {
+                final newNum = i + 1;
+                final b = beneficiaries[i];
+                if (b.queueNumber == newNum) continue;
+                await BeneficiaryService.updateBeneficiary(b.id, b.copyWith(queueNumber: newNum));
+                totalUpdated++;
+                final historySnap = await FirebaseService.firestore
+                    .collection('queueHistory')
+                    .where('dayQueueName', isEqualTo: queueName)
+                    .where('action', isEqualTo: 'issued')
+                    .get();
+                for (final doc in historySnap.docs) {
+                  final data = doc.data();
+                  if (data['beneficiaryId'] == b.id) {
+                    await doc.reference.update({'queueNumber': newNum});
+                    break;
+                  }
+                }
+              }
+            }
+            if (totalUpdated > 0) {
+              print('✅ Queue renumbering: $totalUpdated beneficiaries across ${groups.length} queue(s).');
+            }
+            await prefs.setBool('queue_number_renumber_done', true);
+          }
+        } catch (e) {
+          print('⚠️ Queue number renumbering error (non-critical): $e');
+        }
+
+        // Then run collections setup and roles initialization
         await Future.wait([
           FirebaseCollectionsSetup.setupAllCollections()
               .timeout(const Duration(seconds: 20))
@@ -3598,11 +3714,10 @@ Future<void> _initializeFirestoreCollectionsInBackground() async {
             return null;
           }),
         ], eagerError: false);
-        
-        print('✅ Firebase collections and roles initialized in background!');
+
+        print('✅ Firebase collections and roles initialized.');
   } catch (e) {
-        print('⚠️ Background collections setup error (non-critical): $e');
-        // Continue anyway - collections might already exist
+        print('⚠️ Background init error (non-critical): $e');
       }
     });
   // Don't await - let it run in background
@@ -4319,11 +4434,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final password = _passwordController.text.trim();
 
       // Authenticate against Firestore admins collection with timeout handling
-      print('🔐 Starting authentication process...');
+      // Auth in progress
       Admin? admin;
       try {
         admin = await AdminService.authenticateAdmin(mobile, password);
-        print('🔐 Authentication result: ${admin != null ? "SUCCESS" : "FAILED"}');
       } on TimeoutException catch (e) {
         print('❌ Login timeout: $e');
         if (mounted) {
@@ -4365,7 +4479,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       
-      print('✅ Authentication successful, proceeding with login...');
+      // Auth success, proceeding with login
 
       // Save credentials if "Remember Me" is checked
       await _saveCredentials(_mobileController.text.trim(), _passwordController.text.trim());
@@ -4993,6 +5107,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   final _customUnitsFocusNode = FocusNode();
   final _customEntityFocusNode = FocusNode();
   final _nfcCodeFocusNode = FocusNode();
+  final _nfcReferenceFocusNode = FocusNode();
 
   String? _selectedDistributionArea;
   String _type = 'Normal';
@@ -5227,7 +5342,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   //   }
   // }
 
-  final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
+  static const List<String> _typeOptionsBase = ['Normal', 'Child', 'Disability']; // Elderly set automatically from birth date
   // final List<String> _genderOptions = ['Male', 'Female']; // UNUSED
   // final List<String> _statusOptions = ['Active', 'Banned']; // UNUSED
   final List<String> _unitsOptions = ['1', '2'];
@@ -5236,6 +5351,10 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
   @override
   void initState() {
     super.initState();
+    // If only one distribution area, select it by default
+    if (widget.distributionAreas.length == 1) {
+      _selectedDistributionArea = widget.distributionAreas.first.id;
+    }
     // Add lifecycle observer
     WidgetsBinding.instance.addObserver(this);
     // Start monitoring clipboard for Google Lens results (continuous monitoring)
@@ -5286,6 +5405,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
     _customUnitsFocusNode.dispose();
     _customEntityFocusNode.dispose();
     _nfcCodeFocusNode.dispose();
+    _nfcReferenceFocusNode.dispose();
     super.dispose();
   }
 
@@ -5415,58 +5535,6 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         return;
       }
 
-      // Check for duplicate ID in Firestore before proceeding
-      if (_idNumberController.text.isNotEmpty) {
-        final existingBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(_idNumberController.text);
-        if (existingBeneficiary != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-      }
-
-      // Check for duplicate NFC tag ID before proceeding
-      // First check if there's already a duplicate message set
-      if (_duplicateNFCMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_duplicateNFCMessage!),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        return;
-      }
-
-      // Get NFC code to check - prefer original (from scan); if manually entered and not masked, use text field
-      // If field shows masked value but we don't have _originalNfcTagId (e.g. cleared by focus), don't block - proceed without NFC for this submission
-      String? nfcCodeToCheck = _originalNfcTagId;
-      if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
-        final textFieldValue = _nfcCodeController.text.trim();
-        if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
-          nfcCodeToCheck = textFieldValue;
-        }
-        // If text contains '*' (masked) and no _originalNfcTagId: skip duplicate check and allow registration; NFC won't be saved for this beneficiary
-      }
-
-      if (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) {
-        final existingNfcBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(nfcCodeToCheck);
-        if (existingNfcBeneficiary != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-          return;
-        }
-      }
-
       String entityName = '';
       if (_isEntity) {
         if (_useCustomEntity) {
@@ -5500,7 +5568,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         units = _customUnitsController.text;
       }
 
-      // Show loading dialog
+      // Show loading dialog immediately so user sees feedback (duplicate checks + save can take time)
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -5510,6 +5578,47 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
       );
 
       try {
+        // Run duplicate checks in parallel to reduce wait time (instead of 2+ sequential Firestore reads)
+        final idToCheck = _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), '').trim();
+        String? nfcCodeToCheck = _originalNfcTagId;
+        if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
+          final textFieldValue = _nfcCodeController.text.trim();
+          if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
+            nfcCodeToCheck = textFieldValue;
+          }
+        }
+        final results = await Future.wait([
+          idToCheck.isNotEmpty ? BeneficiaryService.getBeneficiaryByIdNumber(idToCheck) : Future<Beneficiary?>.value(null),
+          (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) ? BeneficiaryService.getBeneficiaryByNFC(nfcCodeToCheck) : Future<Beneficiary?>.value(null),
+        ]);
+        final existingById = results[0] as Beneficiary?;
+        final existingByNfc = results[1] as Beneficiary?;
+        if (existingById != null) {
+          if (mounted) Navigator.of(context).pop();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+        if (existingByNfc != null) {
+          if (mounted) Navigator.of(context).pop();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingByNfc.name} (ID: ${existingByNfc.idNumber})'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          return;
+        }
+
         // Get the current admin ID for createdBy field (or use 'guest' for guest registrations)
         final createdBy = AdminService.currentAdminId ?? 'guest';
         
@@ -5523,7 +5632,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
         gender: _gender,
           name: _nameController.text,
           idNumber: _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), ''), // Clean ID number
-          mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '') : null, // Clean mobile number
+          mobileNumber: _mobileNumberController.text.isNotEmpty ? ('01' + _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '')) : null, // 01 prefix + 9 digits
         isEntity: _isEntity,
         entityName: _isEntity ? entityName : null,
         numberOfUnits: units,
@@ -6025,8 +6134,8 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           
           if (parsedData['birthDate'] != null) {
             _extractedBirthDate = parsedData['birthDate'] as DateTime;
-            // Auto-detect Elderly if birth date is before January 1, 1965
-            final elderlyThreshold = DateTime(1965, 1, 1);
+            // Auto-detect Elderly if birth date is before 1970
+            final elderlyThreshold = DateTime(1970, 1, 1);
             if (_extractedBirthDate!.isBefore(elderlyThreshold)) {
               _type = 'Elderly';
             }
@@ -6339,7 +6448,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
           }
           if (parsedData['birthDate'] != null) {
             _extractedBirthDate = parsedData['birthDate'] as DateTime;
-            if (_extractedBirthDate!.isBefore(DateTime(1965, 1, 1))) {
+            if (_extractedBirthDate!.isBefore(DateTime(1970, 1, 1))) {
               _type = 'Elderly';
             }
           }
@@ -6758,9 +6867,9 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             if (validIdNumber.length == 14) {
               final birthDate = IDParser.extractBirthDateFromIDNumber(validIdNumber);
               
-              // Check if birth date is older than 1-1-1965
+              // Check if birth date is before 1970 (e.g. 1965) → mark as Elderly
               if (birthDate != null) {
-                final cutoffDate = DateTime(1965, 1, 1);
+                final cutoffDate = DateTime(1970, 1, 1);
                 if (birthDate.isBefore(cutoffDate)) {
                   setState(() {
                     _type = 'Elderly';
@@ -6862,6 +6971,12 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
               duration: const Duration(seconds: 3),
             ),
           );
+          // Move focus to mobile field so user can continue typing
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _mobileNumberFocusNode.canRequestFocus) {
+              _mobileNumberFocusNode.requestFocus();
+            }
+          });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7189,21 +7304,8 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            Text(
-                  AppLanguage.translate('Beneficiary Registration'),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: darkBlue,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _buildLabel('Distribution Area *'),
-                const SizedBox(height: 8),
                 _buildDistributionAreaDropdown(),
-                const SizedBox(height: 24),
-                _buildLabel('ID Copy *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -7230,13 +7332,9 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     ],
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('Type *'),
-                const SizedBox(height: 8),
-                _buildDropdown(_type, _typeOptions, (value) => setState(() => _type = value ?? 'Normal')),
-                const SizedBox(height: 24),
-                _buildLabel('Gender *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                _buildDropdown(_type, [..._typeOptionsBase, if (_type == 'Elderly') 'Elderly'], (value) => setState(() => _type = value ?? 'Normal')),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -7261,9 +7359,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('Name *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -7286,9 +7382,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     ],
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('ID Number *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _idNumberController,
                   focusNode: _idNumberFocusNode,
@@ -7324,6 +7418,13 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                       final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
                       if (cleanValue.length == 14) {
                         _checkDuplicateID(cleanValue);
+                        // Extract birth date from National ID and auto-set Elderly if before 1970
+                        final birthDate = IDParser.extractBirthDateFromIDNumber(cleanValue);
+                        if (birthDate != null && birthDate.isBefore(DateTime(1970, 1, 1))) {
+                          setState(() {
+                            _type = 'Elderly';
+                          });
+                        }
                       } else {
                         setState(() {
                           _duplicateIDMessage = null;
@@ -7359,51 +7460,31 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Mobile Number *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _mobileNumberController,
                   focusNode: _mobileNumberFocusNode,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  maxLength: 11,
-                  decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
+                  maxLength: 9,
+                  decoration: _buildInputDecoration(AppLanguage.translate('Mobile Number')).copyWith(prefixText: '01'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return AppLanguage.translate('Please enter mobile number');
                     }
-                    // Remove any spaces or dashes for validation
                     final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
-                    // Check Egyptian mobile number format: 01[0-2,5][0-9]{8}
+                    final full = '01$cleanValue';
                     final regex = RegExp(r'^01[0-2,5][0-9]{8}$');
-                    if (!regex.hasMatch(cleanValue)) {
-                      return 'Invalid Egyptian mobile number format. Must be 11 digits starting with 01 (e.g., 01012345678, 01123456789, 01234567890, 01512345678)';
+                    if (full.length != 11 || !regex.hasMatch(full)) {
+                      return 'Invalid Egyptian mobile number. Enter 9 digits after 01 (e.g. 0123456789)';
                     }
                     return null;
                   },
-                  onFieldSubmitted: (_) {
-                    // Move to custom units if visible, otherwise to NFC code
-                    if (_useCustomUnits && _customUnitsFocusNode.canRequestFocus) {
-                      _customUnitsFocusNode.requestFocus();
-                    } else if (_useCustomEntity && _customEntityFocusNode.canRequestFocus) {
-                      _customEntityFocusNode.requestFocus();
-                    } else {
-                      _nfcCodeFocusNode.requestFocus();
-                    }
-                  },
+                  onFieldSubmitted: (_) => _nfcCodeFocusNode.requestFocus(),
                   onChanged: (value) {
-                    if (value.isNotEmpty) {
-                      // Clean the value before checking
-                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
-                      // Only check if it's a valid format (11 digits starting with 01)
-                      if (RegExp(r'^01[0-2,5][0-9]{8}$').hasMatch(cleanValue)) {
-                        _checkDuplicateMobile(cleanValue);
-                      } else {
-                        setState(() {
-                          _duplicateMobileMessage = null;
-                        });
-                      }
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    if (cleanValue.length == 9) {
+                      _checkDuplicateMobile('01$cleanValue');
                     } else {
                       setState(() {
                         _duplicateMobileMessage = null;
@@ -7434,9 +7515,7 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Number of Units *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -7464,60 +7543,61 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                     decoration: _buildInputDecoration('Enter custom number of units'),
                   ),
                 ],
-                const SizedBox(height: 24),
-                CheckboxListTile(
-                  title: Text(AppLanguage.translate('Entity')),
-                  value: _isEntity,
-                  onChanged: (value) => setState(() => _isEntity = value ?? false),
-                ),
-                if (_isEntity) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE0E0E0)),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedEntity,
-                              isExpanded: true,
-                              hint: const Text('Select entity'),
-                              items: [...widget.entities, 'Other'].map((entity) {
-                                return DropdownMenuItem(
-                                  value: entity,
-                                  child: Text(
-                                    entity,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) => setState(() {
-                                _selectedEntity = value;
-                                _useCustomEntity = value == 'Other';
-                              }),
+                // Entity section hidden for upcoming versions
+                if (false) ...[
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    title: Text(AppLanguage.translate('Entity')),
+                    value: _isEntity,
+                    onChanged: (value) => setState(() => _isEntity = value ?? false),
+                  ),
+                  if (_isEntity) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.white,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedEntity,
+                                isExpanded: true,
+                                hint: const Text('Select entity'),
+                                items: [...widget.entities, 'Other'].map((entity) {
+                                  return DropdownMenuItem(
+                                    value: entity,
+                                    child: Text(
+                                      entity,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) => setState(() {
+                                  _selectedEntity = value;
+                                  _useCustomEntity = value == 'Other';
+                                }),
+                              ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                    if (_useCustomEntity) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _customEntityController,
+                        decoration: _buildInputDecoration('Enter custom entity name'),
                       ),
                     ],
-                  ),
-                  if (_useCustomEntity) ...[
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _customEntityController,
-                      decoration: _buildInputDecoration('Enter custom entity name'),
-                    ),
                   ],
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Photo (Optional)'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     if (_photoPath != null)
@@ -7627,12 +7707,12 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Code'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcCodeController,
                         focusNode: _nfcCodeFocusNode,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _nfcReferenceFocusNode.requestFocus(),
                         decoration: InputDecoration(
                           hintText: AppLanguage.translate('Enter NFC code'),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -7695,8 +7775,6 @@ class _GuestBeneficiaryRegistrationScreenState extends State<GuestBeneficiaryReg
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Reference'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcReferenceController,
@@ -7894,20 +7972,20 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   Future<void> _loadDistributionAreas() async {
     // Prevent multiple simultaneous loads
     if (_isLoadingAreas) {
-      print('⏭️ _loadDistributionAreas() already in progress, skipping...');
+      // _loadDistributionAreas() already in progress
       return;
     }
     
-    print('🚀 _loadDistributionAreas() called');
+      // _loadDistributionAreas
     _isLoadingAreas = true;
     
     try {
       // Update tracked admin ID
       final currentAdminId = AdminService.currentAdminId;
-      print('🚀 Current admin ID: $currentAdminId');
+      // Admin ID check
       if (currentAdminId != _lastAdminId) {
         _lastAdminId = currentAdminId;
-        print('🔄 Admin ID changed in _loadDistributionAreas, reloading...');
+        // Admin ID changed, reloading
       }
       
       // Get current admin's assigned distribution area - try multiple times if needed
@@ -7921,7 +7999,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         currentAdmin = AdminService.currentAdmin;
         retries++;
         if (retries % 3 == 0) {
-          print('⏳ Waiting for admin data to load... (attempt $retries/10)');
+          // Waiting for admin data
         }
       }
       
@@ -7935,7 +8013,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         return;
       }
       
-      print('✅ Admin data loaded: ${currentAdmin.fullName}');
+      // Admin loaded
       
       // Load all distribution areas from Firestore (now that admin is available)
       final allAreas = await DistributionAreaService.getAllAreas().first.timeout(
@@ -7946,12 +8024,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         },
       );
       
-      print('🔍 Loading distribution areas...');
-      print('🔍 Current Admin: ${currentAdmin?.fullName}');
-      print('🔍 Admin Role: ${currentAdmin?.role}');
-      print('🔍 Is Super Admin: ${currentAdmin?.isSuperAdmin}');
-      print('🔍 Distribution Point: ${currentAdmin?.distributionPoint}');
-      print('🔍 Total areas in Firestore: ${allAreas.length}');
+      // Loading distribution areas
       
       // Super Admin or admin with distributionPoint == "All" can see all distribution areas
       // Check multiple conditions to ensure Super Admin is detected
@@ -7974,14 +8047,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         isTestSuperAdmin  // Fallback for test user
       );
       
-      print('🔍 Role check details: role="$role", isSuperAdmin=$isSuperAdmin, distributionPoint="$distributionPoint"');
-      print('🔍 Normalized: roleLower="$roleLower", distPointLower="$distPointLower", isTestSuperAdmin=$isTestSuperAdmin, isSuperAdminRole=$isSuperAdminRole');
+      // Role check for Super Admin
       
       if (currentAdmin != null && isSuperAdminRole) {
-        print('✅ Super Admin detected - showing all ${allAreas.length} distribution areas');
         setState(() {
           _distributionAreas = allAreas;
-          print('✅ Set _distributionAreas to ${_distributionAreas.length} areas');
           
           // Reset selected area if it's no longer in the list
           if (_selectedDistributionArea != null) {
@@ -8008,7 +8078,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                    adminPoint.contains(areaName);
         }).toList();
         
-          print('📋 Filtered areas for Admin/Q_Admin: ${filteredAreas.length} areas (distributionPoint: ${admin.distributionPoint})');
+          // Filtered areas for Admin/Q_Admin
         setState(() {
           _distributionAreas = filteredAreas.isNotEmpty ? filteredAreas : [];
           
@@ -8042,7 +8112,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         });
       }
       
-      print('✅ Final distribution areas count: ${_distributionAreas.length}');
     } catch (e) {
       print('❌ Error loading distribution areas: $e');
       // Fallback to empty list or default areas
@@ -8111,211 +8180,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     }
     
     return _selectedDistributionArea;
-  }
-
-  /// Load mock data for today's queues: divide beneficiaries per area across that area's queues,
-  /// each queue gets a group with automatic sequence numbers 1, 2, 3... to test the full serving cycle.
-  /// If an area has no beneficiaries, creates mock beneficiaries for that area.
-  /// [progressMessage] and [cancelRequested] optional: when provided, progress is reported and user can cancel.
-  Future<int?> _loadMockDataForTodayQueues({
-    ValueNotifier<String>? progressMessage,
-    ValueNotifier<bool>? cancelRequested,
-  }) async {
-    void updateProgress(String msg) {
-      progressMessage?.value = msg;
-    }
-
-    bool cancelled() => cancelRequested?.value ?? false;
-
-    try {
-      updateProgress('Loading today\'s queues...');
-      final queues = await _getQueuesStream().first;
-      if (cancelled()) return null;
-
-      final today = DateTime.now();
-      final todayOnly = DateTime(today.year, today.month, today.day);
-      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-      final todayQueues = queues.where((q) {
-        final fromDateOnly = DateTime(q.fromDate.year, q.fromDate.month, q.fromDate.day);
-        final toDateOnly = DateTime(q.toDate.year, q.toDate.month, q.toDate.day);
-        return todayOnly.compareTo(fromDateOnly) >= 0 && todayOnly.compareTo(toDateOnly) <= 0;
-      }).toList();
-
-      if (todayQueues.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No queues for today. Create a queue that includes today\'s date.')),
-          );
-        }
-        return 0;
-      }
-
-      final areaToQueues = <String, List<Queue>>{};
-      for (final q in todayQueues) {
-        areaToQueues.putIfAbsent(q.distributionArea, () => []).add(q);
-      }
-
-      int totalAssigned = 0;
-      const minPerQueue = 3;
-      final areaEntries = areaToQueues.entries.toList();
-
-      for (int areaIndex = 0; areaIndex < areaEntries.length; areaIndex++) {
-        if (cancelled()) break;
-        final entry = areaEntries[areaIndex];
-        final areaId = entry.key;
-        final queuesInArea = entry.value;
-        updateProgress('Area ${areaIndex + 1}/${areaEntries.length}: loading beneficiaries...');
-        List<Beneficiary> areaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(areaId).first;
-        if (cancelled()) break;
-
-        final minNeeded = queuesInArea.length * minPerQueue;
-        if (areaBeneficiaries.length < minNeeded) {
-          final toCreate = minNeeded - areaBeneficiaries.length;
-          for (int i = 0; i < toCreate; i++) {
-            if (cancelled()) break;
-            updateProgress('Area ${areaIndex + 1}/${areaEntries.length}: creating mock ${i + 1}/$toCreate...');
-            final mock = Beneficiary(
-              id: 'mock_${DateTime.now().millisecondsSinceEpoch}_${areaId}_$i',
-              distributionArea: areaId,
-              initialAssignedQueuePoint: null,
-              type: 'Normal',
-              idCopyPath: null,
-              gender: i.isEven ? 'Male' : 'Female',
-              name: 'Mock Beneficiary ${i + 1}',
-              idNumber: '2990101${(12345670 + i) % 10000000}',
-              mobileNumber: null,
-              isEntity: false,
-              entityName: null,
-              numberOfUnits: '1',
-              nfcPreprintedCode: null,
-              nfcReference: null,
-              photoPath: null,
-              status: 'Active',
-              birthDate: null,
-              queueNumber: null,
-              isServed: false,
-              unitsTaken: 0,
-              createdBy: null,
-            );
-            await BeneficiaryService.createBeneficiary(mock, 'mock');
-          }
-          if (cancelled()) break;
-          areaBeneficiaries = await BeneficiaryService.getBeneficiariesByArea(areaId).first;
-        }
-
-        final int perQueue = areaBeneficiaries.length ~/ queuesInArea.length;
-        int start = 0;
-        for (int qIndex = 0; qIndex < queuesInArea.length; qIndex++) {
-          if (cancelled()) break;
-          final queue = queuesInArea[qIndex];
-          final effectiveName = queue.isMultiDay ? '${queue.name}_$todayStr' : queue.name;
-          final count = qIndex == queuesInArea.length - 1
-              ? (areaBeneficiaries.length - start)
-              : perQueue;
-          updateProgress('Area ${areaIndex + 1}/${areaEntries.length}: assigning queue "${queue.name}" (${qIndex + 1}/${queuesInArea.length})...');
-          for (int i = 0; i < count; i++) {
-            if (cancelled()) break;
-            if (i > 0 && i % 5 == 0) {
-              updateProgress('Area ${areaIndex + 1}/${areaEntries.length}: queue "${queue.name}" ${i + 1}/$count...');
-            }
-            final b = areaBeneficiaries[start + i];
-            final updated = b.copyWith(
-              initialAssignedQueuePoint: effectiveName,
-              queueNumber: i + 1,
-            );
-            await BeneficiaryService.updateBeneficiary(b.id, updated);
-            totalAssigned++;
-          }
-          start += count;
-        }
-      }
-
-      return totalAssigned;
-    } catch (e, st) {
-      print('Error loading mock data: $e\n$st');
-      rethrow;
-    }
-  }
-
-  /// Shows progress dialog and runs mock data load; user can cancel. On completion or cancel, closes dialog and shows SnackBar.
-  Future<void> _loadMockDataForTodayQueuesWithDialog() async {
-    final progressMessage = ValueNotifier<String>('Preparing...');
-    final cancelRequested = ValueNotifier<bool>(false);
-    final navigator = Navigator.of(context);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Row(
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 12),
-              Text('Load mock data'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ValueListenableBuilder<String>(
-                valueListenable: progressMessage,
-                builder: (_, msg, __) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(msg, style: const TextStyle(fontSize: 14)),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  cancelRequested.value = true;
-                },
-                icon: const Icon(Icons.cancel_outlined, size: 20),
-                label: const Text('Cancel'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange,
-                  side: const BorderSide(color: Colors.orange),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    int? totalAssigned;
-    try {
-      totalAssigned = await _loadMockDataForTodayQueues(
-        progressMessage: progressMessage,
-        cancelRequested: cancelRequested,
-      );
-    } catch (e) {
-      if (mounted) {
-        navigator.pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) return;
-    navigator.pop();
-
-    if (totalAssigned == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Load mock data cancelled. Changes up to the current stage were saved.')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Mock data loaded: $totalAssigned beneficiaries assigned with sequence numbers. Open Serve to test.')),
-      );
-    }
   }
 
   // Beneficiaries are now loaded from Firestore via StreamBuilder
@@ -8397,9 +8261,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     // Load distribution areas filtered by admin
     // Use WidgetsBinding to ensure admin data is loaded, with a delay to ensure admin is set
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      print('📋 Dashboard initState: Starting distribution areas loading process...');
-      print('📋 Current admin ID: ${AdminService.currentAdminId}');
-      print('📋 Current admin object: ${AdminService.currentAdmin != null ? "Available" : "NULL"}');
+      // Dashboard initState: load distribution areas when admin is ready
       
       // Wait for admin to be available (with retries)
       int retries = 0;
@@ -8407,7 +8269,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         await Future.delayed(const Duration(milliseconds: 200));
         retries++;
         if (retries % 2 == 0) {
-          print('⏳ Dashboard: Waiting for admin data... (attempt $retries/10)');
+          // Dashboard waiting for admin data
         }
       }
       
@@ -8416,13 +8278,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         final currentAdminId = AdminService.currentAdminId;
         if (currentAdminId != _lastAdminId) {
           _lastAdminId = currentAdminId;
-          print('🔄 Admin ID changed in initState, reloading distribution areas...');
+          // Admin ID changed, reloading distribution areas
         }
         
         final admin = AdminService.currentAdmin;
         if (admin != null) {
-          print('✅ Dashboard: Admin data available - ${admin.fullName}');
-          print('📋 Dashboard: Calling _loadDistributionAreas()...');
           _loadDistributionAreas();
         } else {
           print('❌ Dashboard: Admin data still not available after waiting');
@@ -8444,7 +8304,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         if (currentAdminId != _lastAdminId) {
           _lastAdminId = currentAdminId;
           // Admin changed - force reload distribution areas
-          print('🔄 Admin changed detected, reloading distribution areas...');
+          // Admin changed, reloading distribution areas
           _loadDistributionAreas();
         } else {
           // Always reload to ensure Super Admin sees all areas
@@ -8861,9 +8721,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             beneficiaries: beneficiariesForQueue,
                             onQueueUpdated: (updatedQueue) {
-                              // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
-                              // This callback is just for UI updates - no need to update Firestore again
-                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
+                              // Queue is already updated in Firestore - callback for UI only
                             },
                             onBeneficiaryUpdated: (beneficiary) {},
                           ),
@@ -8882,9 +8740,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             queue: queue,
                             distributionAreas: _distributionAreas,
                             onQueueUpdated: (updatedQueue) {
-                              // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
-                              // This callback is just for UI updates - no need to update Firestore again
-                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
+                              // Queue is already updated in Firestore - callback for UI only
                             },
                           ),
                         ),
@@ -9566,8 +9422,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             beneficiaries: beneficiariesForQueue,
                             onQueueUpdated: (updatedQueue) {
                               // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
-                              // This callback is just for UI updates - no need to update Firestore again
-                              print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
+                              // Callback for UI only - queue already updated in Firestore
                             },
                             onBeneficiaryUpdated: (beneficiary) {},
                           ),
@@ -9601,8 +9456,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             onQueueUpdated: (updatedQueue) {
                       // Queue is already updated in Firestore by QueueDetailsScreen._handleUpdate()
                       // This callback is just for UI updates - no need to update Firestore again
-                      // The StreamBuilder will automatically reflect the changes
-                      print('ℹ️ onQueueUpdated callback called - queue already updated in Firestore (${updatedQueue.name})');
+                      // StreamBuilder will reflect changes
                     },
                           ),
                         ),
@@ -9880,30 +9734,13 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    AppLanguage.translate('Our Queue List'),
-                                    style: TextStyle(
-                                      fontSize: isLandscape ? 16 : 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1A237E),
-                                    ),
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () async {
-                                    setState(() {});
-                                    await _loadMockDataForTodayQueuesWithDialog();
-                                  },
-                                  icon: const Icon(Icons.science, size: 18),
-                                  label: const Text('Load mock data'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF1A237E),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              AppLanguage.translate('Our Queue List'),
+                              style: TextStyle(
+                                fontSize: isLandscape ? 16 : 20,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF1A237E),
+                              ),
                             ),
                             SizedBox(height: isLandscape ? 6 : 12),
                             Expanded(
@@ -15788,6 +15625,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   final _customUnitsFocusNode = FocusNode();
   final _customEntityFocusNode = FocusNode();
   final _nfcCodeFocusNode = FocusNode();
+  final _nfcReferenceFocusNode = FocusNode();
 
   String? _selectedDistributionArea;
   String? _selectedQueuePoint; // Not used in registration, kept for compatibility
@@ -15809,7 +15647,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   bool _nfcDetected = false; // Track if NFC tag was detected
   String? _originalNfcTagId; // Store original NFC tag ID for saving (not masked)
 
-  final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
+  static const List<String> _typeOptionsBase = ['Normal', 'Child', 'Disability']; // Elderly set automatically from birth date
   // final List<String> _genderOptions = ['Male', 'Female']; // UNUSED
   // final List<String> _statusOptions = ['Active', 'Banned']; // UNUSED
   final List<String> _unitsOptions = ['1', '2'];
@@ -15823,6 +15661,10 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
   @override
   void initState() {
     super.initState();
+    // If only one distribution area, select it by default
+    if (widget.distributionAreas.length == 1) {
+      _selectedDistributionArea = widget.distributionAreas.first.id;
+    }
     // Add lifecycle observer
     WidgetsBinding.instance.addObserver(this);
     // Start monitoring clipboard for Google Lens results (continuous monitoring)
@@ -15873,6 +15715,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
     _customUnitsFocusNode.dispose();
     _customEntityFocusNode.dispose();
     _nfcCodeFocusNode.dispose();
+    _nfcReferenceFocusNode.dispose();
     super.dispose();
   }
 
@@ -16359,8 +16202,8 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           
           if (parsedData['birthDate'] != null) {
             _extractedBirthDate = parsedData['birthDate'] as DateTime;
-            // Auto-detect Elderly if birth date is before January 1, 1965
-            final elderlyThreshold = DateTime(1965, 1, 1);
+            // Auto-detect Elderly if birth date is before 1970
+            final elderlyThreshold = DateTime(1970, 1, 1);
             if (_extractedBirthDate!.isBefore(elderlyThreshold)) {
               _type = 'Elderly';
             }
@@ -16803,9 +16646,9 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             if (validIdNumber.length == 14) {
               final birthDate = IDParser.extractBirthDateFromIDNumber(validIdNumber);
               
-              // Check if birth date is older than 1-1-1965
+              // Check if birth date is before 1970 (e.g. 1965) → mark as Elderly
               if (birthDate != null) {
-                final cutoffDate = DateTime(1965, 1, 1);
+                final cutoffDate = DateTime(1970, 1, 1);
                 if (birthDate.isBefore(cutoffDate)) {
                   setState(() {
                     _type = 'Elderly';
@@ -17318,58 +17161,6 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         return;
       }
 
-      // Check for duplicate ID in Firestore before proceeding
-      if (_idNumberController.text.isNotEmpty) {
-        final existingBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(_idNumberController.text);
-        if (existingBeneficiary != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-      }
-
-      // Check for duplicate NFC tag ID before proceeding
-      // First check if there's already a duplicate message set
-      if (_duplicateNFCMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_duplicateNFCMessage!),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        return;
-      }
-
-      // Get NFC code to check - prefer original (from scan); if manually entered and not masked, use text field
-      // If field shows masked value but we don't have _originalNfcTagId (e.g. cleared by focus), don't block - proceed without NFC for this submission
-      String? nfcCodeToCheck = _originalNfcTagId;
-      if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
-        final textFieldValue = _nfcCodeController.text.trim();
-        if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
-          nfcCodeToCheck = textFieldValue;
-        }
-        // If text contains '*' (masked) and no _originalNfcTagId: skip duplicate check and allow registration; NFC won't be saved for this beneficiary
-      }
-
-      if (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) {
-        final existingNfcBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(nfcCodeToCheck);
-        if (existingNfcBeneficiary != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingNfcBeneficiary.name} (ID: ${existingNfcBeneficiary.idNumber})'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-          return;
-        }
-      }
-
       String entityName = '';
       if (_isEntity) {
         if (_useCustomEntity) {
@@ -17403,7 +17194,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
         units = _customUnitsController.text;
       }
 
-      // Show loading dialog
+      // Show loading dialog immediately so user sees feedback
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -17413,6 +17204,47 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
       );
 
       try {
+        // Run duplicate checks in parallel to reduce wait time
+        final idToCheck = _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), '').trim();
+        String? nfcCodeToCheck = _originalNfcTagId;
+        if (nfcCodeToCheck == null || nfcCodeToCheck.isEmpty) {
+          final textFieldValue = _nfcCodeController.text.trim();
+          if (textFieldValue.isNotEmpty && !textFieldValue.contains('*')) {
+            nfcCodeToCheck = textFieldValue;
+          }
+        }
+        final results = await Future.wait([
+          idToCheck.isNotEmpty ? BeneficiaryService.getBeneficiaryByIdNumber(idToCheck) : Future<Beneficiary?>.value(null),
+          (nfcCodeToCheck != null && nfcCodeToCheck.isNotEmpty) ? BeneficiaryService.getBeneficiaryByNFC(nfcCodeToCheck) : Future<Beneficiary?>.value(null),
+        ]);
+        final existingById = results[0] as Beneficiary?;
+        final existingByNfc = results[1] as Beneficiary?;
+        if (existingById != null) {
+          if (mounted) Navigator.of(context).pop();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLanguage.translate('This ID number is already registered in the system.')),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+        if (existingByNfc != null) {
+          if (mounted) Navigator.of(context).pop();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${AppLanguage.translate('This NFC card is already registered to:')} ${existingByNfc.name} (ID: ${existingByNfc.idNumber})'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          return;
+        }
+
         // Get the current admin ID for createdBy field
         final createdBy = AdminService.currentAdminId ?? 'system';
         
@@ -17426,7 +17258,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
           gender: _gender,
           name: _nameController.text,
           idNumber: _idNumberController.text.replaceAll(RegExp(r'[\s\-]'), ''), // Clean ID number
-          mobileNumber: _mobileNumberController.text.isNotEmpty ? _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '') : null, // Clean mobile number
+          mobileNumber: _mobileNumberController.text.isNotEmpty ? ('01' + _mobileNumberController.text.replaceAll(RegExp(r'[\s\-]'), '')) : null, // 01 prefix + 9 digits
           isEntity: _isEntity,
           entityName: _isEntity ? entityName : null,
           numberOfUnits: units,
@@ -17500,21 +17332,8 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  AppLanguage.translate('Beneficiary Registration'),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: darkBlue,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _buildLabel('Distribution Area *'),
-                const SizedBox(height: 8),
                 _buildDistributionAreaDropdown(),
-                const SizedBox(height: 24),
-                _buildLabel('ID Copy *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -17541,13 +17360,9 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ],
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('Type *'),
-                const SizedBox(height: 8),
-                _buildDropdown(_type, _typeOptions, (value) => setState(() => _type = value ?? 'Normal')),
-                const SizedBox(height: 24),
-                _buildLabel('Gender *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                _buildDropdown(_type, [..._typeOptionsBase, if (_type == 'Elderly') 'Elderly'], (value) => setState(() => _type = value ?? 'Normal')),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -17572,9 +17387,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('Name *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -17597,9 +17410,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ],
                   ],
                 ),
-                const SizedBox(height: 24),
-                _buildLabel('ID Number *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _idNumberController,
                   focusNode: _idNumberFocusNode,
@@ -17635,6 +17446,13 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                       final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
                       if (cleanValue.length == 14) {
                         _checkDuplicateID(cleanValue);
+                        // Extract birth date from National ID and auto-set Elderly if before 1970
+                        final birthDate = IDParser.extractBirthDateFromIDNumber(cleanValue);
+                        if (birthDate != null && birthDate.isBefore(DateTime(1970, 1, 1))) {
+                          setState(() {
+                            _type = 'Elderly';
+                          });
+                        }
                       } else {
                         setState(() {
                           _duplicateIDMessage = null;
@@ -17670,51 +17488,31 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Mobile Number *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _mobileNumberController,
                   focusNode: _mobileNumberFocusNode,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  maxLength: 11,
-                  decoration: _buildInputDecoration('Enter mobile number (01XXXXXXXXX)'),
+                  maxLength: 9,
+                  decoration: _buildInputDecoration(AppLanguage.translate('Mobile Number')).copyWith(prefixText: '01'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return AppLanguage.translate('Please enter mobile number');
                     }
-                    // Remove any spaces or dashes for validation
                     final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
-                    // Check Egyptian mobile number format: 01[0-2,5][0-9]{8}
+                    final full = '01$cleanValue';
                     final regex = RegExp(r'^01[0-2,5][0-9]{8}$');
-                    if (!regex.hasMatch(cleanValue)) {
-                      return 'Invalid Egyptian mobile number format. Must be 11 digits starting with 01 (e.g., 01012345678, 01123456789, 01234567890, 01512345678)';
+                    if (full.length != 11 || !regex.hasMatch(full)) {
+                      return 'Invalid Egyptian mobile number. Enter 9 digits after 01 (e.g. 0123456789)';
                     }
                     return null;
                   },
-                  onFieldSubmitted: (_) {
-                    // Move to custom units if visible, otherwise to NFC code
-                    if (_useCustomUnits && _customUnitsFocusNode.canRequestFocus) {
-                      _customUnitsFocusNode.requestFocus();
-                    } else if (_useCustomEntity && _customEntityFocusNode.canRequestFocus) {
-                      _customEntityFocusNode.requestFocus();
-                    } else {
-                      _nfcCodeFocusNode.requestFocus();
-                    }
-                  },
+                  onFieldSubmitted: (_) => _nfcCodeFocusNode.requestFocus(),
                   onChanged: (value) {
-                    if (value.isNotEmpty) {
-                      // Clean the value before checking
-                      final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
-                      // Only check if it's a valid format (11 digits starting with 01)
-                      if (RegExp(r'^01[0-2,5][0-9]{8}$').hasMatch(cleanValue)) {
-                        _checkDuplicateMobile(cleanValue);
-                      } else {
-                        setState(() {
-                          _duplicateMobileMessage = null;
-                        });
-                      }
+                    final cleanValue = value.replaceAll(RegExp(r'[\s\-]'), '');
+                    if (cleanValue.length == 9) {
+                      _checkDuplicateMobile('01$cleanValue');
                     } else {
                       setState(() {
                         _duplicateMobileMessage = null;
@@ -17745,9 +17543,7 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Number of Units *'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -17775,56 +17571,57 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                     decoration: _buildInputDecoration('Enter custom number of units'),
                   ),
                 ],
-                const SizedBox(height: 24),
-                CheckboxListTile(
-                  title: Text(AppLanguage.translate('Entity')),
-                  value: _isEntity,
-                  onChanged: (value) => setState(() => _isEntity = value ?? false),
-                ),
-                if (_isEntity) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE0E0E0)),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedEntity,
-                              isExpanded: true,
-                              hint: const Text('Select entity'),
-                              items: [...widget.entities, 'Other'].map((entity) {
-                                return DropdownMenuItem(
-                                  value: entity,
-                                  child: Text(entity),
-                                );
-                              }).toList(),
-                              onChanged: (value) => setState(() {
-                                _selectedEntity = value;
-                                _useCustomEntity = value == 'Other';
-                              }),
+                // Entity section hidden for upcoming versions
+                if (false) ...[
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    title: Text(AppLanguage.translate('Entity')),
+                    value: _isEntity,
+                    onChanged: (value) => setState(() => _isEntity = value ?? false),
+                  ),
+                  if (_isEntity) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.white,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedEntity,
+                                isExpanded: true,
+                                hint: const Text('Select entity'),
+                                items: [...widget.entities, 'Other'].map((entity) {
+                                  return DropdownMenuItem(
+                                    value: entity,
+                                    child: Text(entity),
+                                  );
+                                }).toList(),
+                                onChanged: (value) => setState(() {
+                                  _selectedEntity = value;
+                                  _useCustomEntity = value == 'Other';
+                                }),
+                              ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                    if (_useCustomEntity) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _customEntityController,
+                        decoration: _buildInputDecoration('Enter custom entity name'),
                       ),
                     ],
-                  ),
-                  if (_useCustomEntity) ...[
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _customEntityController,
-                      decoration: _buildInputDecoration('Enter custom entity name'),
-                    ),
                   ],
                 ],
-                const SizedBox(height: 24),
-                _buildLabel('Photo (Optional)'),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     if (_photoPath != null)
@@ -17934,12 +17731,12 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Code'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcCodeController,
                         focusNode: _nfcCodeFocusNode,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _nfcReferenceFocusNode.requestFocus(),
                         decoration: InputDecoration(
                           hintText: AppLanguage.translate('Enter NFC code'),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -18002,8 +17799,6 @@ class _BeneficiaryRegistrationScreenState extends State<BeneficiaryRegistrationS
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Reference'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcReferenceController,
@@ -18203,6 +17998,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
   bool _isLoadingMore = false;
   bool _hasMoreData = true;
   DocumentSnapshot? _lastDocument;
+  bool _initialCursorFetchStarted = false;
 
   @override
   void initState() {
@@ -18235,6 +18031,45 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     } else {
       // If no admin or no distribution point, show all areas
       _adminDistributionAreaIds = widget.distributionAreas.map((area) => area.id).toList();
+    }
+    // Start NFC detection so tapping a card fills search and searches by NFC code
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startNFCDetection());
+    }
+  }
+
+  void _startNFCDetection() async {
+    if (kIsWeb) return;
+    try {
+      final isAvailable = await NFCHelper.isNFCAvailable();
+      if (!isAvailable) return;
+      NFCHelper.startNFCSession(
+        context: context,
+        onTagDetected: (id) {
+          if (mounted) {
+            setState(() {
+              _searchController.text = id; // Use raw NFC ID for search (matches nfcPreprintedCode)
+              _activeSearchQuery = id;
+            });
+            _performSearch();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLanguage.translate('NFC card detected')),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: Colors.red),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      print('Beneficiaries list NFC detection error: $e');
     }
   }
 
@@ -18287,6 +18122,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
 
   @override
   void dispose() {
+    NFCHelper.stopNFCSession();
     // Cancel search debounce timer
     _searchDebounce?.cancel();
     
@@ -18330,29 +18166,27 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     });
     
     try {
-      List<Beneficiary> moreBeneficiaries;
+      BeneficiaryPaginatedResult result;
       if (_selectedDistributionArea != null) {
-        moreBeneficiaries = await BeneficiaryService.getBeneficiariesByAreaPaginated(
+        result = await BeneficiaryService.getBeneficiariesByAreaPaginated(
           areaId: _selectedDistributionArea!,
           limit: _loadMoreLimit,
           startAfter: _lastDocument,
           activeOnly: false, // Load all beneficiaries including banned
         );
       } else {
-        moreBeneficiaries = await BeneficiaryService.getBeneficiariesPaginated(
+        result = await BeneficiaryService.getBeneficiariesPaginated(
           limit: _loadMoreLimit,
           startAfter: _lastDocument,
           activeOnly: false, // Load all beneficiaries including banned
         );
       }
       
-      if (moreBeneficiaries.isEmpty) {
+      if (result.list.isEmpty) {
         _hasMoreData = false;
       } else {
-        _loadedBeneficiaries.addAll(moreBeneficiaries);
-        // Update last document for next pagination
-        // Note: We'd need to track the last document from the query
-        // For now, we'll use the length as a simple check
+        _loadedBeneficiaries.addAll(result.list);
+        _lastDocument = result.lastDocument; // Cursor for next page
       }
     } catch (e) {
       print('Error loading more beneficiaries: $e');
@@ -18362,6 +18196,33 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
           _isLoadingMore = false;
         });
       }
+    }
+  }
+
+  /// Fetches the cursor (lastDocument) for the first page so load-more can request the next page.
+  Future<void> _fetchInitialCursor(int streamLength) async {
+    if (_lastDocument != null || streamLength < _initialLoadLimit || _activeSearchQuery.isNotEmpty) return;
+    try {
+      BeneficiaryPaginatedResult result;
+      if (_selectedDistributionArea != null) {
+        result = await BeneficiaryService.getBeneficiariesByAreaPaginated(
+          areaId: _selectedDistributionArea!,
+          limit: _initialLoadLimit,
+          startAfter: null,
+          activeOnly: false,
+        );
+      } else {
+        result = await BeneficiaryService.getBeneficiariesPaginated(
+          limit: _initialLoadLimit,
+          startAfter: null,
+          activeOnly: false,
+        );
+      }
+      if (mounted && result.lastDocument != null) {
+        setState(() => _lastDocument = result.lastDocument);
+      }
+    } catch (e) {
+      print('Error fetching initial cursor: $e');
     }
   }
 
@@ -18651,25 +18512,6 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20.0),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    AppLanguage.translate('Beneficiaries'),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A237E),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           // Distribution Area Dropdown (Collapsible)
           Container(
             padding: const EdgeInsets.all(16.0),
@@ -18684,14 +18526,6 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                   },
                   child: Row(
                     children: [
-                      Text(
-                        AppLanguage.translate('Distribution Area'),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A237E),
-                        ),
-                      ),
                       const Spacer(),
                       Icon(
                         _isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -18802,6 +18636,10 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                               print('🔄 Distribution area changed to: $value');
                               setState(() {
                                 _selectedDistributionArea = value;
+                                _loadedBeneficiaries = [];
+                                _lastDocument = null;
+                                _hasMoreData = true;
+                                _initialCursorFetchStarted = false;
                               });
                             },
                           ),
@@ -18823,7 +18661,7 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
               keyboardType: TextInputType.text, // Use text input to support all characters including Arabic
               textInputAction: TextInputAction.done, // Show "Done" button on keyboard
               decoration: InputDecoration(
-                hintText: AppLanguage.translate('Search by Name, ID, Mobile, or NFC reference'),
+                hintText: AppLanguage.translate('Search by Name, ID, Mobile, NFC code, or NFC reference'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -18883,9 +18721,22 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                   );
                 }
 
-                final allBeneficiaries = snapshot.data ?? [];
+                final streamList = snapshot.data ?? [];
+                // Merge stream (initial page) with loaded-more items; dedupe by id so stream items take precedence
+                final seenIds = <String>{};
+                final merged = <Beneficiary>[];
+                for (var b in streamList) {
+                  if (seenIds.add(b.id)) merged.add(b);
+                }
+                for (var b in _loadedBeneficiaries) {
+                  if (seenIds.add(b.id)) merged.add(b);
+                }
                 // Filter by admin's areas and search query (area filtering is already done by Firestore if area is selected)
-                final filtered = _filterBeneficiaries(allBeneficiaries);
+                final filtered = _filterBeneficiaries(merged);
+                // When stream has a full page and we don't have a cursor yet, fetch it so load-more can get next page
+                if (streamList.length >= _initialLoadLimit && _lastDocument == null && _activeSearchQuery.isEmpty) {
+                  _fetchInitialCursor(streamList.length);
+                }
 
                 if (filtered.isEmpty) {
                   return Center(
@@ -18911,7 +18762,24 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                   );
                 }
 
-                return ListView.builder(
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: Colors.grey[100],
+                      child: Text(
+                        '${AppLanguage.translate('Beneficiaries')}: ${filtered.length}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
                   controller: _scrollController,
                   itemCount: filtered.length + (_isLoadingMore ? 1 : 0),
                   // Performance optimizations for fast scrolling on Android
@@ -19132,7 +19000,10 @@ class _BeneficiariesListScreenState extends State<BeneficiariesListScreen> {
                     ),
                     );
                   },
-                );
+                ),
+              ),
+            ],
+          );
               },
             ),
           ),
@@ -19181,6 +19052,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
   
   // FocusNodes for keyboard navigation
   final _nfcCodeFocusNode = FocusNode();
+  final _nfcReferenceFocusNode = FocusNode();
   
   String? _selectedDistributionArea;
   String? _selectedQueuePoint;
@@ -19398,7 +19270,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
   }
   
 
-  final List<String> _typeOptions = ['Normal', 'Child', 'Widowed', 'Divorced', 'Disability', 'Sick', 'Elderly'];
+  static const List<String> _typeOptionsBase = ['Normal', 'Child', 'Disability']; // Elderly set automatically from birth date
   final List<String> _genderOptions = ['Male', 'Female'];
   final List<String> _statusOptions = ['Active', 'Banned'];
   final List<String> _unitsOptions = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
@@ -19457,7 +19329,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
     // Set to null to avoid dropdown issues and crashes
     _selectedQueuePoint = null;
     // Add null safety checks for enum-like fields
-    _type = _typeOptions.contains(widget.beneficiary.type) ? widget.beneficiary.type : 'Normal';
+    _type = (widget.beneficiary.type == 'Elderly' || _typeOptionsBase.contains(widget.beneficiary.type)) ? widget.beneficiary.type : 'Normal';
     _gender = _genderOptions.contains(widget.beneficiary.gender) ? widget.beneficiary.gender : 'Male';
     _status = _statusOptions.contains(widget.beneficiary.status) ? widget.beneficiary.status : 'Active';
     // Ensure numberOfUnits is valid - if not in options, use custom
@@ -19513,6 +19385,7 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
     _customUnitsController.dispose();
     // Dispose FocusNodes
     _nfcCodeFocusNode.dispose();
+    _nfcReferenceFocusNode.dispose();
     super.dispose();
   }
 
@@ -20395,8 +20268,8 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
           
           if (parsedData['birthDate'] != null) {
             _birthDate = parsedData['birthDate'] as DateTime;
-            // Auto-detect Elderly if birth date is before January 1, 1965
-            final elderlyThreshold = DateTime(1965, 1, 1);
+            // Auto-detect Elderly if birth date is before 1970
+            final elderlyThreshold = DateTime(1970, 1, 1);
             if (_birthDate!.isBefore(elderlyThreshold)) {
               _type = 'Elderly';
             }
@@ -20715,9 +20588,9 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                   ],
                 ),
                 const SizedBox(height: 24),
-                _buildLabel('Type *'),
+                _buildLabel(AppLanguage.translate('Priority type *')),
                 const SizedBox(height: 8),
-                _buildDropdown(_type, _typeOptions, (value) => setState(() => _type = value ?? 'Normal')),
+                _buildDropdown(_type, [..._typeOptionsBase, if (_type == 'Elderly') 'Elderly'], (value) => setState(() => _type = value ?? 'Normal')),
                 const SizedBox(height: 24),
                 _buildLabel('Gender *'),
                 const SizedBox(height: 8),
@@ -20954,12 +20827,12 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Code'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcCodeController,
                         focusNode: _nfcCodeFocusNode,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _nfcReferenceFocusNode.requestFocus(),
                         decoration: InputDecoration(
                           hintText: AppLanguage.translate('Enter NFC code'),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -21028,8 +20901,6 @@ class _BeneficiaryDetailsScreenState extends State<BeneficiaryDetailsScreen> wit
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    _buildLabel('NFC Reference'),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         controller: _nfcReferenceController,
@@ -21875,6 +21746,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   bool _isNFCScanning = false;
   final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _scrollToTargetKey = GlobalKey();
   String? _lastProcessedTagId; // Track last processed tag to prevent duplicate searches
   DateTime? _lastTagDetectionTime; // Track last tag detection time
   static const Duration _tagDetectionCooldown = Duration(milliseconds: 1500); // Cooldown period
@@ -21912,10 +21784,19 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
 
     // Multi Day beneficiaries are saved under a day-specific queue key:
     //   <queue.name>_YYYY-MM-DD
-    // Multi Day navigation creates a "dayQueue" with fromDate/toDate set to that day,
-    // so we can derive the correct key from widget.queue.fromDate.
+    // When today is within the queue's date range, use today so the list matches issued tickets for today.
+    // When opening a specific day from the calendar, widget.queue.fromDate is already that day.
     if (widget.queue.isMultiDay) {
-      final day = DateTime(widget.queue.fromDate.year, widget.queue.fromDate.month, widget.queue.fromDate.day);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final queueStart = DateTime(widget.queue.fromDate.year, widget.queue.fromDate.month, widget.queue.fromDate.day);
+      final queueEnd = DateTime(widget.queue.toDate.year, widget.queue.toDate.month, widget.queue.toDate.day);
+      final DateTime day;
+      if (today.compareTo(queueStart) >= 0 && today.compareTo(queueEnd) <= 0) {
+        day = today; // Today is within range: show today's beneficiaries (match issue screen)
+      } else {
+        day = queueStart; // Outside range or single-day view: use queue's fromDate
+      }
       final dayStr =
           '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
       _effectiveQueueName = '${widget.queue.name}_$dayStr';
@@ -21995,50 +21876,47 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           .map((doc) => BeneficiaryService.documentToBeneficiary(doc))
           .toList();
       
-      // For multi-day queues, also check queueHistory
-      if (widget.queue.isMultiDay) {
-        try {
-          final historyQuery = await FirebaseService.firestore
-              .collection('queueHistory')
-              .where('dayQueueName', isEqualTo: _effectiveQueueName)
-              .where('action', isEqualTo: 'issued')
-              .limit(500)
-              .get();
-          
-          final beneficiaryIdsFromHistory = historyQuery.docs
-              .map((doc) => doc.data()['beneficiaryId'] as String?)
-              .where((id) => id != null)
-              .cast<String>()
-              .toSet();
-          
-          // Get beneficiaries by IDs in batches (Firestore 'in' limit is 10)
-          if (beneficiaryIdsFromHistory.isNotEmpty) {
-            final idsList = beneficiaryIdsFromHistory.toList();
-            for (int i = 0; i < idsList.length; i += 10) {
-              final batch = idsList.skip(i).take(10).toList();
-              final batchQuery = await FirebaseService.firestore
-                  .collection('beneficiaries')
-                  .where(FieldPath.documentId, whereIn: batch)
-                  .where('status', isEqualTo: 'Active')
-                  .get();
-              
-              final batchBeneficiaries = batchQuery.docs
-                  .map((doc) => BeneficiaryService.documentToBeneficiary(doc))
-                  .toList();
-              
-              // Add to list, avoiding duplicates
-              final existingIds = queueBeneficiaries.map((b) => b.id).toSet();
-              for (var b in batchBeneficiaries) {
-                if (!existingIds.contains(b.id)) {
-                  queueBeneficiaries.add(b);
-                  existingIds.add(b.id);
-                }
+      // Also include beneficiaries who have an "issued" ticket for this queue in queueHistory
+      // (so they appear in this queue's list even if initialAssignedQueuePoint is another queue)
+      try {
+        final historyQuery = await FirebaseService.firestore
+            .collection('queueHistory')
+            .where('dayQueueName', isEqualTo: _effectiveQueueName)
+            .where('action', isEqualTo: 'issued')
+            .limit(500)
+            .get();
+        
+        final beneficiaryIdsFromHistory = historyQuery.docs
+            .map((doc) => doc.data()['beneficiaryId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toSet();
+        
+        if (beneficiaryIdsFromHistory.isNotEmpty) {
+          final idsList = beneficiaryIdsFromHistory.toList();
+          for (int i = 0; i < idsList.length; i += 10) {
+            final batch = idsList.skip(i).take(10).toList();
+            final batchQuery = await FirebaseService.firestore
+                .collection('beneficiaries')
+                .where(FieldPath.documentId, whereIn: batch)
+                .where('status', isEqualTo: 'Active')
+                .get();
+            
+            final batchBeneficiaries = batchQuery.docs
+                .map((doc) => BeneficiaryService.documentToBeneficiary(doc))
+                .toList();
+            
+            final existingIds = queueBeneficiaries.map((b) => b.id).toSet();
+            for (var b in batchBeneficiaries) {
+              if (!existingIds.contains(b.id)) {
+                queueBeneficiaries.add(b);
+                existingIds.add(b.id);
               }
             }
           }
-        } catch (e) {
-          print('Warning: Could not check queueHistory: $e');
         }
+      } catch (e) {
+        print('Warning: Could not check queueHistory: $e');
       }
       
       if (mounted) {
@@ -22085,8 +21963,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           if (totalAvailable != null) {
             final calculatedRemaining = totalAvailable - totalServed;
             if ((calculatedRemaining - currentRemaining).abs() > 1) {
-              // Only log if difference is significant (more than 1 unit)
-              print('ℹ️ Info: Current remaining from Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using Firebase value (may have been manually edited).');
+              // Only log if difference is significant (more than 1 unit) - use Firebase value
             }
             // Always use the Firebase value when explicitly set
           }
@@ -22097,8 +21974,6 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             _totalServedUnits = totalServed; // Cache for synchronous calculation
           });
           
-          print('📊 Available Units: Total Available=$totalAvailable, Total Served=$totalServed, Current Remaining=$currentRemaining');
-          print('📊 Queue data: numberOfAvailableUnits=${currentQueue.numberOfAvailableUnits}, totalAvailableUnits=${currentQueue.totalAvailableUnits}');
         }
       }
     } catch (e) {
@@ -22122,9 +21997,6 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         _queueUpdateSubscription = QueueService.getQueueStreamById(queueId).listen(
           (updatedQueue) {
             if (updatedQueue != null && mounted) {
-              print('🔄 Queue updated detected in serving screen: ${updatedQueue.name}');
-              print('🔄 New numberOfAvailableUnits: ${updatedQueue.numberOfAvailableUnits}, totalAvailableUnits: ${updatedQueue.totalAvailableUnits}');
-              
               // Update the state with the new queue data
               _updateQueueData(updatedQueue);
             }
@@ -22179,8 +22051,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       if (totalAvailable != null) {
         final calculatedRemaining = totalAvailable - totalServed;
         if ((calculatedRemaining - currentRemaining).abs() > 1) {
-          // Only warn if difference is more than 1 (allowing for minor discrepancies)
-          print('⚠️ Info: Current remaining from Firebase: $currentRemaining, Calculated: $calculatedRemaining. Using Firebase value (may have been manually edited).');
+          // Use Firebase value when difference is significant (may have been manually edited)
         }
         // Always use the Firebase value when it's explicitly set (trust the edit)
       }
@@ -22191,8 +22062,6 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           _totalAvailableUnits = totalAvailable;
           _totalServedUnits = totalServed;
         });
-        
-        print('✅ Queue data updated in serving screen: Available=$currentRemaining, Total=$totalAvailable, Served=$totalServed');
       }
     } catch (e) {
       print('❌ Error updating queue data: $e');
@@ -22756,18 +22625,15 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         });
         _scrollToBeneficiary(foundBeneficiary);
         
-        // Show warning if already served, otherwise show success
-        // Only show message if this is a new search value (prevent duplicate messages)
-        if (mounted && _lastSearchedValue != normalizedValue) {
+        // Show warning only if already served (no success popup on find)
+        if (mounted && _lastSearchedValue != normalizedValue && isAlreadyServed) {
           _lastSearchedValue = normalizedValue;
-          if (isAlreadyServed) {
-            _showMessageDialog(
-              'Warning: Beneficiary "${foundBeneficiary.name}" has already been fully served. Served: $currentUnitsTaken/$eligibleUnits ${widget.queue.unitName.toLowerCase()}.',
-              backgroundColor: Colors.orange,
-            );
-          } else {
-            _showMessageDialog('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}', backgroundColor: Colors.green);
-          }
+          _showMessageDialog(
+            'Warning: Beneficiary "${foundBeneficiary.name}" has already been fully served. Served: $currentUnitsTaken/$eligibleUnits ${widget.queue.unitName.toLowerCase()}.',
+            backgroundColor: Colors.orange,
+          );
+        } else if (mounted && _lastSearchedValue != normalizedValue) {
+          _lastSearchedValue = normalizedValue;
         }
       } else {
         // Clear selection if no match found
@@ -23050,9 +22916,6 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         _searchController.text = NFCHelper.maskNfcTagId(nfcCode);
       });
       _scrollToBeneficiary(foundBeneficiary);
-      
-      // Show success feedback
-      _showMessageDialog('${AppLanguage.translate('Beneficiary found')}: ${foundBeneficiary.name}', backgroundColor: Colors.green);
     } else {
       // Clear selection if not found
       setState(() {
@@ -23104,30 +22967,24 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   }
 
   void _scrollToBeneficiary(Beneficiary beneficiary) {
-    // Find the index of the beneficiary in the sorted list
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      
-      // Get the current sorted beneficiaries list
-      final sortedBeneficiaries = List<Beneficiary>.from(_localBeneficiaries);
-      if (_servingOption != 'noOrder') {
-        sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
-      }
-      
-      final index = sortedBeneficiaries.indexWhere((b) => b.id == beneficiary.id);
-      if (index >= 0) {
-        // Calculate approximate position (each item is roughly 100 pixels tall)
-        final itemHeight = 100.0;
-        final targetOffset = index * itemHeight;
-        
-        // Scroll to the beneficiary with animation
-        _scrollController.animateTo(
-          targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-          duration: const Duration(milliseconds: 300),
+    // After the list rebuilds with the selected beneficiary, scroll so the full card is visible
+    void tryScroll() {
+      if (!mounted) return;
+      final ctx = _scrollToTargetKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 350),
           curve: Curves.easeInOut,
+          alignment: 0.05, // Slight padding from top so full card is visible
         );
+        return;
       }
-    });
+      if (_scrollController.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
   }
 
   void _selectBeneficiary(Beneficiary beneficiary) {
@@ -23437,7 +23294,59 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     );
   }
 
-  Widget _buildServingBody(List<Beneficiary> sortedBeneficiaries, Set<String> servedBeneficiaryIds, [Map<String, int> daySpecificUnitsTaken = const {}]) {
+  /// Returns a map of beneficiaryId -> details of where they were already served on the effective day
+  /// in another queue of the same type (same unitName). Used to dim the Serve button on other queues
+  /// so the beneficiary can only take more units from the queue they already served at.
+  /// Same type + same day: once served at any queue, Serve is disabled elsewhere; enabled only at that queue.
+  Future<Map<String, Map<String, dynamic>?>> _getAlreadyServedInOtherQueueDetailsMap(List<Beneficiary> beneficiaries) async {
+    final map = <String, Map<String, dynamic>?>{};
+    if (beneficiaries.isEmpty) return map;
+    try {
+      // Use effective day: for multi-day queues use the day from _effectiveQueueName (QueueName_YYYY-MM-DD);
+      // for single-day use calendar today so "same day" = today.
+      DateTime dayStart;
+      if (widget.queue.isMultiDay && _effectiveQueueName.contains('_')) {
+        final dateStr = _effectiveQueueName.split('_').last;
+        final parsed = DateTime.tryParse(dateStr);
+        dayStart = parsed ?? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      } else {
+        final now = DateTime.now();
+        dayStart = DateTime(now.year, now.month, now.day);
+      }
+      final dayEnd = dayStart.add(const Duration(days: 1));
+      final dayStartTs = FirebaseService.dateTimeToTimestamp(dayStart);
+      final dayEndTs = FirebaseService.dateTimeToTimestamp(dayEnd);
+      final beneficiaryIds = beneficiaries.map((b) => b.id).toSet();
+      final snapshot = await FirebaseService.firestore
+          .collection('queueHistory')
+          .where('action', isEqualTo: 'served')
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final performedAt = data['performedAt'] as Timestamp?;
+        if (performedAt == null) continue;
+        if (performedAt.compareTo(dayStartTs) < 0 || performedAt.compareTo(dayEndTs) >= 0) continue;
+        final unitName = data['unitName'] as String?;
+        if (unitName == null || unitName != widget.queue.unitName) continue;
+        final beneficiaryId = data['beneficiaryId'] as String?;
+        if (beneficiaryId == null || !beneficiaryIds.contains(beneficiaryId)) continue;
+        final queueId = data['queueId'] as String?;
+        final dayQueueName = data['dayQueueName'] as String?;
+        if (queueId == widget.queue.name && (dayQueueName == null || dayQueueName == _effectiveQueueName)) continue;
+        if (dayQueueName == _effectiveQueueName) continue;
+        map[beneficiaryId] = {
+          'queueName': dayQueueName ?? queueId ?? '—',
+          'unitName': unitName,
+          'servedAt': performedAt,
+        };
+      }
+    } catch (e) {
+      print('Error building already-served-in-other-queue map: $e');
+    }
+    return map;
+  }
+
+  Widget _buildServingBody(List<Beneficiary> sortedBeneficiaries, Set<String> servedBeneficiaryIds, [Map<String, int> daySpecificUnitsTaken = const {}, Map<String, Map<String, dynamic>?>? alreadyServedInOtherQueueDetails]) {
     return Column(
         children: [
           // Dynamic Search Field Section
@@ -23581,9 +23490,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                   });
               }
               
-              // Build statistics section (cached computations)
-              // totalAvailableUnits is guaranteed to be non-null at this point
+              // Build statistics section from the same list that is displayed (sortedBeneficiaries)
               return _buildStatisticsSection(
+                sortedBeneficiaries,
+                servedBeneficiaryIds,
                 currentAvailableUnits,
                 totalAvailableUnits,
               );
@@ -23706,16 +23616,15 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                           final graceWindow = _calculateGraceWindow(sortedBeneficiaries, daySpecificUnitsTaken);
                           final graceStart = graceWindow['start']!;
                           final graceEnd = graceWindow['end']!;
-                          isWithinGraceRange = beneficiary.queueNumber! >= graceStart && beneficiary.queueNumber! <= graceEnd;
-                          if (!isWithinGraceRange && graceStart > 0) {
-                            graceRangeMessage = 'Current window: ${graceStart}-${graceEnd} only';
+                          // Allow anyone in the window OR with queue number before the window (e.g. skipped / late)
+                          isWithinGraceRange = beneficiary.queueNumber! <= graceEnd;
+                          if (!isWithinGraceRange && graceEnd > 0) {
+                            graceRangeMessage = 'Can serve up to #$graceEnd only';
                           }
                         }
                       }
                       
-                      return RepaintBoundary(
-                        key: ValueKey('beneficiary_${beneficiary.id}'),
-                        child: Card(
+                      final cardContent = Card(
                           clipBehavior: Clip.antiAlias, // Better performance
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           elevation: isSelected ? 8 : 4,
@@ -23876,40 +23785,83 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                                       color: Colors.blue,
                                     ),
                                     const SizedBox(width: 16),
-                                    Builder(
-                                      builder: (context) {
-                                        // Check if this beneficiary is next in queue order
-                                        final isNextInQueue = _isNextInQueueOrder(beneficiary);
-                                        final isButtonDisabled = isServing || !isWithinGraceRange || !isNextInQueue;
-                                        
-                                        return ElevatedButton(
-                                          onPressed: isButtonDisabled ? null : () {
-                                        final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
-                                        if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
-                                          _serveBeneficiary(beneficiary, units);
-                                        }
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                            backgroundColor: isButtonDisabled ? Colors.grey : Colors.blue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        minimumSize: const Size(80, 40),
-                                      ),
-                                      child: isServing
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    Expanded(
+                                      child: Builder(
+                                        builder: (context) {
+                                          // Already served today in another queue of same type: show details and prevent serve (do not remove from this list)
+                                          final otherQueueDetails = alreadyServedInOtherQueueDetails?[beneficiary.id];
+                                          final alreadyServedElsewhere = otherQueueDetails != null;
+                                          String? otherQueueMessage;
+                                          if (alreadyServedElsewhere) {
+                                            final qName = otherQueueDetails['queueName'] as String? ?? '—';
+                                            final servedAtRaw = otherQueueDetails['servedAt'];
+                                            if (servedAtRaw is Timestamp) {
+                                              final d = servedAtRaw.toDate();
+                                              otherQueueMessage = 'Already served at: $qName on ${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                                            } else {
+                                              otherQueueMessage = 'Already served at: $qName';
+                                            }
+                                          }
+                                          // Check if this beneficiary is next in queue order
+                                          final isNextInQueue = _isNextInQueueOrder(beneficiary);
+                                          final isButtonDisabled = isServing || !isWithinGraceRange || !isNextInQueue || alreadyServedElsewhere;
+                                          
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              if (alreadyServedElsewhere && otherQueueMessage != null)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(bottom: 6),
+                                                  child: Text(
+                                                    otherQueueMessage,
+                                                    style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
+                                                  ),
+                                                ),
+                                              ElevatedButton(
+                                              onPressed: isButtonDisabled ? (alreadyServedElsewhere ? () {
+                                                final qName = otherQueueDetails!['queueName'] as String? ?? '—';
+                                                final uName = otherQueueDetails['unitName'] as String? ?? widget.queue.unitName;
+                                                String servedAtStr = '—';
+                                                final servedAtRaw = otherQueueDetails['servedAt'];
+                                                if (servedAtRaw is Timestamp) {
+                                                  final d = servedAtRaw.toDate();
+                                                  servedAtStr = '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                                                }
+                                                _showMessageDialog(
+                                                  'This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue of the same type.\n\nQueue: $qName\nUnit: $uName\nServed at: $servedAtStr\n\nCannot serve the same type again on the same day.',
+                                                  backgroundColor: Colors.red,
+                                                );
+                                              } : null) : () {
+                                                final units = _unitsToServe[beneficiary.id] ?? maxUnitsToServe;
+                                                if (units > 0 && units <= remainingUnits && units <= _availableUnits) {
+                                                  _serveBeneficiary(beneficiary, units);
+                                                }
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: isButtonDisabled ? Colors.grey : Colors.blue,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                minimumSize: const Size(80, 40),
                                               ),
-                                            )
-                                          : Text(
-                                              AppLanguage.translate('Serve'),
-                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                              child: isServing
+                                                  ? const SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                      ),
+                                                    )
+                                                  : Text(
+                                                      AppLanguage.translate('Serve'),
+                                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                                    ),
                                             ),
+                                          ],
                                         );
                                       },
+                                    ),
                                     ),
                                   ],
                                 ),
@@ -23917,8 +23869,14 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                               ),
                           ],
                         ),
-                      ),
-                    );
+                      );
+                      final wrapped = RepaintBoundary(
+                        key: ValueKey('beneficiary_${beneficiary.id}'),
+                        child: cardContent,
+                      );
+                      return isSelected
+                          ? KeyedSubtree(key: _scrollToTargetKey, child: wrapped)
+                          : wrapped;
                     },
                   ),
           ),
@@ -23970,31 +23928,17 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
     Navigator.pop(context);
   }
 
-  /// Build statistics section widget (extracted for performance optimization)
-  Widget _buildStatisticsSection(int currentAvailable, int totalAvailable) {
-    // Compute sorted beneficiaries and served IDs from local data
-    final sortedBeneficiaries = List<Beneficiary>.from(_localBeneficiaries);
-    if (_servingOption != 'noOrder') {
-      sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
-    }
-    
-    // Get served beneficiary IDs from local beneficiaries
-    final servedBeneficiaryIds = sortedBeneficiaries
-        .where((b) {
-          final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
-          final dayUnitsTaken = widget.queue.isMultiDay 
-              ? (b.unitsTaken) // For multi-day, we'd need day-specific calculation, but using unitsTaken as fallback
-              : b.unitsTaken;
-          return dayUnitsTaken >= eligibleUnits;
-        })
-        .map((b) => b.id)
-        .toSet();
-    
-    // Cache expensive computations to avoid recalculating on every rebuild
-    final servedCount = sortedBeneficiaries.where((b) => servedBeneficiaryIds.contains(b.id)).length;
-    final attendeesCount = _localBeneficiaries.where((b) => 
-      b.initialAssignedQueuePoint == _effectiveQueueName
-    ).length;
+  /// Build statistics section widget. Uses the same list as the displayed list so counts match.
+  Widget _buildStatisticsSection(
+    List<Beneficiary> displayedList,
+    Set<String> servedBeneficiaryIds,
+    int currentAvailable,
+    int totalAvailable,
+  ) {
+    final servedCount = displayedList.where((b) => servedBeneficiaryIds.contains(b.id)).length;
+    final withTicketCount = displayedList.where((b) => b.queueNumber != null).length;
+    final noTicketCount = displayedList.where((b) => b.queueNumber == null).length;
+    final attendeesDisplay = noTicketCount > 0 ? '$withTicketCount + $noTicketCount' : '$withTicketCount';
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -24013,7 +23957,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           Expanded(
             child: _buildStatCard(
               'Attendees',
-              '$attendeesCount',
+              attendeesDisplay,
               Icons.people,
               Colors.blue,
             ),
@@ -24137,13 +24081,13 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         }
         
         final graceCount = _servingOption == 'grace5' ? 5 : 10;
-        // Start from current (first unserved): e.g. with 13 beneficiaries, grace 10 = 1..10 (current #1 included)
+        // Start from current (first unserved): grace window is graceStart..graceEnd. Allow anyone at or before the window (queueNumber <= graceEnd).
         final graceStart = highestServedQueueNumber + 1;
         final graceEnd = graceStart + graceCount - 1;
         
-        if (beneficiary.queueNumber! < graceStart || beneficiary.queueNumber! > graceEnd) {
+        if (beneficiary.queueNumber! > graceEnd) {
           if (mounted) {
-            _showMessageDialog('Grace ${graceCount} mode: Can only serve beneficiaries ${graceStart} to ${graceEnd} (current window). Queue number ${beneficiary.queueNumber} is outside.', backgroundColor: Colors.orange);
+            _showMessageDialog('Grace $graceCount mode: Can only serve beneficiaries with queue number up to $graceEnd. Queue number ${beneficiary.queueNumber} is after the current window.', backgroundColor: Colors.orange);
           }
           // Remove from serving in progress
           setState(() {
@@ -24204,13 +24148,20 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       }
     }
     
-    // Check if beneficiary was already served today in another queue with the same unit type
+    // Check if beneficiary was already served on the effective day in another queue with the same unit type
     // NOTE: Beneficiaries can take tickets in multiple queues of the same type, but can only be served
     // in ONE queue of that type per day. This check prevents serving in multiple queues of same type on same day.
     try {
-      final today = DateTime.now();
-      final todayStart = DateTime(today.year, today.month, today.day);
-      final todayEnd = todayStart.add(const Duration(days: 1));
+      final DateTime dayStart;
+      if (widget.queue.isMultiDay && _effectiveQueueName.contains('_')) {
+        final dateStr = _effectiveQueueName.split('_').last;
+        final parsed = DateTime.tryParse(dateStr);
+        dayStart = parsed ?? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      } else {
+        final now = DateTime.now();
+        dayStart = DateTime(now.year, now.month, now.day);
+      }
+      final dayEnd = dayStart.add(const Duration(days: 1));
       
       // Use a simpler query that doesn't require complex indexes - query by beneficiary and action only
       // Then filter by date and unitName in memory
@@ -24226,14 +24177,26 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         print('Error querying queueHistory: $e');
         // If query fails, try using ServingTransactionService as fallback
         try {
-          final wasServed = await ServingTransactionService.wasBeneficiaryServedTodayInOtherQueue(
+          final otherQueueDetails = await ServingTransactionService.getFirstServedTodayInOtherQueueDetails(
             currentBeneficiary.id,
             _effectiveQueueName,
             widget.queue.unitName,
           );
-          if (wasServed) {
+          if (otherQueueDetails != null) {
             if (mounted) {
-              _showMessageDialog('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue. Cannot serve the same type again on the same day.', backgroundColor: Colors.red);
+              final qName = otherQueueDetails['queueName'] as String? ?? '—';
+              final uName = otherQueueDetails['unitName'] as String? ?? widget.queue.unitName;
+              final servedAtRaw = otherQueueDetails['servedAt'];
+              String servedAtStr = '—';
+              if (servedAtRaw is Timestamp) {
+                final d = servedAtRaw.toDate();
+                servedAtStr = '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+              }
+              final details = 'Queue: $qName\nUnit: $uName\nServed at: $servedAtStr';
+              _showMessageDialog(
+                'This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue of the same type.\n\n$details\n\nCannot serve the same type again on the same day.',
+                backgroundColor: Colors.red,
+              );
             }
             return;
           }
@@ -24247,19 +24210,19 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         return;
       }
       
-      // Filter results in memory by date and unit type
-      final todayTimestampStart = FirebaseService.dateTimeToTimestamp(todayStart);
-      final todayTimestampEnd = FirebaseService.dateTimeToTimestamp(todayEnd);
+      // Filter results in memory by date and unit type (effective day for multi-day, today for single-day)
+      final dayTimestampStart = FirebaseService.dateTimeToTimestamp(dayStart);
+      final dayTimestampEnd = FirebaseService.dateTimeToTimestamp(dayEnd);
       
       // Check each served record to see if it's from a different queue with the same unit type
       for (var doc in servedHistoryQuery.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final performedAt = data['performedAt'] as Timestamp?;
         
-        // Filter by date in memory
+        // Filter by effective day in memory
         if (performedAt == null) continue;
-        if (performedAt.compareTo(todayTimestampStart) < 0 || performedAt.compareTo(todayTimestampEnd) >= 0) {
-          continue; // Not today
+        if (performedAt.compareTo(dayTimestampStart) < 0 || performedAt.compareTo(dayTimestampEnd) >= 0) {
+          continue; // Not on effective day
         }
         
         final servedQueueId = data['queueId'] as String?;
@@ -24274,6 +24237,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         // Check if unitName matches (either from stored field or by querying the queue)
         bool unitNameMatches = false;
         String? servedQueueName;
+        Queue? servedQueueForDetails;
         
         if (servedUnitName != null && servedUnitName == widget.queue.unitName) {
           // UnitName is stored and matches
@@ -24287,6 +24251,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               final servedQueue = await QueueService.getQueueById(servedQueueIdFromFirestore);
               if (servedQueue != null) {
                 servedQueueName = servedQueue.name;
+                servedQueueForDetails = servedQueue;
                 if (servedQueue.unitName == widget.queue.unitName) {
                   unitNameMatches = true;
                 }
@@ -24300,9 +24265,25 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
         }
         
         if (unitNameMatches && servedQueueName != null) {
-          // Beneficiary was already served today in another queue with the same unit type
+          // Fetch queue details for popup if not already available
+          if (servedQueueForDetails == null && servedQueueId != null) {
+            try {
+              final idFromName = await QueueService.getQueueIdByName(servedQueueId);
+              if (idFromName != null) {
+                servedQueueForDetails = await QueueService.getQueueById(idFromName);
+              }
+            } catch (_) {}
+          }
+          final DateTime servedAt = performedAt.toDate();
+          final String servedAtStr = '${servedAt.day}/${servedAt.month}/${servedAt.year} ${servedAt.hour.toString().padLeft(2, '0')}:${servedAt.minute.toString().padLeft(2, '0')}';
+          final String queueTypeStr = servedQueueForDetails?.queueType ?? '—';
+          final String unitNameStr = servedQueueForDetails?.unitName ?? widget.queue.unitName;
+          final String details = 'Queue: $servedQueueName\nType: $queueTypeStr\nUnit: $unitNameStr\nServed at: $servedAtStr';
           if (mounted) {
-            _showMessageDialog('This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in queue "$servedQueueName". Cannot serve the same type again on the same day.', backgroundColor: Colors.red);
+            _showMessageDialog(
+              'This beneficiary was already served ${widget.queue.unitName.toLowerCase()} today in another queue of the same type.\n\n$details\n\nCannot serve the same type again on the same day.',
+              backgroundColor: Colors.red,
+            );
           }
           return;
         }
@@ -24402,8 +24383,8 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       // Get current admin ID for servedBy field
       final servedBy = AdminService.currentAdminId ?? 'unknown';
       
-      // Update beneficiary in Firebase with exact unitsTaken value
-      // This ensures the "Eligible for X/Y meals" label updates correctly
+      // Update beneficiary in Firebase with exact unitsTaken value only (do NOT change initialAssignedQueuePoint).
+      // This keeps the beneficiary visible in other queues where they have a ticket; serving is blocked there via popup.
       final updatedBeneficiary = currentBeneficiary.copyWith(
         unitsTaken: newUnitsTaken,
         isServed: newUnitsTaken >= eligibleUnits,
@@ -24411,7 +24392,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       
       print('🔄 Updating beneficiary ${currentBeneficiary.id}: unitsTaken from ${currentBeneficiary.unitsTaken} to $newUnitsTaken');
       
-      // Update beneficiary with new unitsTaken and isServed status
+      // Update beneficiary with new unitsTaken and isServed status only (preserves initialAssignedQueuePoint for other queues)
       await BeneficiaryService.updateBeneficiary(currentBeneficiary.id, updatedBeneficiary);
       
       print('✅ Beneficiary updated in Firebase: unitsTaken = $newUnitsTaken, isServed = ${updatedBeneficiary.isServed}');
@@ -24569,8 +24550,7 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
           dayUnitsAfterServing = updatedBeneficiary.unitsTaken;
         }
         
-        _showMessageDialog('${units} unit(s) served successfully. Eligible: $dayUnitsAfterServing/$eligibleUnits ${widget.queue.unitName.toLowerCase()}', backgroundColor: Colors.green);
-        
+        // Success popup removed for better UX during repeated serving
         print('✅ UI updated: beneficiary ${currentBeneficiary.name} now shows $dayUnitsAfterServing/$eligibleUnits');
       }
     } catch (e) {
@@ -24631,20 +24611,21 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
               
               // Get beneficiaries who either:
               // 1. Have initialAssignedQueuePoint matching this day (with or without ticket), OR
-              // 2. Have a queue number in history for this day
+              // 2. Have a queue number in history for this queue/day (including when assigned to another queue)
               final filteredBeneficiaries = allAreaBeneficiaries.where((b) {
-                // Direct assignment (includes beneficiaries without tickets)
                 if (b.initialAssignedQueuePoint == _effectiveQueueName) {
-                  return true; // Include even if they don't have a queue number (without tickets)
+                  return true;
                 }
-                // Check if queue point is for this multi-day queue
-                if (b.initialAssignedQueuePoint != null && 
+                // Include anyone with an issued ticket for THIS queue (queueHistory), even if
+                // initialAssignedQueuePoint is for another queue (e.g. B15) so they appear in both B15 and B6 lists
+                if (beneficiaryIdsFromHistory.contains(b.id)) {
+                  return true;
+                }
+                if (b.initialAssignedQueuePoint != null &&
                     b.initialAssignedQueuePoint!.isNotEmpty &&
-                    b.initialAssignedQueuePoint!.startsWith(queuePrefix)) {
-                  // Check if they have a queue number in history for this specific day
-                  if (beneficiaryIdsFromHistory.contains(b.id)) {
-                    return true;
-                  }
+                    b.initialAssignedQueuePoint!.startsWith(queuePrefix) &&
+                    beneficiaryIdsFromHistory.contains(b.id)) {
+                  return true;
                 }
                 return false;
               }).toList();
@@ -24857,7 +24838,15 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                         ),
                       ],
                     ),
-                    body: _buildServingBody(filteredBeneficiaries, fullyServedBeneficiaryIds, daySpecificUnitsTaken),
+                    body: FutureBuilder<Map<String, Map<String, dynamic>?>>(
+                      future: _getAlreadyServedInOtherQueueDetailsMap(filteredBeneficiaries),
+                      builder: (context, snap) => _buildServingBody(
+                        filteredBeneficiaries,
+                        fullyServedBeneficiaryIds,
+                        daySpecificUnitsTaken,
+                        snap.data,
+                      ),
+                    ),
                   );
                 },
               );
@@ -24870,13 +24859,10 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
       return StreamBuilder<List<Beneficiary>>(
         stream: BeneficiaryService.getBeneficiariesByQueueName(_effectiveQueueName),
         builder: (context, snapshot) {
-          // Use stream data if available, otherwise use local list filtered by queue
-          // Filter local list to only include beneficiaries for this queue
-          final filteredLocalBeneficiaries = _localBeneficiaries
-              .where((b) => b.initialAssignedQueuePoint != null && 
-                     b.initialAssignedQueuePoint!.isNotEmpty &&
-                     b.initialAssignedQueuePoint == _effectiveQueueName)
-              .toList();
+          // Use stream data if available, otherwise use local list. For single-day, _localBeneficiaries
+          // is already loaded by _loadQueueBeneficiaries to include everyone with an "issued" ticket
+          // for this queue (initialAssignedQueuePoint match OR queueHistory issued), so use it in full.
+          final filteredLocalBeneficiaries = _localBeneficiaries;
           List<Beneficiary> currentBeneficiaries = filteredLocalBeneficiaries;
           
           if (snapshot.hasData) {
@@ -24929,149 +24915,177 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             sortedBeneficiaries.sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
           }
 
-          // For non-multi-day queues, only mark as served if they've received full eligible units
-          final servedBeneficiaryIds = <String>{};
-          for (var b in sortedBeneficiaries) {
-            final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
-            if (b.isServed && b.unitsTaken >= eligibleUnits) {
-              servedBeneficiaryIds.add(b.id);
-            }
-          }
-
           // Grace 5 and Grace 10 are serving modes, not filters - show all beneficiaries
-          // The serving restriction will be enforced in _serveBeneficiary method
           List<Beneficiary> filteredBeneficiaries = sortedBeneficiaries;
 
           final title = widget.queue.isMultiDay
               ? 'Serving: ${widget.queue.name} (${widget.queue.fromDate.day}/${widget.queue.fromDate.month}/${widget.queue.fromDate.year})'
               : 'Serving: ${widget.queue.name}';
 
-          return Scaffold(
-              appBar: AppBar(
-                title: Text(title),
-                backgroundColor: const Color(0xFF81CF01),
-                foregroundColor: Colors.white,
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.settings),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Serving Options'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ListTile(
-                                leading: _servingOption == 'queueOrder'
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
-                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
-                                title: Text(
-                                  'Queue order sequence',
-                                  style: TextStyle(
-                                    fontWeight: _servingOption == 'queueOrder' ? FontWeight.bold : FontWeight.normal,
-                                    color: _servingOption == 'queueOrder' ? const Color(0xFF81CF01) : Colors.black87,
+          // For single-day queues: use queueHistory (served for THIS queue only) so a beneficiary
+          // served in another queue does not show as "Served" here
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseService.firestore
+                .collection('queueHistory')
+                .where('dayQueueName', isEqualTo: _effectiveQueueName)
+                .where('action', isEqualTo: 'served')
+                .snapshots(),
+            builder: (context, servedSnapshot) {
+              final queueSpecificUnitsTaken = <String, int>{};
+              if (servedSnapshot.hasData) {
+                for (var doc in servedSnapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final beneficiaryId = data['beneficiaryId'] as String?;
+                  final unitsServed = data['unitsServed'] as int? ?? 0;
+                  if (beneficiaryId != null) {
+                    queueSpecificUnitsTaken[beneficiaryId] =
+                        (queueSpecificUnitsTaken[beneficiaryId] ?? 0) + unitsServed;
+                  }
+                }
+              }
+              final servedBeneficiaryIds = <String>{};
+              for (var b in sortedBeneficiaries) {
+                final eligibleUnits = int.tryParse(b.numberOfUnits) ?? 1;
+                final queueUnits = queueSpecificUnitsTaken[b.id] ?? 0;
+                if (queueUnits >= eligibleUnits) servedBeneficiaryIds.add(b.id);
+              }
+
+              return Scaffold(
+                  appBar: AppBar(
+                    title: Text(title),
+                    backgroundColor: const Color(0xFF81CF01),
+                    foregroundColor: Colors.white,
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.settings),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Serving Options'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListTile(
+                                    leading: _servingOption == 'queueOrder'
+                                        ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                    title: Text(
+                                      'Queue order sequence',
+                                      style: TextStyle(
+                                        fontWeight: _servingOption == 'queueOrder' ? FontWeight.bold : FontWeight.normal,
+                                        color: _servingOption == 'queueOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                      ),
+                                    ),
+                                    tileColor: _servingOption == 'queueOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: _servingOption == 'queueOrder'
+                                          ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                          : BorderSide.none,
+                                    ),
+                                    onTap: () => _handleServingOption('queueOrder'),
                                   ),
-                                ),
-                                tileColor: _servingOption == 'queueOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: _servingOption == 'queueOrder'
-                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
-                                      : BorderSide.none,
-                                ),
-                                onTap: () => _handleServingOption('queueOrder'),
-                              ),
-                              ListTile(
-                                leading: _servingOption == 'grace5'
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
-                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
-                                title: Text(
-                                  'Grace 5',
-                                  style: TextStyle(
-                                    fontWeight: _servingOption == 'grace5' ? FontWeight.bold : FontWeight.normal,
-                                    color: _servingOption == 'grace5' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ListTile(
+                                    leading: _servingOption == 'grace5'
+                                        ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                    title: Text(
+                                      'Grace 5',
+                                      style: TextStyle(
+                                        fontWeight: _servingOption == 'grace5' ? FontWeight.bold : FontWeight.normal,
+                                        color: _servingOption == 'grace5' ? const Color(0xFF81CF01) : Colors.black87,
+                                      ),
+                                    ),
+                                    tileColor: _servingOption == 'grace5' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: _servingOption == 'grace5'
+                                          ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                          : BorderSide.none,
+                                    ),
+                                    onTap: () => _handleServingOption('grace5'),
                                   ),
-                                ),
-                                tileColor: _servingOption == 'grace5' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: _servingOption == 'grace5'
-                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
-                                      : BorderSide.none,
-                                ),
-                                onTap: () => _handleServingOption('grace5'),
-                              ),
-                              ListTile(
-                                leading: _servingOption == 'grace10'
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
-                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
-                                title: Text(
-                                  'Grace 10',
-                                  style: TextStyle(
-                                    fontWeight: _servingOption == 'grace10' ? FontWeight.bold : FontWeight.normal,
-                                    color: _servingOption == 'grace10' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ListTile(
+                                    leading: _servingOption == 'grace10'
+                                        ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                    title: Text(
+                                      'Grace 10',
+                                      style: TextStyle(
+                                        fontWeight: _servingOption == 'grace10' ? FontWeight.bold : FontWeight.normal,
+                                        color: _servingOption == 'grace10' ? const Color(0xFF81CF01) : Colors.black87,
+                                      ),
+                                    ),
+                                    tileColor: _servingOption == 'grace10' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: _servingOption == 'grace10'
+                                          ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                          : BorderSide.none,
+                                    ),
+                                    onTap: () => _handleServingOption('grace10'),
                                   ),
-                                ),
-                                tileColor: _servingOption == 'grace10' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: _servingOption == 'grace10'
-                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
-                                      : BorderSide.none,
-                                ),
-                                onTap: () => _handleServingOption('grace10'),
-                              ),
-                              ListTile(
-                                leading: _servingOption == 'noOrder'
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
-                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
-                                title: Text(
-                                  'No Order',
-                                  style: TextStyle(
-                                    fontWeight: _servingOption == 'noOrder' ? FontWeight.bold : FontWeight.normal,
-                                    color: _servingOption == 'noOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ListTile(
+                                    leading: _servingOption == 'noOrder'
+                                        ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                    title: Text(
+                                      'No Order',
+                                      style: TextStyle(
+                                        fontWeight: _servingOption == 'noOrder' ? FontWeight.bold : FontWeight.normal,
+                                        color: _servingOption == 'noOrder' ? const Color(0xFF81CF01) : Colors.black87,
+                                      ),
+                                    ),
+                                    tileColor: _servingOption == 'noOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: _servingOption == 'noOrder'
+                                          ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                          : BorderSide.none,
+                                    ),
+                                    onTap: () => _handleServingOption('noOrder'),
                                   ),
-                                ),
-                                tileColor: _servingOption == 'noOrder' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: _servingOption == 'noOrder'
-                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
-                                      : BorderSide.none,
-                                ),
-                                onTap: () => _handleServingOption('noOrder'),
-                              ),
-                              ListTile(
-                                leading: _servingOption == 'withoutTickets'
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
-                                    : const Icon(Icons.circle_outlined, color: Colors.grey),
-                                title: Text(
-                                  'Without Tickets',
-                                  style: TextStyle(
-                                    fontWeight: _servingOption == 'withoutTickets' ? FontWeight.bold : FontWeight.normal,
-                                    color: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01) : Colors.black87,
+                                  ListTile(
+                                    leading: _servingOption == 'withoutTickets'
+                                        ? const Icon(Icons.check_circle, color: Color(0xFF81CF01))
+                                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                                    title: Text(
+                                      'Without Tickets',
+                                      style: TextStyle(
+                                        fontWeight: _servingOption == 'withoutTickets' ? FontWeight.bold : FontWeight.normal,
+                                        color: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01) : Colors.black87,
+                                      ),
+                                    ),
+                                    tileColor: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: _servingOption == 'withoutTickets'
+                                          ? const BorderSide(color: Color(0xFF81CF01), width: 2)
+                                          : BorderSide.none,
+                                    ),
+                                    onTap: () => _handleServingOption('withoutTickets'),
                                   ),
-                                ),
-                                tileColor: _servingOption == 'withoutTickets' ? const Color(0xFF81CF01).withOpacity(0.1) : null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: _servingOption == 'withoutTickets'
-                                      ? const BorderSide(color: Color(0xFF81CF01), width: 2)
-                                      : BorderSide.none,
-                                ),
-                                onTap: () => _handleServingOption('withoutTickets'),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              body: _buildServingBody(filteredBeneficiaries, servedBeneficiaryIds, {}),
-            );
+                  body: FutureBuilder<Map<String, Map<String, dynamic>?>>(
+                    future: _getAlreadyServedInOtherQueueDetailsMap(filteredBeneficiaries),
+                    builder: (context, snap) => _buildServingBody(
+                      filteredBeneficiaries,
+                      servedBeneficiaryIds,
+                      queueSpecificUnitsTaken,
+                      snap.data,
+                    ),
+                  ),
+                );
+            },
+          );
         },
       );
     }
@@ -25139,33 +25153,103 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     return queue.name;
   }
 
-  // Get current queue number from Firebase
+  /// Get next queue number atomically to prevent duplicate queue numbers when multiple issues happen at once.
+  /// Uses a Firestore counter document per queue (or day-queue) so each issue gets a unique number.
+  /// When this queue is not started (isStarted == false), clears counter and issued history for this queue so the first issuance gets 1.
   Future<int> _getCurrentQueueNumber() async {
     if (_selectedQueue == null) return 0;
     
-    // For Multi Day queues, require day selection
     if (_selectedQueue!.isMultiDay && _selectedDay == null) {
       return 0;
     }
     
+    final queueName = _selectedQueue!.isMultiDay && _selectedDay != null
+        ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
+        : _selectedQueue!.name;
+    
     try {
-      // Get all beneficiaries for this queue's distribution area
-      final beneficiaries = await BeneficiaryService.getBeneficiariesByArea(_selectedQueue!.distributionArea).first;
+      final counterId = queueName.replaceAll('/', '_');
+      final ref = FirebaseService.firestore.collection('queueCounters').doc(counterId);
+      final historyColl = FirebaseService.firestore.collection('queueHistory');
+
+      // When queue is not started, clear counter and all "issued" records for this queue so we start at 1
+      if (!_selectedQueue!.isStarted) {
+        await ref.delete();
+        const batchSize = 500;
+        while (true) {
+          final issuedSnap = await historyColl
+              .where('dayQueueName', isEqualTo: queueName)
+              .where('action', isEqualTo: 'issued')
+              .limit(batchSize)
+              .get();
+          if (issuedSnap.docs.isEmpty) break;
+          final batch = FirebaseService.firestore.batch();
+          for (final doc in issuedSnap.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } else {
+        // Queue already started: only remove stale counter if this queue has no issued tickets at all
+        final issuedSnap = await historyColl
+            .where('dayQueueName', isEqualTo: queueName)
+            .where('action', isEqualTo: 'issued')
+            .limit(1)
+            .get();
+        if (issuedSnap.docs.isEmpty) {
+          await ref.delete();
+        }
+      }
+
+      // When counter doc doesn't exist yet, get max from queueHistory (must be outside transaction - get() only accepts DocumentReference)
+      int maxFromHistory = 0;
+      final counterSnap = await ref.get();
+      if (!counterSnap.exists) {
+        final historySnap = await FirebaseService.firestore
+            .collection('queueHistory')
+            .where('dayQueueName', isEqualTo: queueName)
+            .where('action', isEqualTo: 'issued')
+            .get();
+        for (final doc in historySnap.docs) {
+          final n = doc.data()['queueNumber'] as int?;
+          if (n != null && n > maxFromHistory) maxFromHistory = n;
+        }
+      }
       
-      // Get the day-specific queue name
-      final queueName = _selectedQueue!.isMultiDay && _selectedDay != null
-          ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
-          : _selectedQueue!.name;
+      final nextNumber = await FirebaseService.firestore.runTransaction<int>((transaction) async {
+        final snapshot = await transaction.get(ref);
+        int current;
+        if (snapshot.exists && snapshot.data() != null) {
+          current = (snapshot.data()!['lastNumber'] as int?) ?? 0;
+        } else {
+          current = maxFromHistory;
+        }
+        final next = current + 1;
+        transaction.set(ref, {
+          'lastNumber': next,
+          'queueName': queueName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        return next;
+      });
       
-      // Filter by queue name and count those with queue numbers
-      final beneficiariesInQueue = beneficiaries
-          .where((b) => b.initialAssignedQueuePoint == queueName && b.queueNumber != null)
-          .length;
-      
-      return beneficiariesInQueue + 1;
+      return nextNumber;
     } catch (e) {
-      print('Error getting current queue number: $e');
-      return 1; // Default to 1 if error
+      print('Error getting next queue number (atomic): $e');
+      // Fallback: use count-based (may still produce duplicates under concurrency)
+      try {
+        final beneficiaries = await BeneficiaryService.getBeneficiariesByArea(_selectedQueue!.distributionArea).first;
+        final queueNameForCount = _selectedQueue!.isMultiDay && _selectedDay != null
+            ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
+            : _selectedQueue!.name;
+        final count = beneficiaries
+            .where((b) => b.initialAssignedQueuePoint == queueNameForCount && b.queueNumber != null)
+            .length;
+        return count + 1;
+      } catch (e2) {
+        print('Fallback queue number failed: $e2');
+        return 1;
+      }
     }
   }
 
@@ -25591,12 +25675,12 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       bool hasTimeoutError = false; // Track if any timeout occurred
 
       // Search based on selected verification method - optimized with timeouts
-      // NFC searches get longer timeout (1000ms) to handle cold start and first query delays
+      // NFC searches use 8s timeout to allow Firestore cold start and network latency
       if (_selectedVerificationMethod == 0) {
         // NFC method - search by NFC code (card) first, then by NFC reference
         try {
           foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-              .timeout(const Duration(milliseconds: 1000)); // Increased timeout for NFC
+              .timeout(const Duration(seconds: 8));
         } catch (e) {
           print('NFC card search timeout or error: $e');
           // Check if it's a timeout error
@@ -25606,7 +25690,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             try {
               await Future.delayed(const Duration(milliseconds: 300));
               foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                  .timeout(const Duration(milliseconds: 1000));
+                  .timeout(const Duration(seconds: 8));
               // If retry succeeds, clear timeout flag
               if (foundBeneficiary != null) {
                 hasTimeoutError = false;
@@ -25624,7 +25708,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         if (foundBeneficiary == null) {
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                .timeout(const Duration(milliseconds: 1000)); // Increased timeout for NFC
+                .timeout(const Duration(seconds: 8));
             // If found, clear timeout flag
             if (foundBeneficiary != null) {
               hasTimeoutError = false;
@@ -25638,7 +25722,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
                 foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                    .timeout(const Duration(milliseconds: 1000));
+                    .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
                   hasTimeoutError = false;
@@ -25691,10 +25775,10 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         }
         // 2. Check if it's NFC code (starts with "NFC_" or alphanumeric, length >= 8) or NFC reference
         else if (value.toUpperCase().startsWith('NFC_') || (value.length >= 8 && RegExp(r'^[A-Z0-9_]+$').hasMatch(value.toUpperCase()))) {
-          // Try NFC card first (increased timeout for NFC searches)
+          // Try NFC card first (8s timeout for Firestore)
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                .timeout(const Duration(milliseconds: 1000));
+                .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('NFC card search timeout or error: $e');
             // Check if it's a timeout error
@@ -25703,7 +25787,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
                 foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                    .timeout(const Duration(milliseconds: 1000));
+                    .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
                   hasTimeoutError = false;
@@ -25721,7 +25805,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           if (foundBeneficiary == null) {
             try {
               foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                  .timeout(const Duration(milliseconds: 1000));
+                  .timeout(const Duration(seconds: 8));
               // If found, clear timeout flag
               if (foundBeneficiary != null) {
                 hasTimeoutError = false;
@@ -25734,7 +25818,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 try {
                   await Future.delayed(const Duration(milliseconds: 300));
                   foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                      .timeout(const Duration(milliseconds: 1000));
+                      .timeout(const Duration(seconds: 8));
                   // If retry succeeds, clear timeout flag
                   if (foundBeneficiary != null) {
                     hasTimeoutError = false;
@@ -25755,7 +25839,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // Could be NFC reference (numeric, shorter)
           try {
             foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                .timeout(const Duration(milliseconds: 1000));
+                .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('NFC reference search timeout or error: $e');
             // Check if it's a timeout error
@@ -25764,7 +25848,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
                 foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
-                    .timeout(const Duration(milliseconds: 1000));
+                    .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
                   hasTimeoutError = false;
@@ -25782,7 +25866,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           if (foundBeneficiary == null) {
             try {
               foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                  .timeout(const Duration(milliseconds: 1000));
+                  .timeout(const Duration(seconds: 8));
               // If found, clear timeout flag
               if (foundBeneficiary != null) {
                 hasTimeoutError = false;
@@ -25795,7 +25879,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 try {
                   await Future.delayed(const Duration(milliseconds: 300));
                   foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
-                      .timeout(const Duration(milliseconds: 1000));
+                      .timeout(const Duration(seconds: 8));
                   // If retry succeeds, clear timeout flag
                   if (foundBeneficiary != null) {
                     hasTimeoutError = false;
@@ -25977,6 +26061,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       return;
     }
 
+    // Ensure one-time queue-assignments cleanup has run so the issued number is 1 (not 14) when appropriate
+    await _ensureQueueAssignmentsCleanupDone();
+
     // MANDATORY: Get the distribution area from the selected queue
     final queueDistributionArea = _selectedQueue!.distributionArea;
     
@@ -26015,7 +26102,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     // of the same type (e.g., multiple "Meals" queues), but they can only be served in ONE queue of that type per day.
     if (_selectedQueue!.isMultiDay) {
       try {
-        print('🔍 Checking queueHistory for beneficiary ${beneficiary.id}, dayQueueName: $queueName');
         final historyQuery = await FirebaseService.firestore
             .collection('queueHistory')
             .where('beneficiaryId', isEqualTo: beneficiary.id)
@@ -26023,8 +26109,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             .where('action', isEqualTo: 'issued')
             .limit(1)
             .get();
-        
-        print('🔍 QueueHistory query result: ${historyQuery.docs.length} documents found');
         
         if (historyQuery.docs.isNotEmpty) {
           final historyDoc = historyQuery.docs.first.data();
@@ -26041,7 +26125,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           }
           return;
         }
-        print('✅ No existing queue number found for this queue, proceeding with issuance');
       } catch (e) {
         print('⚠️ Error checking queue history: $e');
         // Check if it's an index error
@@ -26056,7 +26139,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             );
           }
         }
-        print('⚠️ Continuing with queue number issuance despite history check error');
         // Continue with normal flow if history check fails - allow issuance
       }
     }
@@ -26066,7 +26148,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     // of the same type (e.g., multiple "Meals" queues), but they can only be served in ONE queue of that type per day.
     if (!_selectedQueue!.isMultiDay) {
       try {
-        print('🔍 Checking queueHistory for beneficiary ${beneficiary.id}, queueName: $queueName');
         final historyQuery = await FirebaseService.firestore
             .collection('queueHistory')
             .where('beneficiaryId', isEqualTo: beneficiary.id)
@@ -26074,8 +26155,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             .where('action', isEqualTo: 'issued')
             .limit(1)
             .get();
-        
-        print('🔍 QueueHistory query result: ${historyQuery.docs.length} documents found');
         
         if (historyQuery.docs.isNotEmpty) {
           final historyDoc = historyQuery.docs.first.data();
@@ -26092,7 +26171,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           }
           return;
         }
-        print('✅ No existing queue number found for this queue, proceeding with issuance');
       } catch (e) {
         print('⚠️ Error checking queue history: $e');
         // Check if it's an index error
@@ -26107,15 +26185,12 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             );
           }
         }
-        print('⚠️ Continuing with queue number issuance despite history check error');
         // Continue with normal flow if history check fails - allow issuance
       }
     }
 
     // Auto-issue queue number
-    print('📝 Issuing queue number for day: $queueName');
     final queueNumber = await _getCurrentQueueNumber();
-    print('📝 Calculated queue number: $queueNumber');
     
     // For multi-day queues: Check if beneficiary already has a queue number for a different day
     // If so, don't update initialAssignedQueuePoint (keep them in original day's list)
@@ -26124,19 +26199,13 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     
     if (_selectedQueue!.isMultiDay) {
       final queueNamePrefix = '${_selectedQueue!.name}_';
-      print('🔍 Current beneficiary queue point: ${beneficiary.initialAssignedQueuePoint}');
       // Check if beneficiary's current queue point is for a different day of this same multi-day queue
       if (beneficiary.initialAssignedQueuePoint != null &&
           beneficiary.initialAssignedQueuePoint!.isNotEmpty &&
           beneficiary.initialAssignedQueuePoint!.startsWith(queueNamePrefix) && 
           beneficiary.initialAssignedQueuePoint != queueName) {
-        // Beneficiary already has a queue number for a different day
-        // Keep their original queue assignment to preserve them in that day's list
-        // This allows issuing queue numbers for multiple days independently
-        print('ℹ️ Beneficiary has queue number for different day, preserving original queue point: ${beneficiary.initialAssignedQueuePoint}');
+        // Beneficiary already has a queue number for a different day - preserve original queue point
         queuePointToUse = beneficiary.initialAssignedQueuePoint ?? '';
-      } else {
-        print('ℹ️ Setting queue point to current day: $queueName');
       }
     }
     
@@ -26202,11 +26271,19 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       }
       
       // Update beneficiary - for new queue assignments, don't carry over served status from other queues
-      // NOTE: When beneficiary has tickets in multiple queues, we only update initialAssignedQueuePoint for the first queue
-      // or if it's a different day of the same multi-day queue. This allows tracking tickets in multiple queues.
-      // The queueNumber field will be the latest issued number, but queueHistory tracks all tickets per queue.
+      // NOTE: When beneficiary has tickets in multiple queues, preserve initialAssignedQueuePoint so they
+      // appear in both queues' serving lists (each queue loads from queueHistory by issued for that queue).
       String? updatedQueuePoint = queuePointToUse;
-      if (!_selectedQueue!.isMultiDay) {
+      if (_selectedQueue!.isMultiDay) {
+        // For multi-day: if beneficiary already has a ticket in a *different* queue (different name prefix),
+        // preserve it so they stay visible in the first queue's serving list; this queue will show them via queueHistory.
+        final currentPrefix = '${_selectedQueue!.name}_';
+        if (beneficiary.initialAssignedQueuePoint != null &&
+            beneficiary.initialAssignedQueuePoint!.isNotEmpty &&
+            !beneficiary.initialAssignedQueuePoint!.startsWith(currentPrefix)) {
+          updatedQueuePoint = beneficiary.initialAssignedQueuePoint; // Different queue - preserve
+        }
+      } else {
         // For single-day queues, only update initialAssignedQueuePoint if beneficiary doesn't have one yet
         // or if they're getting a ticket in a different queue (allow multiple tickets in different queues)
         if (beneficiary.initialAssignedQueuePoint == null || beneficiary.initialAssignedQueuePoint!.isEmpty) {
@@ -26215,7 +26292,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // Different queue - keep original to allow multiple tickets, but track in queueHistory
           updatedQueuePoint = beneficiary.initialAssignedQueuePoint;
         }
-        // If same queue, keep it as is
       }
       
       await BeneficiaryService.updateBeneficiary(beneficiary.id, beneficiary.copyWith(
@@ -26260,13 +26336,19 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     // Update beneficiary with queue number and distribution area
     // Use the queue-specific served status and units taken calculated above
     // NOTE: For multiple tickets in different queues, initialAssignedQueuePoint is preserved from first queue
-    // but all tickets are tracked in queueHistory per queue
+    // so the beneficiary appears in both queues' serving lists (each queue loads from queueHistory).
     String? finalQueuePoint = queuePointToUse;
-    if (!_selectedQueue!.isMultiDay) {
+    if (_selectedQueue!.isMultiDay) {
+      final currentPrefix = '${_selectedQueue!.name}_';
+      if (beneficiary.initialAssignedQueuePoint != null &&
+          beneficiary.initialAssignedQueuePoint!.isNotEmpty &&
+          !beneficiary.initialAssignedQueuePoint!.startsWith(currentPrefix)) {
+        finalQueuePoint = beneficiary.initialAssignedQueuePoint; // Different queue - preserve
+      }
+    } else {
       if (beneficiary.initialAssignedQueuePoint == null || beneficiary.initialAssignedQueuePoint!.isEmpty) {
         finalQueuePoint = queueName; // First queue assignment
       } else if (beneficiary.initialAssignedQueuePoint != queueName) {
-        // Different queue - keep original to allow multiple tickets
         finalQueuePoint = beneficiary.initialAssignedQueuePoint;
       }
     }
@@ -26386,8 +26468,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Select Queue *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
@@ -26441,8 +26521,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                     ),
                     // Day selection for Multi Day queues (shows today, disabled)
                     if (_selectedQueue != null && _selectedQueue!.isMultiDay) ...[
-                      const SizedBox(height: 24),
-                      const Text('Select Day *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -26488,8 +26566,6 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
-                    const Text('Verify Beneficiary *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 12),
                     // Verification Method Selection Buttons
                     Row(
@@ -26522,7 +26598,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     // Dynamic Search Field
                     Row(
                       children: [

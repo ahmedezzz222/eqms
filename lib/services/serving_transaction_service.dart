@@ -209,6 +209,16 @@ class ServingTransactionService {
     String currentQueueName,
     String unitName,
   ) async {
+    final details = await getFirstServedTodayInOtherQueueDetails(beneficiaryId, currentQueueName, unitName);
+    return details != null;
+  }
+
+  /// Returns details of the first serving today in another queue of the same unit type, or null
+  static Future<Map<String, dynamic>?> getFirstServedTodayInOtherQueueDetails(
+    String beneficiaryId,
+    String currentQueueName,
+    String unitName,
+  ) async {
     try {
       final today = DateTime.now();
       final todayStart = DateTime(today.year, today.month, today.day);
@@ -221,19 +231,23 @@ class ServingTransactionService {
           .where('servedAt', isLessThan: FirebaseService.dateTimeToTimestamp(todayEnd))
           .get();
       
-      // Check if any transaction is from a different queue
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final servedQueueName = data['queueName'] as String?;
         if (servedQueueName != null && servedQueueName != currentQueueName) {
-          return true;
+          return {
+            'queueName': servedQueueName,
+            'dayQueueName': data['dayQueueName'] as String?,
+            'unitName': data['unitName'] as String?,
+            'servedAt': data['servedAt'],
+          };
         }
       }
       
-      return false;
+      return null;
     } catch (e) {
-      print('❌ Error checking if beneficiary was served today: $e');
-      return false;
+      print('❌ Error getting first served today in other queue: $e');
+      return null;
     }
   }
 

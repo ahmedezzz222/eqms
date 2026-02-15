@@ -11,9 +11,6 @@ class FirebaseCollectionsSetup {
   /// This creates sample documents to ensure collections exist
   /// Optimized to be non-blocking and faster
   static Future<void> setupAllCollections() async {
-    print('🚀 Setting up Firestore collections in background...');
-    print('📦 Project: et3am-ca94c');
-    
     try {
       // Skip connection test to speed up - collections will be created on first use anyway
       // Verify Firestore is accessible with a quick timeout
@@ -83,9 +80,6 @@ class FirebaseCollectionsSetup {
         }),
       ], eagerError: false);
       
-      print('✅ All collections setup complete!');
-      print('💡 You can now delete the sample documents from Firebase Console if needed.');
-      print('🔗 View in Console: https://console.firebase.google.com/u/0/project/et3am-ca94c/firestore');
     } catch (e, stackTrace) {
       print('⚠️ Error setting up collections (non-critical): $e');
       print('Stack trace: $stackTrace');
@@ -95,7 +89,6 @@ class FirebaseCollectionsSetup {
   }
 
   static Future<void> _setupRoles() async {
-    print('Setting up roles collection...');
     final collection = FirebaseService.firestore.collection('roles');
     
     final existing = await collection.limit(1).get();
@@ -127,15 +120,13 @@ class FirebaseCollectionsSetup {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      print('  ✓ Created default roles');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupDistributionAreas() async {
     try {
-      print('Setting up distributionAreas collection...');
       final collection = FirebaseService.firestore.collection('distributionAreas');
       
       // Check if collection already has data
@@ -149,9 +140,8 @@ class FirebaseCollectionsSetup {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        print('  ✅ Created sample distribution area');
       } else {
-        print('  ✓ Collection already exists (${existing.docs.length} documents)');
+        // Collection already exists
       }
     } catch (e) {
       print('  ❌ Error setting up distributionAreas: $e');
@@ -160,7 +150,6 @@ class FirebaseCollectionsSetup {
   }
 
   static Future<void> _setupQueues() async {
-    print('Setting up queues collection...');
     final collection = FirebaseService.firestore.collection('queues');
     
     final existing = await collection.limit(1).get();
@@ -191,14 +180,12 @@ class FirebaseCollectionsSetup {
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': 'system',
       });
-      print('  ✓ Created sample queue');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupBeneficiaries() async {
-    print('Setting up beneficiaries collection...');
     final collection = FirebaseService.firestore.collection('beneficiaries');
     
     final existing = await collection.limit(1).get();
@@ -219,14 +206,12 @@ class FirebaseCollectionsSetup {
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': 'system',
       });
-      print('  ✓ Created sample beneficiary');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupAdmins() async {
-    print('Setting up admins collection...');
     final collection = FirebaseService.firestore.collection('admins');
     
     final existing = await collection.limit(1).get();
@@ -245,14 +230,12 @@ class FirebaseCollectionsSetup {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      print('  ✓ Created sample admin');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupVolunteers() async {
-    print('Setting up volunteers collection...');
     final collection = FirebaseService.firestore.collection('volunteers');
     
     final existing = await collection.limit(1).get();
@@ -268,14 +251,12 @@ class FirebaseCollectionsSetup {
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': 'system',
       });
-      print('  ✓ Created sample volunteer');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupEntities() async {
-    print('Setting up entities collection...');
     final collection = FirebaseService.firestore.collection('entities');
     
     final existing = await collection.limit(1).get();
@@ -285,14 +266,12 @@ class FirebaseCollectionsSetup {
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': 'system',
       });
-      print('  ✓ Created sample entity');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupQueueHistory() async {
-    print('Setting up queueHistory collection...');
     final collection = FirebaseService.firestore.collection('queueHistory');
     
     final existing = await collection.limit(1).get();
@@ -305,14 +284,12 @@ class FirebaseCollectionsSetup {
         'performedBy': 'system',
         'performedAt': FieldValue.serverTimestamp(),
       });
-      print('  ✓ Created sample queue history');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupReports() async {
-    print('Setting up reports collection...');
     final collection = FirebaseService.firestore.collection('reports');
     
     final existing = await collection.limit(1).get();
@@ -329,14 +306,12 @@ class FirebaseCollectionsSetup {
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': 'system',
       });
-      print('  ✓ Created sample report');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
   static Future<void> _setupUnits() async {
-    print('Setting up units collection...');
     final collection = FirebaseService.firestore.collection('units');
     
     final existing = await collection.limit(1).get();
@@ -359,40 +334,124 @@ class FirebaseCollectionsSetup {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      print('  ✓ Created default units');
     } else {
-      print('  ✓ Collection already exists');
+      // Collection already exists
     }
   }
 
-  /// Clean up sample documents (optional)
+  /// Clean up sample documents (optional) – docs with createdBy == 'system'
   static Future<void> cleanupSampleData() async {
     print('Cleaning up sample data...');
-    
-    final collections = [
-      'distributionAreas',
+    await cleanupAllMockAndSampleData();
+    print('Sample data cleanup complete!');
+  }
+
+  /// Clean up all mock and sample data: known sample doc IDs, createdBy=='system', and mock beneficiaries (call BeneficiaryService separately).
+  /// Returns a map of collection/category -> count of items removed.
+  static Future<Map<String, int>> cleanupAllMockAndSampleData() async {
+    final firestore = FirebaseService.firestore;
+    final removed = <String, int>{};
+    int total = 0;
+
+    // 1) Delete known sample document IDs (some samples don't have createdBy)
+    final knownSampleIds = <String, List<String>>{
+      'distributionAreas': ['sample_area'],
+      'queues': ['sample_queue'],
+      'beneficiaries': ['sample_beneficiary'],
+      'admins': ['sample_admin'],
+      'volunteers': ['sample_volunteer'],
+    };
+    for (final entry in knownSampleIds.entries) {
+      final col = firestore.collection(entry.key);
+      int n = 0;
+      for (final id in entry.value) {
+        final ref = col.doc(id);
+        final snap = await ref.get();
+        if (snap.exists) {
+          await ref.delete();
+          n++;
+        }
+      }
+      if (n > 0) {
+        removed['${entry.key}(by id)'] = n;
+        total += n;
+      }
+    }
+
+    // 2) Delete any doc with createdBy == 'system' in these collections
+    final collectionsWithCreatedBy = [
       'queues',
       'beneficiaries',
-      'admins',
       'volunteers',
       'entities',
-      'queueHistory',
       'reports',
-      'units',
     ];
-
-    for (final collectionName in collections) {
-      final collection = FirebaseService.firestore.collection(collectionName);
+    for (final collectionName in collectionsWithCreatedBy) {
+      final collection = firestore.collection(collectionName);
       final docs = await collection.where('createdBy', isEqualTo: 'system').get();
-      
       for (final doc in docs.docs) {
         await doc.reference.delete();
       }
-      
-      print('  ✓ Cleaned $collectionName');
+      if (docs.docs.isNotEmpty) {
+        removed[collectionName] = docs.docs.length;
+        total += docs.docs.length;
+      }
     }
-    
-    print('Sample data cleanup complete!');
+
+    // 3) queueHistory: delete sample-related (performedBy=='system' or queueId/beneficiaryId sample)
+    final qhCol = firestore.collection('queueHistory');
+    final toDelete = <DocumentReference>{};
+    for (final query in [
+      qhCol.where('performedBy', isEqualTo: 'system'),
+      qhCol.where('queueId', isEqualTo: 'sample_queue'),
+      qhCol.where('beneficiaryId', isEqualTo: 'sample_beneficiary'),
+    ]) {
+      final snapshot = await query.get();
+      for (final doc in snapshot.docs) {
+        toDelete.add(doc.reference);
+      }
+    }
+    for (final ref in toDelete) {
+      await ref.delete();
+    }
+    if (toDelete.isNotEmpty) {
+      removed['queueHistory'] = toDelete.length;
+      total += toDelete.length;
+    }
+
+    if (total > 0) {
+      print('  ✓ Sample/schema data removed: $total document(s) across ${removed.length} collection(s)');
+    }
+    return removed;
+  }
+
+  /// Delete all documents in a collection (batch delete, supports large collections).
+  static Future<int> _clearCollection(String collectionName) async {
+    final firestore = FirebaseService.firestore;
+    final collection = firestore.collection(collectionName);
+    const batchSize = 500;
+    int deleted = 0;
+    while (true) {
+      final snapshot = await collection.limit(batchSize).get();
+      if (snapshot.docs.isEmpty) break;
+      final batch = firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      deleted += snapshot.docs.length;
+      if (snapshot.docs.length < batchSize) break;
+    }
+    return deleted;
+  }
+
+  /// Clear all documents from servingTransactions and queueHistory.
+  /// Returns map with 'servingTransactions' and 'queueHistory' counts.
+  static Future<Map<String, int>> clearServingAndQueueHistoryCollections() async {
+    final result = <String, int>{};
+    result['servingTransactions'] = await _clearCollection('servingTransactions');
+    result['queueHistory'] = await _clearCollection('queueHistory');
+    return result;
   }
 }
 

@@ -4,6 +4,13 @@ import 'package:async/async.dart';
 import '../main.dart';
 import 'firebase_service.dart';
 
+/// Result of a paginated beneficiaries query (list + cursor for next page).
+class BeneficiaryPaginatedResult {
+  final List<Beneficiary> list;
+  final DocumentSnapshot? lastDocument;
+  BeneficiaryPaginatedResult({required this.list, this.lastDocument});
+}
+
 /// Service for managing Beneficiaries
 class BeneficiaryService {
   static final CollectionReference _collection =
@@ -53,8 +60,8 @@ class BeneficiaryService {
     });
   }
   
-  /// Get paginated beneficiaries (for initial load)
-  static Future<List<Beneficiary>> getBeneficiariesPaginated({
+  /// Get paginated beneficiaries (for initial load). Returns list and last document for cursor.
+  static Future<BeneficiaryPaginatedResult> getBeneficiariesPaginated({
     int limit = 100,
     DocumentSnapshot? startAfter,
     bool activeOnly = false,
@@ -82,7 +89,8 @@ class BeneficiaryService {
       beneficiaries.sort((a, b) => b.id.compareTo(a.id)); // Simple fallback
     }
     
-    return beneficiaries;
+    final lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+    return BeneficiaryPaginatedResult(list: beneficiaries, lastDocument: lastDoc);
   }
 
   /// Get beneficiaries by distribution area with pagination support
@@ -135,8 +143,8 @@ class BeneficiaryService {
         });
   }
   
-  /// Get paginated beneficiaries by area
-  static Future<List<Beneficiary>> getBeneficiariesByAreaPaginated({
+  /// Get paginated beneficiaries by area. Returns list and last document for cursor.
+  static Future<BeneficiaryPaginatedResult> getBeneficiariesByAreaPaginated({
     required String areaId,
     int limit = 100,
     DocumentSnapshot? startAfter,
@@ -161,7 +169,9 @@ class BeneficiaryService {
     query = query.limit(limit);
     
     final snapshot = await query.get();
-    return snapshot.docs.map((doc) => documentToBeneficiary(doc)).toList();
+    final list = snapshot.docs.map((doc) => documentToBeneficiary(doc)).toList();
+    final lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+    return BeneficiaryPaginatedResult(list: list, lastDocument: lastDoc);
   }
 
   /// Get beneficiaries filtered by multiple distribution areas (server-side filtering)
@@ -589,6 +599,124 @@ class BeneficiaryService {
   /// Delete a beneficiary
   static Future<void> deleteBeneficiary(String id) async {
     await _collection.doc(id).delete();
+  }
+
+  /// Delete all beneficiaries that were created by a given creator (e.g. 'mock').
+  /// Returns the number of beneficiaries deleted.
+  static Future<int> deleteBeneficiariesCreatedBy(String createdBy) async {
+    final snapshot = await _collection.where('createdBy', isEqualTo: createdBy).get();
+    for (final doc in snapshot.docs) {
+      await doc.reference.delete();
+    }
+    return snapshot.docs.length;
+  }
+
+  /// Get all beneficiaries that have a queue assignment (for one-time renumbering migration).
+  static Future<List<Beneficiary>> getBeneficiariesWithQueueAssignment() async {
+    final snapshot = await _collection
+        .where('initialAssignedQueuePoint', isNotEqualTo: '')
+        .get();
+    return snapshot.docs.map((doc) => documentToBeneficiary(doc)).toList();
+  }
+
+  /// Get all beneficiaries that have a queue number set (may overlap with initialAssignedQueuePoint).
+  static Future<List<Beneficiary>> getBeneficiariesWithQueueNumber() async {
+    final snapshot = await _collection
+        .where('queueNumber', isNotEqualTo: null)
+        .get();
+    return snapshot.docs.map((doc) => documentToBeneficiary(doc)).toList();
+  }
+
+  /// Clear all queue assignments from all beneficiaries (initialAssignedQueuePoint and queueNumber).
+  /// Also resets isServed and unitsTaken so no one appears "Served" after cleanup (mock/seed data).
+  /// Used for one-time cleanup so queue numbers are not affected by mock/seed data.
+  /// Covers both single queues and multi-day (sub) queues.
+  /// Returns the number of beneficiaries updated.
+  static Future<int> clearAllQueueAssignmentsFromBeneficiaries() async {
+    final withQueuePoint = await getBeneficiariesWithQueueAssignment();
+    final withQueueNumber = await getBeneficiariesWithQueueNumber();
+    final byId = <String, Beneficiary>{};
+    for (final b in withQueuePoint) {
+      byId[b.id] = b;
+    }
+    for (final b in withQueueNumber) {
+      byId[b.id] = b;
+    }
+    final toUpdate = byId.values.toList();
+    if (toUpdate.isEmpty) return 0;
+    const batchSize = 500;
+    int updated = 0;
+    for (int i = 0; i < toUpdate.length; i += batchSize) {
+      final batch = FirebaseService.firestore.batch();
+      final chunk = toUpdate.skip(i).take(batchSize).toList();
+      for (final b in chunk) {
+        batch.update(_collection.doc(b.id), {
+          'initialAssignedQueuePoint': '',
+          'queueNumber': null,
+          'isServed': false,
+          'unitsTaken': 0,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        updated++;
+      }
+      await batch.commit();
+    }
+    return updated;
+  }
+
+  /// Reset isServed and unitsTaken for all beneficiaries that are currently marked served.
+  /// Used so no one appears "Served" in the UI after cleanup (mock/seed or old data).
+  /// Returns the number of beneficiaries updated.
+  static Future<int> resetAllServedStateFromBeneficiaries() async {
+    const batchSize = 500;
+    int updated = 0;
+    DocumentSnapshot? lastDoc;
+    while (true) {
+      Query query = _collection
+          .where('isServed', isEqualTo: true)
+          .limit(batchSize);
+      if (lastDoc != null) {
+        query = query.startAfterDocument(lastDoc);
+      }
+      final snapshot = await query.get();
+      if (snapshot.docs.isEmpty) break;
+      final batch = FirebaseService.firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          'isServed': false,
+          'unitsTaken': 0,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        updated++;
+      }
+      await batch.commit();
+      lastDoc = snapshot.docs.last;
+      if (snapshot.docs.length < batchSize) break;
+    }
+    return updated;
+  }
+
+  /// Delete all "issued" ticket records from queueHistory for every queue (single and multi-day sub-queues).
+  /// This ensures no beneficiary is considered assigned to any queue so queue numbers are not affected by mock data.
+  /// Returns the number of queueHistory documents deleted.
+  static Future<int> clearAllIssuedTicketsFromQueueHistory() async {
+    final collection = FirebaseService.firestore.collection('queueHistory');
+    int deleted = 0;
+    const batchSize = 500;
+    while (true) {
+      final snapshot = await collection
+          .where('action', isEqualTo: 'issued')
+          .limit(batchSize)
+          .get();
+      if (snapshot.docs.isEmpty) break;
+      final batch = FirebaseService.firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+        deleted++;
+      }
+      await batch.commit();
+    }
+    return deleted;
   }
 
   /// Get served beneficiaries with serving information
