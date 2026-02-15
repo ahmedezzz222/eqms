@@ -131,6 +131,76 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  Future<void> _clearQueueAssignmentsForReissuing() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clean queue assignments for re-issuing?'),
+        content: const Text(
+          'This will:\n\n'
+          '• Clear queue assignments from all beneficiaries\n'
+          '• Clear queueHistory, servingTransactions, queueCounters\n\n'
+          'You can then re-issue queue numbers starting from 1. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clean all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Cleaning queue assignments for re-issuing...';
+    });
+
+    try {
+      final result = await OneTimeSetup.clearQueueAssignmentsForReissuing();
+      final beneficiaries = result['beneficiaries'] ?? 0;
+      final queueHistory = result['queueHistory'] ?? 0;
+      final serving = result['servingTransactions'] ?? 0;
+      final counters = result['queueCounters'] ?? 0;
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Cleaned: $beneficiaries beneficiaries, $queueHistory queueHistory, $serving serving, $counters counters.';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Queue assignments cleaned. You can now re-issue numbers from 1.'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Error: $e';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _clearServingAndQueueHistory() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -287,6 +357,20 @@ class _SetupScreenState extends State<SetupScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.deepOrange,
                   side: const BorderSide(color: Colors.deepOrange),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _clearQueueAssignmentsForReissuing,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Clean queue assignments for re-issuing'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.deepPurple,
+                  side: const BorderSide(color: Colors.deepPurple),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

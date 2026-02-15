@@ -453,5 +453,11 @@ class FirebaseCollectionsSetup {
     result['queueHistory'] = await _clearCollection('queueHistory');
     return result;
   }
+
+  /// Clear all documents from queueCounters collection.
+  /// Use when resetting queue numbers for re-issuing (next issuance will start at 1).
+  static Future<int> clearQueueCountersCollection() async {
+    return _clearCollection('queueCounters');
+  }
 }
 

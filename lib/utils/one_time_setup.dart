@@ -97,5 +97,18 @@ class OneTimeSetup {
   static Future<Map<String, int>> clearServingAndQueueHistory() async {
     return FirebaseCollectionsSetup.clearServingAndQueueHistoryCollections();
   }
+
+  /// Clean up all queue assignments so you can re-issue new numbers from 1.
+  /// Clears: beneficiaries (queue assignments), queueHistory, servingTransactions, queueCounters.
+  /// Returns counts: beneficiaries, queueHistory, servingTransactions, queueCounters.
+  static Future<Map<String, int>> clearQueueAssignmentsForReissuing() async {
+    final result = <String, int>{};
+    result['beneficiaries'] = await BeneficiaryService.clearAllQueueAssignmentsFromBeneficiaries();
+    final coll = await FirebaseCollectionsSetup.clearServingAndQueueHistoryCollections();
+    result['servingTransactions'] = coll['servingTransactions'] ?? 0;
+    result['queueHistory'] = coll['queueHistory'] ?? 0;
+    result['queueCounters'] = await FirebaseCollectionsSetup.clearQueueCountersCollection();
+    return result;
+  }
 }
 

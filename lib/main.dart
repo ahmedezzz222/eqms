@@ -3578,10 +3578,10 @@ Future<void> _ensureQueueAssignmentsCleanupDone() async {
   final prefs = await SharedPreferences.getInstance();
   try {
     if (!(prefs.getBool('queue_assignments_cleared_done') ?? false)) {
+      await prefs.setBool('queue_assignments_cleared_done', true);
       await BeneficiaryService.clearAllQueueAssignmentsFromBeneficiaries();
       // Do NOT delete queueHistory 'issued' - beneficiaries must stay visible in queue lists
       await QueueService.resetAllQueueCounters();
-      await prefs.setBool('queue_assignments_cleared_done', true);
     }
     // One-time: reset counters for installs that ran old cleanup without counter reset
     if (!(prefs.getBool('queue_counters_reset_done') ?? false)) {
@@ -3612,13 +3612,14 @@ Future<void> _initializeFirestoreCollectionsInBackground() async {
           final prefs = await SharedPreferences.getInstance();
           final assignmentsClearedDone = prefs.getBool('queue_assignments_cleared_done') ?? false;
           if (!assignmentsClearedDone) {
+            // Set flag first so we don't re-run this heavy cleanup if the app is killed during it
+            await prefs.setBool('queue_assignments_cleared_done', true);
             final beneficiariesUpdated = await BeneficiaryService.clearAllQueueAssignmentsFromBeneficiaries();
             // Do NOT delete queueHistory 'issued' records - that would remove beneficiaries from queue lists
             final countersReset = await QueueService.resetAllQueueCounters();
             if (beneficiariesUpdated > 0 || countersReset > 0) {
               print('✅ Queue assignments cleared: $beneficiariesUpdated unassigned, $countersReset counter(s) reset.');
             }
-            await prefs.setBool('queue_assignments_cleared_done', true);
           }
           final servedStateClearedDone = prefs.getBool('served_state_cleared_done') ?? false;
           if (!servedStateClearedDone) {
@@ -9614,15 +9615,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              AppLanguage.translate('Distribution Area'),
-                              style: TextStyle(
-                                fontSize: isLandscape ? 14 : 16,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1A237E),
-                              ),
-                            ),
-                            SizedBox(height: spacing),
                             // Show location hierarchy above dropdown if area is selected
                             if (_selectedDistributionArea != null)
                               Builder(
@@ -10292,6 +10284,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         builder: (context) => IssueQueueNumberScreen(
                           queues: _filteredQueues, // Use filtered queues (admin's queues only)
                           beneficiaries: _beneficiaries,
+                          distributionAreas: _distributionAreas, // Enables instant city check (no Firestore)
                           onQueueNumberIssued: _handleQueueNumberIssued,
                         ),
                       ),
@@ -24587,15 +24580,21 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             .where('action', isEqualTo: 'issued')
             .snapshots(),
         builder: (context, historySnapshot) {
-          // Get beneficiary IDs from queueHistory
-          final beneficiaryIdsFromHistory = historySnapshot.hasData
-              ? historySnapshot.data!.docs
-                  .map((doc) => doc.data() as Map<String, dynamic>)
-                  .map((data) => data['beneficiaryId'] as String?)
-                  .where((id) => id != null)
-                  .cast<String>()
-                  .toSet()
-              : <String>{};
+          // Get beneficiary IDs and queue numbers from queueHistory (source of truth for this day)
+          final beneficiaryIdsFromHistory = <String>{};
+          final queueNumberByBeneficiaryId = <String, int>{};
+          if (historySnapshot.hasData) {
+            for (final doc in historySnapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final id = data['beneficiaryId'] as String?;
+              if (id != null) {
+                beneficiaryIdsFromHistory.add(id);
+                final raw = data['queueNumber'];
+                final n = raw == null ? null : (raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw.toString())));
+                if (n != null) queueNumberByBeneficiaryId[id] = n;
+              }
+            }
+          }
           
           // Load beneficiaries from stream (with limit for performance)
           return StreamBuilder<List<Beneficiary>>(
@@ -24630,13 +24629,15 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                 return false;
               }).toList();
               
-              // Merge with local updates
-              // Prefer stream data for numberOfUnits (eligibility) since it's the source of truth
-              // Prefer local updates for unitsTaken/isServed (recently served) for immediate feedback
+              // Merge with local updates and overlay queue numbers from queueHistory (day-specific)
+              // queueNumber from queueHistory is the source of truth for this day - beneficiary.doc may have wrong value
               final Map<String, Beneficiary> beneficiaryMap = {};
               // First add all from stream (most authoritative from Firebase, especially for numberOfUnits)
               for (var b in filteredBeneficiaries) {
-                beneficiaryMap[b.id] = b;
+                final dayQueueNumber = queueNumberByBeneficiaryId[b.id];
+                beneficiaryMap[b.id] = dayQueueNumber != null
+                    ? b.copyWith(queueNumber: dayQueueNumber)
+                    : b;
               }
               // Then merge with local updates (might have recent serving updates not yet in stream)
               for (var b in _localBeneficiaries) {
@@ -24644,17 +24645,18 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
                     beneficiaryIdsFromHistory.contains(b.id)) {
                   final streamed = beneficiaryMap[b.id];
                   if (streamed == null) {
-                    // New beneficiary not in stream yet, add it
-                    beneficiaryMap[b.id] = b;
+                    final dayQueueNumber = queueNumberByBeneficiaryId[b.id];
+                    beneficiaryMap[b.id] = dayQueueNumber != null
+                        ? b.copyWith(queueNumber: dayQueueNumber)
+                        : b;
                   } else {
-                    // Merge: use stream's numberOfUnits (source of truth), but prefer local for unitsTaken/isServed if more recent
+                    // Merge: use stream's numberOfUnits (source of truth), prefer local for unitsTaken/isServed if more recent
                     if (b.unitsTaken > streamed.unitsTaken || 
                         (b.unitsTaken == streamed.unitsTaken && b.isServed != streamed.isServed)) {
-                      // Local has more recent serving data, but keep numberOfUnits from stream
-                      beneficiaryMap[b.id] = b.copyWith(numberOfUnits: streamed.numberOfUnits);
-                    } else {
-                      // Stream is more recent or equal, use stream data (already in map)
-                      // This ensures numberOfUnits updates are immediately reflected
+                      beneficiaryMap[b.id] = b.copyWith(
+                        numberOfUnits: streamed.numberOfUnits,
+                        queueNumber: streamed.queueNumber, // Keep day-specific from queueHistory
+                      );
                     }
                   }
                 }
@@ -24870,30 +24872,18 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
             final streamedBeneficiaries = snapshot.data!;
             
             // Merge stream data with local updates to ensure immediate UI updates
-            // Prefer stream data for numberOfUnits (eligibility) since it's the source of truth
-            // Prefer local updates for unitsTaken/isServed (recently served) for immediate feedback
             final Map<String, Beneficiary> beneficiaryMap = {};
-            // First add all from stream (most authoritative from Firebase, especially for numberOfUnits)
             for (var b in streamedBeneficiaries) {
               beneficiaryMap[b.id] = b;
             }
-            // Then update with filtered local list (might have recent updates not yet in stream)
-            // This ensures immediate UI updates before Firebase stream catches up
-            // Only include beneficiaries that match this queue's name
             for (var b in filteredLocalBeneficiaries) {
               final streamed = beneficiaryMap[b.id];
               if (streamed == null) {
-                // New beneficiary not in stream yet, add it
                 beneficiaryMap[b.id] = b;
               } else {
-                // Merge: use stream's numberOfUnits (source of truth), but prefer local for unitsTaken/isServed if more recent
                 if (b.unitsTaken > streamed.unitsTaken || 
                     (b.unitsTaken == streamed.unitsTaken && b.isServed != streamed.isServed)) {
-                  // Local has more recent serving data, but keep numberOfUnits from stream
                   beneficiaryMap[b.id] = b.copyWith(numberOfUnits: streamed.numberOfUnits);
-                } else {
-                  // Stream is more recent or equal, use stream data (already in map)
-                  // This ensures numberOfUnits updates are immediately reflected
                 }
               }
             }
@@ -25092,16 +25082,25 @@ class _QueueServingScreenState extends State<QueueServingScreen> {
   }
 }
 
+// Cache entry for beneficiary search (Issue Queue Number screen)
+class _CachedBeneficiary {
+  final Beneficiary beneficiary;
+  final DateTime cachedAt;
+  _CachedBeneficiary(this.beneficiary, this.cachedAt);
+}
+
 // Issue Queue Number Screen
 class IssueQueueNumberScreen extends StatefulWidget {
   final List<Queue> queues;
   final List<Beneficiary> beneficiaries;
+  final List<DistributionArea>? distributionAreas; // Optional: when provided, city check uses in-memory lookup (faster)
   final Function(Queue, Beneficiary, int) onQueueNumberIssued;
 
   const IssueQueueNumberScreen({
     super.key,
     required this.queues,
     required this.beneficiaries,
+    this.distributionAreas,
     required this.onQueueNumberIssued,
   });
 
@@ -25115,6 +25114,8 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
   Beneficiary? _verifiedBeneficiary;
   final TextEditingController _searchController = TextEditingController();
   int? _issuedQueueNumber;
+  /// True when the shown number is an existing one (already taken), not newly issued.
+  bool _showingExistingQueueNumber = false;
   bool _isNFCScanning = false;
   bool _isSearching = false; // Track search loading state
   final FocusNode _searchFocusNode = FocusNode();
@@ -25127,6 +25128,12 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
   
   // Verification method selection (0 = NFC, 1 = Mobile, 2 = National ID)
   int _selectedVerificationMethod = 0; // NFC is default
+
+  // In-memory map for instant city check (avoids 2 Firestore round trips per search)
+  late final Map<String, DistributionArea> _areaById;
+  // Short-lived cache for beneficiary search (repeat scan/number = instant)
+  final Map<String, _CachedBeneficiary> _searchCache = {};
+  static const Duration _searchCacheExpiry = Duration(seconds: 30);
 
   // Generate daily entries for Multi Day queue
   List<DateTime> _generateDailyEntries(Queue queue) {
@@ -25155,7 +25162,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
 
   /// Get next queue number atomically to prevent duplicate queue numbers when multiple issues happen at once.
   /// Uses a Firestore counter document per queue (or day-queue) so each issue gets a unique number.
-  /// When this queue is not started (isStarted == false), clears counter and issued history for this queue so the first issuance gets 1.
+  /// Do not clear counter or history on each call; otherwise every issuance would get 1.
   Future<int> _getCurrentQueueNumber() async {
     if (_selectedQueue == null) return 0;
     
@@ -25167,90 +25174,107 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
         : _selectedQueue!.name;
     
-    try {
-      final counterId = queueName.replaceAll('/', '_');
-      final ref = FirebaseService.firestore.collection('queueCounters').doc(counterId);
-      final historyColl = FirebaseService.firestore.collection('queueHistory');
+    final counterId = queueName.replaceAll('/', '_');
+    final ref = FirebaseService.firestore.collection('queueCounters').doc(counterId);
 
-      // When queue is not started, clear counter and all "issued" records for this queue so we start at 1
-      if (!_selectedQueue!.isStarted) {
-        await ref.delete();
-        const batchSize = 500;
-        while (true) {
-          final issuedSnap = await historyColl
-              .where('dayQueueName', isEqualTo: queueName)
-              .where('action', isEqualTo: 'issued')
-              .limit(batchSize)
-              .get();
-          if (issuedSnap.docs.isEmpty) break;
-          final batch = FirebaseService.firestore.batch();
-          for (final doc in issuedSnap.docs) {
-            batch.delete(doc.reference);
-          }
-          await batch.commit();
-        }
-      } else {
-        // Queue already started: only remove stale counter if this queue has no issued tickets at all
-        final issuedSnap = await historyColl
-            .where('dayQueueName', isEqualTo: queueName)
-            .where('action', isEqualTo: 'issued')
-            .limit(1)
-            .get();
-        if (issuedSnap.docs.isEmpty) {
-          await ref.delete();
-        }
-      }
-
-      // When counter doc doesn't exist yet, get max from queueHistory (must be outside transaction - get() only accepts DocumentReference)
-      int maxFromHistory = 0;
-      final counterSnap = await ref.get();
-      if (!counterSnap.exists) {
-        final historySnap = await FirebaseService.firestore
-            .collection('queueHistory')
-            .where('dayQueueName', isEqualTo: queueName)
-            .where('action', isEqualTo: 'issued')
-            .get();
-        for (final doc in historySnap.docs) {
-          final n = doc.data()['queueNumber'] as int?;
-          if (n != null && n > maxFromHistory) maxFromHistory = n;
-        }
-      }
-      
-      final nextNumber = await FirebaseService.firestore.runTransaction<int>((transaction) async {
-        final snapshot = await transaction.get(ref);
-        int current;
-        if (snapshot.exists && snapshot.data() != null) {
-          current = (snapshot.data()!['lastNumber'] as int?) ?? 0;
-        } else {
-          current = maxFromHistory;
-        }
-        final next = current + 1;
-        transaction.set(ref, {
-          'lastNumber': next,
-          'queueName': queueName,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        return next;
-      });
-      
-      return nextNumber;
-    } catch (e) {
-      print('Error getting next queue number (atomic): $e');
-      // Fallback: use count-based (may still produce duplicates under concurrency)
-      try {
-        final beneficiaries = await BeneficiaryService.getBeneficiariesByArea(_selectedQueue!.distributionArea).first;
-        final queueNameForCount = _selectedQueue!.isMultiDay && _selectedDay != null
-            ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
-            : _selectedQueue!.name;
-        final count = beneficiaries
-            .where((b) => b.initialAssignedQueuePoint == queueNameForCount && b.queueNumber != null)
-            .length;
-        return count + 1;
-      } catch (e2) {
-        print('Fallback queue number failed: $e2');
-        return 1;
+    // Do NOT delete the counter here - that causes non-sequential numbers due to race/consistency.
+    // Counter is only cleared by explicit "Clean queue assignments for re-issuing" in Setup screen.
+    // When counter doc doesn't exist (new queue or after cleanup), use max from queueHistory.
+    int maxFromHistory = 0;
+    final counterSnap = await ref.get();
+    if (!counterSnap.exists) {
+      final historySnap = await FirebaseService.firestore
+          .collection('queueHistory')
+          .where('dayQueueName', isEqualTo: queueName)
+          .where('action', isEqualTo: 'issued')
+          .get();
+      for (final doc in historySnap.docs) {
+        final n = doc.data()['queueNumber'] as int?;
+        if (n != null && n > maxFromHistory) maxFromHistory = n;
       }
     }
+
+    // Retry transaction up to 3 times (Firestore can abort on contention)
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final nextNumber = await FirebaseService.firestore.runTransaction<int>((transaction) async {
+          final snapshot = await transaction.get(ref);
+          int current;
+          if (snapshot.exists && snapshot.data() != null) {
+            current = (snapshot.data()!['lastNumber'] as int?) ?? 0;
+          } else {
+            current = maxFromHistory;
+          }
+          final next = current + 1;
+          transaction.set(ref, {
+            'lastNumber': next,
+            'queueName': queueName,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return next;
+        });
+        return nextNumber;
+      } catch (e) {
+        print('Queue number transaction attempt $attempt failed: $e');
+        if (attempt < 3) {
+          await Future.delayed(Duration(milliseconds: 200 * attempt));
+        } else {
+          // Fallback: use max from queueHistory + 1 (correct for multi-day when beneficiary count is wrong)
+          try {
+            final historySnap = await FirebaseService.firestore
+                .collection('queueHistory')
+                .where('dayQueueName', isEqualTo: queueName)
+                .where('action', isEqualTo: 'issued')
+                .get();
+            int maxN = 0;
+            for (final doc in historySnap.docs) {
+              final n = doc.data()['queueNumber'] as int?;
+              if (n != null && n > maxN) maxN = n;
+            }
+            final nextNumber = maxN + 1;
+            // Sync counter so next call uses it (prevents repeated fallback with wrong values)
+            await ref.set({
+              'lastNumber': nextNumber,
+              'queueName': queueName,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+            return nextNumber;
+          } catch (e2) {
+            print('Fallback queue number failed: $e2');
+            return 1;
+          }
+        }
+      }
+    }
+    return 1;
+  }
+
+  /// Read next queue number for display only - does NOT increment the counter.
+  /// Use this for stats/UI. Use _getCurrentQueueNumber() only when actually issuing a ticket.
+  Future<int> _getNextQueueNumberPreview() async {
+    if (_selectedQueue == null) return 0;
+    if (_selectedQueue!.isMultiDay && _selectedDay == null) return 0;
+    final queueName = _selectedQueue!.isMultiDay && _selectedDay != null
+        ? _getDaySpecificQueueName(_selectedQueue!, _selectedDay!)
+        : _selectedQueue!.name;
+    final counterId = queueName.replaceAll('/', '_');
+    final ref = FirebaseService.firestore.collection('queueCounters').doc(counterId);
+    final counterSnap = await ref.get();
+    if (counterSnap.exists && counterSnap.data() != null) {
+      final last = (counterSnap.data()!['lastNumber'] as int?) ?? 0;
+      return last + 1;
+    }
+    final historySnap = await FirebaseService.firestore
+        .collection('queueHistory')
+        .where('dayQueueName', isEqualTo: queueName)
+        .where('action', isEqualTo: 'issued')
+        .get();
+    int maxN = 0;
+    for (final doc in historySnap.docs) {
+      final n = doc.data()['queueNumber'] as int?;
+      if (n != null && n > maxN) maxN = n;
+    }
+    return maxN + 1;
   }
 
   // Get total attendees from Firebase
@@ -25284,7 +25308,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
   @override
   void initState() {
     super.initState();
-    
+    final areas = widget.distributionAreas ?? [];
+    _areaById = {for (var a in areas) a.id: a};
+
     // Auto-select first queue if available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -25332,7 +25358,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     });
   }
 
-  // Load queue statistics when queue is selected
+  // Load queue statistics when queue is selected (preview only - does NOT consume/increment counter)
   Future<void> _loadQueueStatistics() async {
     if (_selectedQueue == null) {
       setState(() {
@@ -25342,7 +25368,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       return;
     }
     
-    final queueNumber = await _getCurrentQueueNumber();
+    final queueNumber = await _getNextQueueNumberPreview();
     final totalAttendees = await _getTotalAttendees();
     
     if (mounted) {
@@ -25417,6 +25443,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             setState(() {
               _verifiedBeneficiary = null;
               _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
               _isNFCScanning = false;
             });
             
@@ -25586,6 +25613,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           _searchController.clear();
           _verifiedBeneficiary = null;
           _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
           _lastProcessedTagId = null; // Reset when switching verification methods
         });
         
@@ -25634,10 +25662,12 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
   }
 
   Future<void> _handleSearchInput(String value) async {
-    if (value.isEmpty) {
+    final trimmedValue = value.trim();
+    if (trimmedValue.isEmpty) {
       setState(() {
         _verifiedBeneficiary = null;
         _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
         _lastProcessedTagId = null; // Reset when search is cleared
         _isSearching = false;
       });
@@ -25666,6 +25696,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     setState(() {
       _verifiedBeneficiary = null;
       _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
       _isSearching = true;
       _isNFCScanning = true;
     });
@@ -25673,13 +25704,21 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
     try {
       Beneficiary? foundBeneficiary;
       bool hasTimeoutError = false; // Track if any timeout occurred
+      final searchValue = trimmedValue;
+
+      // Short-lived cache: repeat search (same value within 30s) returns instantly
+      final cacheKey = searchValue;
+      final cached = _searchCache[cacheKey];
+      if (cached != null && DateTime.now().difference(cached.cachedAt) < _searchCacheExpiry) {
+        foundBeneficiary = cached.beneficiary;
+      }
 
       // Search based on selected verification method - optimized with timeouts
       // NFC searches use 8s timeout to allow Firestore cold start and network latency
-      if (_selectedVerificationMethod == 0) {
+      if (foundBeneficiary == null && _selectedVerificationMethod == 0) {
         // NFC method - search by NFC code (card) first, then by NFC reference
         try {
-          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
               .timeout(const Duration(seconds: 8));
         } catch (e) {
           print('NFC card search timeout or error: $e');
@@ -25689,7 +25728,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             print('NFC: Retrying NFC card search after timeout...');
             try {
               await Future.delayed(const Duration(milliseconds: 300));
-              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
                   .timeout(const Duration(seconds: 8));
               // If retry succeeds, clear timeout flag
               if (foundBeneficiary != null) {
@@ -25707,7 +25746,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         // If not found by NFC card, try NFC reference
         if (foundBeneficiary == null) {
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                 .timeout(const Duration(seconds: 8));
             // If found, clear timeout flag
             if (foundBeneficiary != null) {
@@ -25721,7 +25760,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               print('NFC: Retrying NFC reference search after timeout...');
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
-                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                     .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
@@ -25737,36 +25776,36 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             }
           }
         }
-      } else if (_selectedVerificationMethod == 1) {
+      } else if (foundBeneficiary == null && _selectedVerificationMethod == 1) {
         // Mobile method - search by mobile number
         try {
-          foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(value)
-              .timeout(const Duration(milliseconds: 500));
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(searchValue)
+              .timeout(const Duration(seconds: 8));
         } catch (e) {
           print('Mobile search timeout or error: $e');
           if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
             hasTimeoutError = true;
           }
         }
-      } else if (_selectedVerificationMethod == 2) {
+      } else if (foundBeneficiary == null && _selectedVerificationMethod == 2) {
         // National ID method - search by ID number
         try {
-          foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(value)
-              .timeout(const Duration(milliseconds: 500));
+          foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(searchValue)
+              .timeout(const Duration(seconds: 8));
         } catch (e) {
           print('ID number search timeout or error: $e');
           if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
             hasTimeoutError = true;
           }
         }
-      } else {
+      } else if (foundBeneficiary == null) {
         // Fallback: Auto-detect search type based on input pattern - optimized with timeouts
         // 1. Check if it's a mobile number (11 digits starting with 01)
-        if (RegExp(r'^01[0-2,5]{1}[0-9]{8}$').hasMatch(value)) {
+        if (RegExp(r'^01[0-2,5]{1}[0-9]{8}$').hasMatch(searchValue)) {
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(value)
-                .timeout(const Duration(milliseconds: 500));
-          } catch (e) {
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(searchValue)
+                .timeout(const Duration(seconds: 8));
+        } catch (e) {
             print('Mobile search timeout or error: $e');
             if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
               hasTimeoutError = true;
@@ -25774,10 +25813,10 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           }
         }
         // 2. Check if it's NFC code (starts with "NFC_" or alphanumeric, length >= 8) or NFC reference
-        else if (value.toUpperCase().startsWith('NFC_') || (value.length >= 8 && RegExp(r'^[A-Z0-9_]+$').hasMatch(value.toUpperCase()))) {
+        else if (searchValue.toUpperCase().startsWith('NFC_') || (searchValue.length >= 8 && RegExp(r'^[A-Z0-9_]+$').hasMatch(searchValue.toUpperCase()))) {
           // Try NFC card first (8s timeout for Firestore)
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
                 .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('NFC card search timeout or error: $e');
@@ -25786,7 +25825,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               hasTimeoutError = true;
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
-                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
                     .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
@@ -25804,7 +25843,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // If not found, try NFC reference
           if (foundBeneficiary == null) {
             try {
-              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                   .timeout(const Duration(seconds: 8));
               // If found, clear timeout flag
               if (foundBeneficiary != null) {
@@ -25817,7 +25856,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 hasTimeoutError = true;
                 try {
                   await Future.delayed(const Duration(milliseconds: 300));
-                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                       .timeout(const Duration(seconds: 8));
                   // If retry succeeds, clear timeout flag
                   if (foundBeneficiary != null) {
@@ -25835,10 +25874,10 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           }
         }
         // 2b. Check if it's NFC reference (numeric, shorter than 8 digits)
-        else if (RegExp(r'^[0-9]+$').hasMatch(value) && value.length < 8) {
+        else if (RegExp(r'^[0-9]+$').hasMatch(searchValue) && searchValue.length < 8) {
           // Could be NFC reference (numeric, shorter)
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                 .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('NFC reference search timeout or error: $e');
@@ -25847,7 +25886,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               hasTimeoutError = true;
               try {
                 await Future.delayed(const Duration(milliseconds: 300));
-                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(value)
+                foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFCReference(searchValue)
                     .timeout(const Duration(seconds: 8));
                 // If retry succeeds, clear timeout flag
                 if (foundBeneficiary != null) {
@@ -25865,7 +25904,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // If not found, try NFC card as fallback
           if (foundBeneficiary == null) {
             try {
-              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
                   .timeout(const Duration(seconds: 8));
               // If found, clear timeout flag
               if (foundBeneficiary != null) {
@@ -25878,7 +25917,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                 hasTimeoutError = true;
                 try {
                   await Future.delayed(const Duration(milliseconds: 300));
-                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(value)
+                  foundBeneficiary = await BeneficiaryService.getBeneficiaryByNFC(searchValue)
                       .timeout(const Duration(seconds: 8));
                   // If retry succeeds, clear timeout flag
                   if (foundBeneficiary != null) {
@@ -25896,10 +25935,10 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           }
         }
         // 3. Check if it's national ID (11+ digits)
-        else if (RegExp(r'^[0-9]{11,}$').hasMatch(value)) {
+        else if (RegExp(r'^[0-9]{11,}$').hasMatch(searchValue)) {
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(value)
-                .timeout(const Duration(milliseconds: 500));
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(searchValue)
+                .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('ID number search timeout or error: $e');
             if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
@@ -25911,8 +25950,8 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         else {
           // Try mobile first (most common)
           try {
-            foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(value)
-                .timeout(const Duration(milliseconds: 400));
+            foundBeneficiary = await BeneficiaryService.getBeneficiaryByMobile(searchValue)
+                .timeout(const Duration(seconds: 8));
           } catch (e) {
             print('Mobile search timeout or error: $e');
             if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
@@ -25922,8 +25961,8 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           // Try ID number if mobile not found
           if (foundBeneficiary == null) {
             try {
-              foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(value)
-                  .timeout(const Duration(milliseconds: 400));
+              foundBeneficiary = await BeneficiaryService.getBeneficiaryByIdNumber(searchValue)
+                  .timeout(const Duration(seconds: 8));
             } catch (e) {
               print('ID number search timeout or error: $e');
               if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
@@ -25936,24 +25975,30 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
 
       // Process found beneficiary - verify they are in the same city
       if (foundBeneficiary != null) {
+        // Cache for instant repeat search (e.g. same NFC tap within 30s)
+        _searchCache[cacheKey] = _CachedBeneficiary(foundBeneficiary, DateTime.now());
+
         // VERIFY: Check if beneficiary is in the same city as the queue's distribution area
-        // Allow issuing queue numbers to beneficiaries from areas in the same city
+        // Use in-memory _areaById when available (no Firestore), else fetch in parallel
         bool isSameCity = false;
         try {
-          // Get distribution area objects for both beneficiary and queue
-          final beneficiaryArea = await DistributionAreaService.getAreaById(foundBeneficiary.distributionArea);
-          final queueArea = await DistributionAreaService.getAreaById(distributionAreaId);
-          
+          DistributionArea? beneficiaryArea = _areaById[foundBeneficiary.distributionArea];
+          DistributionArea? queueArea = _areaById[distributionAreaId];
+          if (beneficiaryArea == null || queueArea == null) {
+            final results = await Future.wait([
+              beneficiaryArea != null ? Future.value(beneficiaryArea) : DistributionAreaService.getAreaById(foundBeneficiary.distributionArea),
+              queueArea != null ? Future.value(queueArea) : DistributionAreaService.getAreaById(distributionAreaId),
+            ]);
+            beneficiaryArea ??= results[0] as DistributionArea?;
+            queueArea ??= results[1] as DistributionArea?;
+          }
           if (beneficiaryArea != null && queueArea != null) {
-            // Check if they're in the same city (case-insensitive)
             isSameCity = beneficiaryArea.city.toLowerCase().trim() == queueArea.city.toLowerCase().trim();
           } else {
-            // If we can't get area info, fall back to exact match
             isSameCity = foundBeneficiary.distributionArea == distributionAreaId;
           }
         } catch (e) {
           print('Error checking city match: $e');
-          // Fall back to exact match if error occurs
           isSameCity = foundBeneficiary.distributionArea == distributionAreaId;
         }
         
@@ -25963,6 +26008,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
               setState(() {
                 _verifiedBeneficiary = null;
                 _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
                 _isNFCScanning = false;
                 _isSearching = false;
               });
@@ -25995,6 +26041,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
           setState(() {
             _verifiedBeneficiary = null;
             _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
             _isNFCScanning = false;
             _isSearching = false;
           });
@@ -26033,6 +26080,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         setState(() {
           _verifiedBeneficiary = null;
           _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
           _isNFCScanning = false;
           _isSearching = false;
         });
@@ -26112,7 +26160,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         
         if (historyQuery.docs.isNotEmpty) {
           final historyDoc = historyQuery.docs.first.data();
-          final existingQueueNumber = historyDoc['queueNumber'];
+          final raw = historyDoc['queueNumber'];
+          final int? existingQueueNumber = raw == null ? null : (raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw.toString())));
+          if (existingQueueNumber == null) return;
           print('⚠️ Queue number already exists for this day/queue: $existingQueueNumber');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -26121,6 +26171,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             setState(() {
               _verifiedBeneficiary = beneficiary;
               _issuedQueueNumber = existingQueueNumber;
+              _showingExistingQueueNumber = true;
             });
           }
           return;
@@ -26158,7 +26209,9 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         
         if (historyQuery.docs.isNotEmpty) {
           final historyDoc = historyQuery.docs.first.data();
-          final existingQueueNumber = historyDoc['queueNumber'];
+          final raw = historyDoc['queueNumber'];
+          final int? existingQueueNumber = raw == null ? null : (raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw.toString())));
+          if (existingQueueNumber == null) return;
           print('⚠️ Queue number already exists for this queue: $existingQueueNumber');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -26167,6 +26220,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             setState(() {
               _verifiedBeneficiary = beneficiary;
               _issuedQueueNumber = existingQueueNumber;
+              _showingExistingQueueNumber = true;
             });
           }
           return;
@@ -26367,6 +26421,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
       setState(() {
         _verifiedBeneficiary = updatedBeneficiary;
         _issuedQueueNumber = queueNumber;
+        _showingExistingQueueNumber = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -26383,9 +26438,11 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
         }
       });
 
-      // Clear search field after successful issue
-      _searchController.clear();
-      _searchFocusNode.requestFocus();
+      // Clear search field after successful issue (only if still mounted to avoid using disposed controller)
+      if (mounted) {
+        _searchController.clear();
+        _searchFocusNode.requestFocus();
+      }
     }
   }
 
@@ -26441,6 +26498,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
             _selectedDay = null;
             _verifiedBeneficiary = null;
             _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
           });
         }
       });
@@ -26512,6 +26570,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                               }
                               _verifiedBeneficiary = null;
                               _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
                               _searchController.clear();
                             });
                             _loadQueueStatistics();
@@ -26643,6 +26702,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                             setState(() {
                                               _verifiedBeneficiary = null;
                                               _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
                                             });
                                             if (_selectedVerificationMethod != 0) {
                                               _searchFocusNode.requestFocus();
@@ -26668,7 +26728,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 ),
                                 keyboardType: _selectedVerificationMethod == 1 
-                                    ? TextInputType.phone 
+                                    ? TextInputType.number 
                                     : TextInputType.text,
                                 textInputAction: TextInputAction.search,
                                 onChanged: (value) {
@@ -26681,6 +26741,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                       setState(() {
                                         _verifiedBeneficiary = null;
                                         _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
                                         _lastProcessedTagId = null;
                                       });
                                     }
@@ -26690,6 +26751,7 @@ class _IssueQueueNumberScreenState extends State<IssueQueueNumberScreen> {
                                       setState(() {
                                         _verifiedBeneficiary = null;
                                         _issuedQueueNumber = null;
+              _showingExistingQueueNumber = false;
                                       });
                                     }
                                   }
@@ -29659,15 +29721,6 @@ class _QueueHistoryScreenState extends State<QueueHistoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          AppLanguage.translate('Distribution Area'),
-                          style: TextStyle(
-                            fontSize: isLandscape ? 14 : 16,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF1A237E),
-                          ),
-                        ),
-                        SizedBox(height: spacing),
                         StreamBuilder<List<DistributionArea>>(
                           stream: DistributionAreaService.getAllAreas(),
                           initialData: _distributionAreas,
